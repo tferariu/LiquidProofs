@@ -76,3 +76,5 @@ The plugin also ensures that specifications written for one
 package are used when checking client packages. For an example, 
 see the associated [lh-plugin-demo-client package](https://github.com/ucsd-progsys/lh-plugin-demo-client/).
 
+# LiquidProofs
+# LiquidProofs

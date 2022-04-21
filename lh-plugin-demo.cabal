@@ -5,10 +5,10 @@ version:        0.1.0.0
 description:    This toy package demonstrates the use of LH as a plugin.
 homepage:
 bug-reports:
-author:         Ranjit Jhala 
+author:         Ranjit Jhala
 maintainer:     jhala@cs.ucsd.edu
-copyright:      2020 Ranjit Jhala 
-license:        MIT 
+copyright:      2020 Ranjit Jhala
+license:        MIT
 license-file:   LICENSE
 build-type:     Simple
 
@@ -16,11 +16,13 @@ library
   exposed-modules:
       Demo.Lib,
       Demo.Client
+      Demo.StateMachines
   hs-source-dirs:
       src
   build-depends:
       liquid-ghc-prim,
       liquid-base,
+      liquidhaskell >= 0.8.10,
       liquid-prelude,
       liquidhaskell
   default-language: Haskell2010
