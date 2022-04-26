@@ -12,7 +12,7 @@ lookup' x ((x', y):xs)
 
 delete :: Eq a => a -> [(a, b)] -> [(a, b)]
 delete x [] = []
-delete x ((x', y) : xs)
+delete x ((x', y) : xs)z
     | x == x'   = xs
     | otherwise = (x', y) : delete x xs
 

@@ -18,6 +18,31 @@ faaaa :: Integer -> Integer -> Integer -> (Integer,Integer)
 faaaa x a b = (((x * a) `div` b), ((x * a) `mod` b))
 
 
+
+{-}
+
+data Assoc v = KV [(Int, v)]
+
+{-@ data Assoc v <p :: Int -> Prop> 
+    = KV (z :: [(Int<p>, v)]) @-}
+
+    {-@ digits :: Assoc (String) <{\v -> (Btwn 0 v 9)}> @-}
+
+
+{-@ data AccountState <p :: Int -> Prop> = AccountState (z :: [(Pkh, Value<p>)] @-}
+data AccountState = AccountState [(Pkh, Value)]
+
+--{-@ AccountStateP :: AccountState <{\x -> x >= 0}> @-}
+--AccountStateP :: AccountState
+
+{-@ type Posi = {v:Integer | 0 <= v} @-}
+{-@ type Posit = {v:Integer | 0 < v} @-}
+{-@ type ProperMap = [(String, Posi)] @-}
+data StateP = StateP AccountStateP Value 
+
+--{-@ data WDArgs = WDArgs String Integer<{\x -> x >= 0}>)] @-}
+-}
+
 {-@ baaaa:: a:(Posi,Posi) -> ({y:Posi | y == (snd a)},{z:Posi | z == (fst a)}) @-}
 baaaa :: (Integer,Integer) -> (Integer,Integer)
 baaaa (a, b) = (b,a)
@@ -29,8 +54,6 @@ data Assoc v = KV [(Int, v)]
 {-@ data Mememe <p :: Meme -> Int -> Bool> = Scamboli (z :: Meme) x::(Int<p z>) @-}
 data Mememe = Scamboli Meme Integer
 data Meme = MC [(String, Integer)]
-
-
 
 {-@ data AccountStateP = AccountStateP [(Pkh, Value<{\x -> x >= 0}>)] @-}
 {-@ data AccountStateB = AccountStateB [(Pkh, Value<{\x -> x < 0}>)] @-}
@@ -146,7 +169,14 @@ halve i = (j, j + r)
     j = i `div` 2
     r = i `mod` 2
 
+{-@ impossible :: {v:_ | false} -> Int @-}
+impossible :: String -> Int
+impossible msg = error msg
 
+{-@ safeDiv :: Int -> {a:Int| a /= 0} -> Int   @-}
+safeDiv :: Int -> Int -> Int
+safeDiv _ 0 = impossible "divide-by-zero"
+safeDiv x n = x `div` n
 
 data List a = Nil | Cons a (List a)
   deriving (Show)
