@@ -19,12 +19,12 @@ packages:
   original:
     hackage: Diff-0.3.4
 - completed:
-    hackage: th-compat-0.1@sha256:ff11df2bbd6ad519987f8fe5b2fd783349260681a91565a40d4096bb0a536b0b,2818
+    hackage: th-compat-0.1.3@sha256:a16dd922947a6877defe52c4c38d1ab48ed3f85a826930f5d1a568741d619993,2888
     pantry-tree:
-      size: 529
-      sha256: c794a1d447edb8cf039f47514f50eee20c2584452f1a60848f905dc710c9b59f
+      size: 530
+      sha256: 5e622d5a4b2a759ab91b6c5fa18418e470c361f34bbab2628e44104829e2ad1c
   original:
-    hackage: th-compat-0.1
+    hackage: th-compat-0.1.3
 - completed:
     hackage: optics-core-0.3@sha256:0464583aaef715f8e48b8c9ce3fab9866345de93e740dae32d5c5e9a57097bf7,4532
     pantry-tree:
@@ -47,31 +47,66 @@ packages:
   original:
     hackage: optics-extra-0.3
 - completed:
+    hackage: rest-rewrite-0.2.0@sha256:b75893154b295e2a671278da68e2773c60a27c539a76854c86f9ae83303dea6d,3759
+    pantry-tree:
+      size: 3804
+      sha256: 66d44c9fe57aa46c69a35ea7c83f0d7e42087cff2bc38eea2f482bad3fac450c
+  original:
+    hackage: rest-rewrite-0.2.0@sha256:b75893154b295e2a671278da68e2773c60a27c539a76854c86f9ae83303dea6d,3759
+- completed:
+    hackage: store-0.7.15@sha256:728c8b56391015338a821cfd681a50ebcc3358cbc41aef6a783704f280d0f431,8155
+    pantry-tree:
+      size: 1292
+      sha256: 6e1d1adc6560ac359f46f856e8f09c2cc5210c9781f20275dc2935a93d2b94bc
+  original:
+    hackage: store-0.7.15@sha256:728c8b56391015338a821cfd681a50ebcc3358cbc41aef6a783704f280d0f431,8155
+- completed:
+    hackage: store-core-0.4.4.4@sha256:a19098ca8419ea4f6f387790e942a7a5d0acf62fe1beff7662f098cfb611334c,1430
+    pantry-tree:
+      size: 271
+      sha256: 2e38b2201b812c658ef4ce97db1044563cacbf3232211dcc7a2071be2c71f389
+  original:
+    hackage: store-core-0.4.4.4@sha256:a19098ca8419ea4f6f387790e942a7a5d0acf62fe1beff7662f098cfb611334c,1430
+- completed:
+    hackage: th-utilities-0.2.4.3@sha256:2475f24595bede7ee1ba78f3ac6b8bfeacf9b2225c871b443c8aa28e68e60589,1923
+    pantry-tree:
+      size: 882
+      sha256: 9b481fa2fc86026e6d7aa6bf6493a6d8da8d3446d2eec0f5c34a5e7aec41967c
+  original:
+    hackage: th-utilities-0.2.4.3@sha256:2475f24595bede7ee1ba78f3ac6b8bfeacf9b2225c871b443c8aa28e68e60589,1923
+- completed:
+    hackage: th-abstraction-0.4.3.0@sha256:db4b3b69398acd8a7c5c8cc8a962da55d65d05d44d5039b51bd3cb5fb3d8400f,2148
+    pantry-tree:
+      size: 670
+      sha256: cd2d3fd020b3c6b415e41c71b60999ca7dd14918b056e15e090f640cba1feed8
+  original:
+    hackage: th-abstraction-0.4.3.0
+- completed:
     subdir: .
     name: liquidhaskell
-    version: 0.8.10.2.1
+    version: 0.8.10.7.1
     git: https://github.com/ucsd-progsys/liquidhaskell
     pantry-tree:
-      size: 298741
-      sha256: 3577dea4b06443a2c35d371ce0f14447e31a06a029ff50d38e3266c4b81c1531
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+      size: 330693
+      sha256: 6bb56bc3baf19a38345d890b61fd85370df2014e3a0569b0b5733e66c7cbeeb1
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
   original:
     subdir: .
     git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
 - completed:
     subdir: liquid-base
     name: liquid-base
-    version: 4.14.1.0
+    version: 4.14.3.0
     git: https://github.com/ucsd-progsys/liquidhaskell
     pantry-tree:
       size: 15057
-      sha256: 49214f6bd48452f1e93e33539a4877bc91815454ebab25954073b15a26397a28
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+      sha256: ec6292884597585ab0a007b242bf5c711466a9b91fd5f3b2fbcac3602594f140
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
   original:
     subdir: liquid-base
     git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
 - completed:
     subdir: liquid-prelude
     name: liquid-prelude
@@ -79,12 +114,12 @@ packages:
     git: https://github.com/ucsd-progsys/liquidhaskell
     pantry-tree:
       size: 1029
-      sha256: 17fffd9d59ef7d3e7fa04b89174250bab84af77822d3f5de0124d608aa6827c6
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+      sha256: c7f41d6fe87cb7d02944834ff59c5d3c7f29b1bd0c83dec5095fed21362c2546
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
   original:
     subdir: liquid-prelude
     git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
 - completed:
     subdir: liquid-ghc-prim
     name: liquid-ghc-prim
@@ -92,23 +127,23 @@ packages:
     git: https://github.com/ucsd-progsys/liquidhaskell
     pantry-tree:
       size: 912
-      sha256: f4a142e73996a292cf2eae8c364f71fe9a1195937801cad720ac1394db1bd3ae
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+      sha256: a1b1fbc8fda0d355f390bfe8ec3036e935b9d4c244217cce6e24363472cd66bd
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
   original:
     subdir: liquid-ghc-prim
     git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
 - completed:
     name: liquid-fixpoint
-    version: 0.8.10.2.1
+    version: 0.8.10.7.1
     git: https://github.com/ucsd-progsys/liquid-fixpoint
     pantry-tree:
-      size: 20923
-      sha256: fd1751f3edec222aaade91b009b3603308a0c9266f4896109e75f0305e222840
-    commit: 73bf922019259ef6f0581e6bfbec0cee29e5a768
+      size: 22312
+      sha256: 57c0bd325ebf48e567c10839128bfe78676d23a78d6495ec5c41abd76ac57624
+    commit: affb9754f12e09940286215909182515148bb8ad
   original:
     git: https://github.com/ucsd-progsys/liquid-fixpoint
-    commit: 73bf922019259ef6f0581e6bfbec0cee29e5a768
+    commit: affb9754f12e09940286215909182515148bb8ad
 snapshots:
 - completed:
     size: 532379
