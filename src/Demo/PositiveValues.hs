@@ -1,4 +1,4 @@
-module Demo.StateMachines where
+module Demo.PositiveValues where
 
 import Demo.Lib
 import Data.Maybe
@@ -9,14 +9,35 @@ type Value = Integer
 {-@ data Balances <p :: Value -> Bool> = Balances [(PubKeyHash, Value<p>)] @-}
 data Balances = Balances [(PubKeyHash, Value)]
 
-data State = State Balances Value 
+{-@ measure sumVal@-}
+sumVal :: Balances -> Value
+sumVal (Balances xs) = sumAux xs
+
+
+{-@ measure sumAux @-}
+{-@ sumAux :: [(PubKeyHash, Value)] -> Value @-}
+sumAux :: [(PubKeyHash, Value)] -> Value
+sumAux [] = 0
+sumAux (x:xs) = (second x) + sumAux xs
+
+{-@ measure second @-}
+{-@ second:: (a,b) -> b @-}
+second :: (a,b) -> b
+second (a,b) = b
+
+----{-@ data State <p :: Value -> Bool> = State (bal:: Balances<p>) {v:Value | sumVal bal == v} @-}
+--data State = State Balances Value 
+
+
 {-@ data State <p :: Value -> Bool> = State Balances<p> Value @-}
+data State = State Balances Value 
 
 lookup' :: Eq a => a -> [(a, b)] -> Maybe b
 lookup' x [] = Nothing
 lookup' x ((x', y):xs)
     | x == x'   = Just y
     | otherwise = lookup' x xs
+
 
 delete' :: Eq a => a -> [(a, b)] -> [(a, b)]
 delete' x [] = []

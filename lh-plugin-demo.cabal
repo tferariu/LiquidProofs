@@ -17,6 +17,8 @@ library
       Demo.Lib,
       Demo.Client
       Demo.StateMachines
+      Demo.PositiveValues
+      Demo.Test
   hs-source-dirs:
       src
   build-depends:
@@ -24,6 +26,7 @@ library
       liquid-base,
       liquidhaskell >= 0.8.10,
       liquid-prelude,
+      liquid-containers,
       liquidhaskell
   default-language: Haskell2010
   ghc-options: -fplugin=LiquidHaskell

@@ -16,12 +16,13 @@ extra-deps:
   - th-utilities-0.2.4.3@sha256:2475f24595bede7ee1ba78f3ac6b8bfeacf9b2225c871b443c8aa28e68e60589,1923
   - th-abstraction-0.4.3.0
   - git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: fe1fb0fa9f0b645a82c6753e6582470fb3ad6673
+    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
     subdirs:
       - .
       - liquid-base
       - liquid-prelude
       - liquid-ghc-prim
+      - liquid-containers
   - git: https://github.com/ucsd-progsys/liquid-fixpoint
-    commit: affb9754f12e09940286215909182515148bb8ad
+    commit: 73bf922019259ef6f0581e6bfbec0cee29e5a768
 

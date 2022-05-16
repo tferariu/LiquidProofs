@@ -1,10 +1,17 @@
 module Demo.Lib where
 
+{-@ LIQUID "--reflection" @-}
+  
+
 import Data.Ratio
 import Language.Haskell.Liquid.Prelude
 import GHC.Tuple
 import GHC.Arr
-import Data.List
+import Data.List hiding (union)
+import Data.Set hiding (size,map)
+
+
+
 
 
 {-@ type TRUE  = {v:Bool | v    } @-}
@@ -92,14 +99,22 @@ ax5 x y z =   (x <= 0 && x >= 0)
 ax6 :: Int -> Int -> Bool
 ax6 x y = (y >= 0) ==> (x <= x + y)
 
-{-
 
 {-@ congruence :: (Int -> Int) -> Int -> Int -> TRUE @-}
 congruence :: (Int -> Int) -> Int -> Int -> Bool
 congruence f x y = (x == y) ==> (f x == f y)
 
+
+{-
+
+
+{-@ congruence :: (Int -> Int) -> Int -> Int -> TRUE @-}
+congruence f x y = (x == y) ==> (f x == f y)
+
 {-@ congruence :: (_ -> _) -> _ -> _ -> TRUE @-}
 congruence f x y = (x == y) ==> (f x == f y)
+
+
 
 {-@ fx1 :: (Int -> Int) -> Int -> TRUE @-}
 fx1 :: (Int -> Int) -> Int -> Bool
@@ -307,7 +322,7 @@ sumOk  = sum3 [1,2,3,4,5]    -- is accepted by LH, but
 
 --sumBad = sum3 []             -- is rejected by LH
 
-
+{-
 {-@ wtAverage :: NEList (Pos, Pos) -> Int @-}
 wtAverage wxs = divide totElems totWeight
   where
@@ -316,7 +331,7 @@ wtAverage wxs = divide totElems totWeight
     totElems  = sum elems
     totWeight = sum weights
     sum       = foldl1 (+)
-
+-}
 {-@ mappp :: (a -> b) -> x:[a] -> {y:[b] | notEmpty x <=> notEmpty y} @-}
 mappp           :: (a -> b) -> [a] -> [b]
 mappp _ []      =  []
@@ -337,6 +352,54 @@ safeSplit (x:xs) = (x, xs)
 safeSplit _      = die "don't worry, be happy"
 
 
+{-@ predicate EqElts  X Y = ((listElts X) = (listElts Y))    @-}
+
+{-@ predicate SubElts   X Y =  (Set_sub (listElts X) (listElts Y))                  @-}
+
+{-@ predicate UnionElts X Y Z = ((listElts X) = (Set_cup (listElts Y) (listElts Z))) @-}
+
+{-@ predicate IsMem E L = (Set_sub (Set_sng E) (listElts L)) @-}
+
+
+{-@ type ListS a S = {v:[a] | listElts v = S} @-}
+
+{-@ type ListEmp a = ListS a {Set_empty 0} @-}
+
+{-@ type ListEq a X = ListS a {elts X} @-}
+
+
+{-@ type ListSub a X = {v:[a]| Set_sub (elts v) (elts X)} @-}
+
+{-@ type ListUn a X Y = ListS a {Set_cup (elts X) (elts Y)} @-}
+
+--{-@ reverse' :: xs:[a] -> ListEq a xs @-}
+reverse' xs = revHelper [] xs
+revHelper acc [] = acc
+revHelper acc (x:xs) = revHelper (x:acc) xs
+
+--{-@ lookup'''' :: Int -> l:[Int] -> {e:Int | IsMem e l} @-}
+lookup'''' :: Int -> [Int] -> Int
+lookup'''' x [] = 0
+lookup'''' x (x':xs)
+    | x == x' = x
+    | otherwise = lookup'''' x xs
+
+--{-@ lookup''' :: (String, Int) -> l:[(String, Int)] -> {e:(String, Int) | IsMem e l} @-}
+lookup''' :: (String, Int) -> [(String, Int)] -> (String, Int)
+lookup''' z [] = ("aaa",3)
+lookup''' (x, y) ((x', y'):xs)
+    | x == x' && y == y' = (x', y')
+    | otherwise = lookup''' (x, y) xs
+
+--{-@ lookup'' :: String -> l:[(String, Int)] -> Maybe {e:(String, Int) | IsMem e l} @-}
+lookup'' :: String -> [(String, Int)] -> Maybe (String, Int)
+lookup'' x [] = Nothing
+lookup'' x ((x', y):xs)
+    | x == x'   = Just (x', y)
+    | otherwise = lookup'' x xs
+
+
+--{-@ Data.Set.empty :: {v:(Set a) | (Set_emp v)} @-}
 
 
 
@@ -401,6 +464,78 @@ summm :: [(String,Integer)] -> Integer
 summm [] = 0
 summm ((z,x):xs) = x + summm xs
 
+--{-@ data WDArgs = WDArgs String Integer<{\x -> x >= 0}>)] @-}
+
+data Assoc v = KV [(Int, v)]
+{-@ data Assoc v <p :: Int -> Bool> = KV (z :: [(Int<p>, v)]) @-} 
+
+data State1 = STA1 [(String,Integer)] Integer 
+{-@ data State1 = STA1 ( q :: [(String,Integer)] ) ({y:Integer | sum' (mapsecond q) == y }) @-}
+
+data State3 = STA3 [(String,Integer)] Integer 
+{-@ data State3 = STA3 ( w :: [(String,Integer)] ) ({y:Integer | sum'' w == y }) @-}
+
+data State2 = ST2 [Integer] Integer 
+{-@ data State2 = ST2 ( a :: [Integer] ) ({b:Integer | b == sum' a}) @-}
+
+--sum' (map snd x) == y
+
+{-@ data Bar = Bar [(String,Integer)] @-}
+data Bar = Bar [(String,Integer)]
+
+{-@ measure sumVal@-}
+sumVal :: Bar -> Integer
+sumVal (Bar xs) = sum'' xs
+
+
+{-
+sumVal :: Bar -> Integer
+sumVal (Bar []) = 0
+sumVal (Bar (x:xs)) = (secondd x) + (sumVal (Bar xs))
+  
+  case b of
+  [] -> 0
+  (x:xs) -> (secondd x) + sumVal (Bar xs)
+-}
+
+{-@ measure sum' @-}
+{-@ sum' :: [Integer] -> Integer @-}
+sum' :: [Integer] -> Integer
+sum' [] = 0
+sum' (x:xs) = x + sum' xs
+
+
+{-@ measure sum'' @-}
+{-@ sum'' :: [(String,Integer)] -> Integer @-}
+sum'' :: [(String,Integer)] -> Integer
+sum'' [] = 0
+sum'' (x:xs) = (secondd x) + sum'' xs
+
+{-@ measure secondd @-}
+{-@ secondd:: (a,b) -> b @-}
+secondd :: (a,b) -> b
+secondd (a,b) = b
+--sum'' xs = sum' (mapsecond xs) !!! Must make it recursive and temrinating
+
+{-@ measure mapsecond @-}
+{-@ mapsecond ::  [(a,b)] -> [b] @-}
+mapsecond :: [(a,b)] -> [b]
+mapsecond [] = []
+mapsecond (a:as) = (secondd a) : (mapsecond as)
+
+{-@ measure scnd @-}
+scnd (_, y) = y
+
+{-
+
+
+{-@ inline second @-}
+{-@ second:: (a,b) -> b @-}
+second :: (a,b) -> b
+second (a,b) = b
+
+-}
+
 
 {-@ predicate Bux A B C = if (snd C == 7) then (snd B == True) else False @-}
 {-@ predicate Cux A B C = (fst B == fst C) && (Bux A B C) @-}
@@ -433,9 +568,6 @@ data StateP = StateP AccountStateP Value
 {-@ baaaa:: a:(Posi,Posi) -> ({y:Posi | y == (snd a)},{z:Posi | z == (fst a)}) @-}
 baaaa :: (Integer,Integer) -> (Integer,Integer)
 baaaa (a, b) = (b,a)
-
-data Assoc v = KV [(Int, v)]
-{-@ data Assoc v <p :: Int -> Bool> = KV (z :: [(Int<p>, v)]) @-} 
 
 {-
 {-@ data Mememe <p :: Meme -> Int -> Bool> = Scamboli (z :: Meme) x::(Int<p z>) @-}
