@@ -6,6 +6,8 @@ import Data.Maybe
 type PubKeyHash = String
 type Value = Integer
 
+
+--{-@ data Balances <p :: Value -> Bool> = Balances (UniqList PubKeyHash Value<p>) @-}
 {-@ data Balances <p :: Value -> Bool> = Balances [(PubKeyHash, Value<p>)] @-}
 data Balances = Balances [(PubKeyHash, Value)]
 
@@ -25,6 +27,11 @@ sumAux (x:xs) = (second x) + sumAux xs
 second :: (a,b) -> b
 second (a,b) = b
 
+{-@ measure first @-}
+{-@ first:: (a,b) -> a @-}
+first :: (a,b) -> a
+first (a,b) = a
+
 ----{-@ data State <p :: Value -> Bool> = State (bal:: Balances<p>) {v:Value | sumVal bal == v} @-}
 --data State = State Balances Value 
 
@@ -38,7 +45,7 @@ lookup' x ((x', y):xs)
     | x == x'   = Just y
     | otherwise = lookup' x xs
 
-
+--{-@ delete' :: _ -> UniqList _ _ -> UniqList _ _ @-}
 delete' :: Eq a => a -> [(a, b)] -> [(a, b)]
 delete' x [] = []
 delete' x ((x', y) : xs)

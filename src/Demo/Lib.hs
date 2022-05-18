@@ -322,16 +322,18 @@ sumOk  = sum3 [1,2,3,4,5]    -- is accepted by LH, but
 
 --sumBad = sum3 []             -- is rejected by LH
 
-{-
+{-@ type Pos = {v:Int | 0 < v} @-}
+{- 
+
 {-@ wtAverage :: NEList (Pos, Pos) -> Int @-}
 wtAverage wxs = divide totElems totWeight
   where
-    elems     = map (\(w, x) -> w * x) wxs
-    weights   = map (\(w, _) -> w    ) wxs
-    totElems  = sum elems
-    totWeight = sum weights
-    sum       = foldl1 (+)
+    elems     = mappp (\(w, x) -> w * x) wxs
+    weights   = mappp (\(w, _) -> w    ) wxs
+    totElems  = sum3 elems
+    totWeight = sum3 weights
 -}
+
 {-@ mappp :: (a -> b) -> x:[a] -> {y:[b] | notEmpty x <=> notEmpty y} @-}
 mappp           :: (a -> b) -> [a] -> [b]
 mappp _ []      =  []
@@ -352,13 +354,30 @@ safeSplit (x:xs) = (x, xs)
 safeSplit _      = die "don't worry, be happy"
 
 
+{-@ measure elts @-}
+elts        :: (Ord a) => [a] -> Set a
+elts []     = empty
+elts (x:xs) = singleton x `union` elts xs
+
+{-@ rev :: xs:_ -> {v:_ | elts v == elts xs} @-}
+rev :: [a] -> [a]
+rev = go [] 
+  where
+    {-@ go :: acc:_ -> xs:_ -> {v:_ | elts v == union (elts acc) (elts xs)} @-}
+    go acc []     = acc
+    go acc (x:xs) = go (x:acc) xs
+
+
+--{-@ type ElemWithValInList e v l = {e:String | listElts v = S} @-}
+
 {-@ predicate EqElts  X Y = ((listElts X) = (listElts Y))    @-}
 
 {-@ predicate SubElts   X Y =  (Set_sub (listElts X) (listElts Y))                  @-}
 
 {-@ predicate UnionElts X Y Z = ((listElts X) = (Set_cup (listElts Y) (listElts Z))) @-}
 
-{-@ predicate IsMem E L = (Set_sub (Set_sng E) (listElts L)) @-}
+
+
 
 
 {-@ type ListS a S = {v:[a] | listElts v = S} @-}
@@ -372,24 +391,70 @@ safeSplit _      = die "don't worry, be happy"
 
 {-@ type ListUn a X Y = ListS a {Set_cup (elts X) (elts Y)} @-}
 
---{-@ reverse' :: xs:[a] -> ListEq a xs @-}
-reverse' xs = revHelper [] xs
-revHelper acc [] = acc
-revHelper acc (x:xs) = revHelper (x:acc) xs
 
---{-@ lookup'''' :: Int -> l:[Int] -> {e:Int | IsMem e l} @-}
+{-@ predicate IsMem E L = (member E (listElts L)) @-}
+
+{-@ lookup''' :: (String, Int) -> l:[(String, Int)] -> {f:(String, Int) | ((IsMem f l) || (f == ("aaa",3)))} @-}
+lookup''' :: (String, Int) -> [(String, Int)] -> (String, Int)
+lookup''' z [] = ("aaa",3)
+lookup''' (x, y) ((x', y'):xs)
+    | x == x' && y == y' = (x', y')
+    | otherwise = lookup''' (x, y) xs
+
+
+
+{-@ measure sumAux' @-}
+{-@ sumAux' :: [(String, Int)] -> Int @-}
+sumAux' :: [(String, Int)] -> Int
+sumAux' [] = 0
+sumAux' (x:xs) = (second' x) + sumAux' xs
+
+{-@ measure second' @-}
+{-@ second':: (a,b) -> b @-}  
+second' :: (a,b) -> b
+second' (a,b) = b
+
+--{-@ reflect loookup @-}
+{-@ loookup :: i:_ -> l:[(_, _)] -> {v0 : Maybe _ | ( isJust v0 ==> (IsMem (i,(fromJust v0)) l) )} @-}
+--{-@ type IMaybe a = {v0 : Maybe {v : a | ((isJust v0) && v = (fromJust v0))} | 0 = 0 } @-}
+loookup :: Eq a => a -> [(a, b)] -> Maybe b
+loookup x [] = Nothing
+loookup x ((x', y):xs)
+    | x == x'   = Just y
+    | otherwise = loookup x xs
+
+--{-@ predicate EqElts  X Y = ((listElts X) = (listElts Y))    @-}
+
+{-@ type UniqList a b = [(a,b)]<{\xi xj -> (frst xi) /= (frst xj)}> @-}
+
+--{-@ delete2 :: _ -> l:UniqList _ _ -> UniqList _ _ @-}
+delete2 :: Eq a => a -> [(a, b)] -> [(a, b)]
+delete2 x [] = []
+delete2 x ((x', y) : xs)
+    | x == x'   = xs
+    | otherwise = (x', y) : delete2 x xs
+
+{-@ deelete :: i:_ -> l:[(_, _)] -> {l' : [(_, _)] | True} @-}
+deelete :: Eq a => a -> [(a, b)] -> [(a, b)]
+deelete x [] = []
+deelete x ((x', y) : xs)
+    | x == x'   = xs
+    | otherwise = (x', y) : deelete x xs
+
+--{-@ reflect lookup'''' @-}
+--{-@ lookup'''' :: Int -> l:[Int] -> {e:Int | True} @-}
 lookup'''' :: Int -> [Int] -> Int
 lookup'''' x [] = 0
 lookup'''' x (x':xs)
     | x == x' = x
     | otherwise = lookup'''' x xs
 
---{-@ lookup''' :: (String, Int) -> l:[(String, Int)] -> {e:(String, Int) | IsMem e l} @-}
-lookup''' :: (String, Int) -> [(String, Int)] -> (String, Int)
-lookup''' z [] = ("aaa",3)
-lookup''' (x, y) ((x', y'):xs)
-    | x == x' && y == y' = (x', y')
-    | otherwise = lookup''' (x, y) xs
+--{-@ measure lookup2 @-}
+lookup2 :: [Int] -> Int -> Int
+lookup2 [] x = 0
+lookup2 (x':xs) x
+    | x == x' = x
+    | otherwise = lookup2 xs x
 
 --{-@ lookup'' :: String -> l:[(String, Int)] -> Maybe {e:(String, Int) | IsMem e l} @-}
 lookup'' :: String -> [(String, Int)] -> Maybe (String, Int)
@@ -399,7 +464,6 @@ lookup'' x ((x', y):xs)
     | otherwise = lookup'' x xs
 
 
---{-@ Data.Set.empty :: {v:(Set a) | (Set_emp v)} @-}
 
 
 
@@ -410,14 +474,6 @@ lookup'' x ((x', y):xs)
 
 
 
-
-
-
-
-
-
-
-{-@ type Pos = {v:Int | 0 < v} @-}
 
 {-@ incr :: Pos -> Pos @-}
 incr :: Int -> Int
@@ -525,6 +581,11 @@ mapsecond (a:as) = (secondd a) : (mapsecond as)
 
 {-@ measure scnd @-}
 scnd (_, y) = y
+
+{-@ measure frst @-}
+{-@ frst:: (a,b) -> a @-}
+frst :: (a,b) -> a
+frst (a,b) = a
 
 {-
 
