@@ -19,6 +19,7 @@ library
       Demo.StateMachines
       Demo.PositiveValues
       Demo.Test
+      Demo.Tudor
   hs-source-dirs:
       src
   build-depends:

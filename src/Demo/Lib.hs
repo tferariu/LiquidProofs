@@ -425,14 +425,29 @@ loookup x ((x', y):xs)
 
 --{-@ predicate EqElts  X Y = ((listElts X) = (listElts Y))    @-}
 
+{-@ measure keys @-}
+{-@ keys :: [(a,b)] -> [a] @-}
+keys :: [(a,b)] -> [a]
+keys [] = []
+keys (x:xs) = (frst x) : (keys xs)
+
+{-@ predicate Elem2 E L = (member E (listElts L)) @-}
+
 {-@ type UniqList a b = [(a,b)]<{\xi xj -> (frst xi) /= (frst xj)}> @-}
 
---{-@ delete2 :: _ -> l:UniqList _ _ -> UniqList _ _ @-}
+
+
+--{-@ delete2 :: e:_ -> UniqList _ _ -> UniqList _ _ @-}
+  --{l:UniqList _ _ | not (Elem2 e (keys l))} 
 delete2 :: Eq a => a -> [(a, b)] -> [(a, b)]
 delete2 x [] = []
 delete2 x ((x', y) : xs)
-    | x == x'   = xs
-    | otherwise = (x', y) : delete2 x xs
+    | x == x' = xs
+    | x /= x' = (x', y) : delete2 x xs
+
+--tail recursive
+--what is the nicest way to write and prove
+--how to prove it without chanigng code
 
 {-@ deelete :: i:_ -> l:[(_, _)] -> {l' : [(_, _)] | True} @-}
 deelete :: Eq a => a -> [(a, b)] -> [(a, b)]
@@ -486,9 +501,10 @@ incr x = x + 1
 faaaa :: Integer -> Integer -> Integer -> (Integer,Integer)
 faaaa x a b = (((x * a) `div` b), ((x * a) `mod` b))
 
-
+{-
 {-@ data Foo = Foo (x::[Integer]) {y:Integer | summ x == y} @-}
 data Foo = Foo [Integer] Integer
+
 
 {-@ measure summ @-}
 {-@ summ :: [Integer] -> Integer @-}
@@ -519,29 +535,29 @@ barfoo (Foo xs y) = case xs of
 summm :: [(String,Integer)] -> Integer
 summm [] = 0
 summm ((z,x):xs) = x + summm xs
-
+-}
 --{-@ data WDArgs = WDArgs String Integer<{\x -> x >= 0}>)] @-}
 
 data Assoc v = KV [(Int, v)]
 {-@ data Assoc v <p :: Int -> Bool> = KV (z :: [(Int<p>, v)]) @-} 
 
-data State1 = STA1 [(String,Integer)] Integer 
-{-@ data State1 = STA1 ( q :: [(String,Integer)] ) ({y:Integer | sum' (mapsecond q) == y }) @-}
+--data State1 = STA1 [(String,Integer)] Integer 
+--{-@ data State1 = STA1 ( q :: [(String,Integer)] ) ({y:Integer | sum' (mapsecond q) == y }) @-}
 
-data State3 = STA3 [(String,Integer)] Integer 
-{-@ data State3 = STA3 ( w :: [(String,Integer)] ) ({y:Integer | sum'' w == y }) @-}
+--data State3 = STA3 [(String,Integer)] Integer 
+--{-@ data State3 = STA3 ( w :: [(String,Integer)] ) ({y:Integer | sum'' w == y }) @-}
 
-data State2 = ST2 [Integer] Integer 
-{-@ data State2 = ST2 ( a :: [Integer] ) ({b:Integer | b == sum' a}) @-}
+--data State2 = ST2 [Integer] Integer 
+--{-@ data State2 = ST2 ( a :: [Integer] ) ({b:Integer | b == sum' a}) @-}
 
 --sum' (map snd x) == y
 
 {-@ data Bar = Bar [(String,Integer)] @-}
 data Bar = Bar [(String,Integer)]
 
-{-@ measure sumVal@-}
-sumVal :: Bar -> Integer
-sumVal (Bar xs) = sum'' xs
+--{-@ measure sumVal@-}
+--sumVal :: Bar -> Integer
+--sumVal (Bar xs) = sum'' xs
 
 
 {-
@@ -552,7 +568,7 @@ sumVal (Bar (x:xs)) = (secondd x) + (sumVal (Bar xs))
   case b of
   [] -> 0
   (x:xs) -> (secondd x) + sumVal (Bar xs)
--}
+
 
 {-@ measure sum' @-}
 {-@ sum' :: [Integer] -> Integer @-}
@@ -578,7 +594,7 @@ secondd (a,b) = b
 mapsecond :: [(a,b)] -> [b]
 mapsecond [] = []
 mapsecond (a:as) = (secondd a) : (mapsecond as)
-
+-}
 {-@ measure scnd @-}
 scnd (_, y) = y
 
