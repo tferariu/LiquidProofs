@@ -147,6 +147,7 @@ data Balances = Balances [(String, Int)]
 
 {-@ type CorrectResult = {v:([(String, Int)],Int) | noDups (first v)}@-}
 
+
 {-@ deposit :: Int -> String -> {balances:[(String, Int)] | noDups balances} -> total:Int -> Maybe CorrectResult @-}
 deposit :: Int -> String -> [(String, Int)] -> Int -> Maybe ([(String, Int)],Int)
 deposit v pkh accts currV = 

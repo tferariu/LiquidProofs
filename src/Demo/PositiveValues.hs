@@ -13,7 +13,6 @@ type Value = Integer
 {-@ type UniqList a b = {l:[(a,b)] | noDups l} @-}
 
 {-@ data Balances <p :: Value -> Bool> = Balances (UniqList PubKeyHash Value<p>) @-}
---{-@ data Balances <p :: Value -> Bool> = Balances [(PubKeyHash, Value<p>)] @-}
 data Balances = Balances [(PubKeyHash, Value)]
 
 {-@ measure sumVal@-}
@@ -37,8 +36,7 @@ second (a,b) = b
 first :: (a,b) -> a
 first (a,b) = a
 
-{-@ data State <p :: Value -> Bool> = State (bal:: Balances<p>) {v:Value | sumVal bal == v} @-}
---{-@ data State <p :: Value -> Bool> = State Balances<p> Value @-}
+{-@ data State = State (bal:: Balances<{\x -> x >= 0}>) {v:Value | sumVal bal == v} @-}
 data State = State Balances Value 
 
 {-@ reflect lookup' @-}
@@ -71,11 +69,11 @@ delete' x ((x', y) : xs)
     | x == x'   = xs
     | otherwise = (x', y) : delete' x xs
 
-{-@ lem1 :: k:_ -> l:_ -> { ((lookup' k l) == Nothing) <=> (not (Mem k l))} @-}
-lem1 :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
-lem1 x [] = ()
-lem1 x ((x',y):xs) | x == x' = ()
-                   | otherwise = lem1 x xs
+{-@ lem_lookMem :: k:_ -> l:_ -> { ((lookup' k l) == Nothing) <=> (not (Mem k l))} @-}
+lem_lookMem :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
+lem_lookMem x [] = ()
+lem_lookMem x ((x',y):xs) | x == x' = ()
+                          | otherwise = lem_lookMem x xs
 
 {-@ reflect value @-}
 value :: PubKeyHash -> [(PubKeyHash, Value)] -> Value
@@ -83,11 +81,11 @@ value pkh accts = case lookup' pkh accts of
   Just v  -> v
   Nothing -> 0
 
-{-@ lem_delete :: pkh:_ -> accts:_ ->  { sumAux (delete' pkh accts) + (value pkh accts) = sumAux accts } @-}
-lem_delete :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
-lem_delete x [] = ()
-lem_delete x ((x', y) : xs) | x == x'   = ()
-                            | otherwise = lem_delete x xs
+{-@ lem_delSum :: pkh:_ -> accts:_ ->  { sumAux (delete' pkh accts) + (value pkh accts) = sumAux accts } @-}
+lem_delSum :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
+lem_delSum x [] = ()
+lem_delSum x ((x', y) : xs) | x == x'   = ()
+                            | otherwise = lem_delSum x xs
                     
 {-@ lem_delOth :: k1:_ -> {k2:_ | k2 /= k1 } -> t:_ ->  { (value k1 t) = (value k1 (delete' k2 t)) } @-}
 lem_delOth :: PubKeyHash -> PubKeyHash -> [(PubKeyHash, Value)] -> ()
@@ -107,19 +105,20 @@ data AccountInput =
     | Open PubKeyHash
     | Close PubKeyHash
 
-{-@ transition :: State<{\x -> x >= 0}> -> AccountInput -> Maybe (State<{\x -> x >= 0}>)@-}
+--{-@ reflect transition @-}
+{-@ transition :: State -> AccountInput -> Maybe State@-}
 transition :: State -> AccountInput -> Maybe State
 transition (State (Balances accts) currV) i = case i of
 
     (Open pkh) -> case lookup' pkh accts of
         Just _  -> Nothing 
         Nothing ->
-            Just (State (Balances (((pkh, 0) : accts) `withProof` (lem1 pkh accts))) currV)
+            Just (State (Balances (((pkh, 0) : accts) `withProof` (lem_lookMem pkh accts))) currV)
 
     (Close pkh) -> case lookup' pkh accts of
         Nothing -> Nothing
         (Just v0) -> if (v0 == 0) then
-            Just (State (Balances ((delete' pkh accts) `withProof` (lem_delete pkh accts))) currV)
+            Just (State (Balances ((delete' pkh accts) `withProof` (lem_delSum pkh accts))) currV)
                     else Nothing
                    
     (Deposit (WDArgs pkh v))
@@ -127,7 +126,7 @@ transition (State (Balances accts) currV) i = case i of
                    Nothing -> Nothing
                    (Just v0) -> if v >= 0 then -- !!
                        Just (State (Balances 
-                       ((pkh, v0 + v) : ((delete' pkh accts) `withProof` (lem_delete pkh accts)))) (currV + v))
+                       ((pkh, v0 + v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV + v))
                             else Nothing
 
     (Withdraw (WDArgs pkh v))
@@ -135,7 +134,7 @@ transition (State (Balances accts) currV) i = case i of
                    Nothing -> Nothing
                    (Just v0) -> if (v <= v0) then
                        Just (State (Balances 
-                       ((pkh, v0 - v) : ((delete' pkh accts) `withProof` (lem_delete pkh accts)))) (currV - v))
+                       ((pkh, v0 - v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV - v))
                                 else Nothing
 
 
@@ -147,11 +146,18 @@ transition (State (Balances accts) currV) i = case i of
             Just (State (Balances ( d1 `withProof` lem_delOth pkh1 pkh2 accts )) currV)
                                 else Nothing
                 where
-                    d1 = (pkh1,v1-v) : (delete' pkh1 d2) `withProof` (lem_delete pkh1 d2)
-                    d2 = (pkh2,v2+v) : (delete' pkh2 accts) `withProof` (lem_delete pkh2 accts)
+                    d1 = (pkh1,v1-v) : (delete' pkh1 d2) `withProof` (lem_delSum pkh1 d2)
+                    d2 = (pkh2,v2+v) : (delete' pkh2 accts) `withProof` (lem_delSum pkh2 accts)
 
 --    _ -> Nothing -- todo
 
-{-@ initial :: Balances @-}
-initial :: Balances
-initial = Balances []
+{-@ initial :: State @-}
+initial :: State
+initial = State (Balances []) 0
+
+{-@ property :: State -> [AccountInput] -> State@-}
+property :: State -> [AccountInput] -> State
+property st [] = st
+property st (x:xs) = case (transition st x) of
+    Nothing  -> property st xs
+    Just st' -> property st' xs
