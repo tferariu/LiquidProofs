@@ -425,15 +425,11 @@ loookup x ((x', y):xs)
 
 --{-@ predicate EqElts  X Y = ((listElts X) = (listElts Y))    @-}
 
-{-@ measure keys @-}
-{-@ keys :: [(a,b)] -> [a] @-}
-keys :: [(a,b)] -> [a]
-keys [] = []
-keys (x:xs) = (frst x) : (keys xs)
+
 
 {-@ predicate Elem2 E L = (member E (listElts L)) @-}
 
-{-@ type UniqList a b = [(a,b)]<{\xi xj -> (frst xi) /= (frst xj)}> @-}
+--{-@ type UniqList a b = [(a,b)]<{\xi xj -> (frst xi) /= (frst xj)}> @-}
 
 
 
@@ -515,6 +511,11 @@ summ (x:xs) = x + summ xs
 
 {-@ predicate Aux A = ((summ (fst A)) == snd A) @-}
 
+{-@ measure keys @-}
+{-@ keys :: [(a,b)] -> [a] @-}
+keys :: [(a,b)] -> [a]
+keys [] = []
+keys (x:xs) = (frst x) : (keys xs)
 
 
 {-@ foobar :: {a:([Integer],Integer) | Aux a} -> {b:([Integer],Integer) | Aux b} @-}

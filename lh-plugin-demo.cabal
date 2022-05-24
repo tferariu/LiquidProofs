@@ -20,6 +20,7 @@ library
       Demo.PositiveValues
       Demo.Test
       Demo.Tudor
+      Demo.UniqList
   hs-source-dirs:
       src
   build-depends:
