@@ -214,7 +214,7 @@ truncate i max
       i'       = abss i
       max'     = abss max
 
-
+{-
 data Sparse a = SP { spDim   :: Int
                    , spElems :: [(Int, a)] }
 
@@ -232,7 +232,7 @@ okSP = SP 5 [ (0, "cat")
 --             , (6, "dog") ]
 
 {-@ type SparseN a N = {v:Sparse a | spDim v == N} @-}
-
+-}
 avg2 x y   = divide (x + y)     2
 
 avg3 x y z = divide (x + y + z) 3

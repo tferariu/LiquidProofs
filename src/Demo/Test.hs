@@ -23,7 +23,7 @@ second (a,b) = b
 first :: (a,b) -> a
 first (a,b) = a
 
-{-@ measure firsts @-}
+{-@ reflect firsts @-}
 {-@ firsts:: [(a,b)] -> [a] @-}
 firsts :: [(a,b)] -> [a]
 firsts [] = []
@@ -35,7 +35,7 @@ keys :: (Ord a) => [(a,b)] -> Set a
 keys [] = empty
 keys ((x,y):xs) = singleton x `union` keys xs
 
-{-@ measure noDups @-}
+{-@ reflect noDups @-}
 noDups :: (Ord a) => [(a,b)] -> Bool
 noDups [] = True
 noDups ((x,y):xs) | x `member` keys xs = False

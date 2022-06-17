@@ -42,7 +42,7 @@ keys :: (Ord a) => [(a,b)] -> Set a
 keys [] = empty
 keys ((x,y):xs) = singleton x `union` keys xs
 
-{-@ measure noDups @-}
+{-@ reflect noDups @-}
 noDups :: (Ord a) => [(a,b)] -> Bool
 noDups [] = True
 noDups ((x,y):xs) | x `member` keys xs = False

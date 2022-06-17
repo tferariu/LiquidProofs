@@ -1,22 +1,11 @@
 allow-newer: true
-resolver: lts-16.8
-compiler: ghc-8.10.2
+resolver: lts-18.27
+compiler: ghc-8.10.7
 packages:
   - .
 extra-deps:
-  - text-format-0.3.2
-  - Diff-0.3.4
-  - th-compat-0.1.3
-  - optics-core-0.3
-  - optics-th-0.3
-  - optics-extra-0.3
-  - rest-rewrite-0.2.0@sha256:b75893154b295e2a671278da68e2773c60a27c539a76854c86f9ae83303dea6d,3759
-  - store-0.7.15@sha256:728c8b56391015338a821cfd681a50ebcc3358cbc41aef6a783704f280d0f431,8155
-  - store-core-0.4.4.4@sha256:a19098ca8419ea4f6f387790e942a7a5d0acf62fe1beff7662f098cfb611334c,1430
-  - th-utilities-0.2.4.3@sha256:2475f24595bede7ee1ba78f3ac6b8bfeacf9b2225c871b443c8aa28e68e60589,1923
-  - th-abstraction-0.4.3.0
   - git: https://github.com/ucsd-progsys/liquidhaskell
-    commit: 094ea0d2553c72f38d3704b10ba9157fbace8abe
+    commit: a4f2198f894810a729feb0f8d06301790ee8d1fb
     subdirs:
       - .
       - liquid-base
@@ -24,5 +13,6 @@ extra-deps:
       - liquid-ghc-prim
       - liquid-containers
   - git: https://github.com/ucsd-progsys/liquid-fixpoint
-    commit: 73bf922019259ef6f0581e6bfbec0cee29e5a768
-
+    commit: 08fa6b6e0001c2da6b96a135523ca56107a3c0d6
+  - git: https://github.com/facundominguez/rest
+    commit: 31e974979c90e910efe5199ee0d3721b791667f6
