@@ -18,6 +18,11 @@ data Balances = Balances [(PubKeyHash, Value)]
 --sumVal (Balances []) = 0
 --sumVal (Balances (x:xs)) = (second x) + sumVal (Balances xs)
 
+{-@ reflect isNothing@-}
+isNothing         :: Maybe a -> Bool
+isNothing Nothing = True
+isNothing _       = False
+
 {-@ measure sumVal@-}
 sumVal :: Balances -> Value
 sumVal (Balances xs) = sumAux xs
@@ -55,6 +60,12 @@ keys :: (Ord a) => [(a,b)] -> Set a
 keys [] = empty
 keys ((x,y):xs) = singleton x `union` keys xs
 
+{-@ measure elts @-}
+{-@ elts:: [(a,b)] -> (Set (a,b)) @-}
+elts :: (Ord a, Ord b) => [(a,b)] -> (Set (a,b))
+elts [] = empty
+elts ((x,y):xs) = (singleton (x,y)) `union` elts xs
+
 {-@ measure accounts @-}
 {-@ accounts:: State -> [(PubKeyHash, Value)] @-}
 accounts :: State -> [(PubKeyHash, Value)]
@@ -65,6 +76,15 @@ noDups :: (Ord a) => [(a,b)] -> Bool
 noDups [] = True
 noDups ((x,y):xs) | x `member` keys xs = False
                   | otherwise = noDups xs
+
+{-
+--{-@ inertia :: ks:_ -> l1:[(_, _)] -> l2:[(_, _)] -> Bool @-}
+{-@ reflect inertia @-}
+{-@ inertia :: ks:_ -> {l1:[(_, _)] | noDups l1} -> {l2:[(_, _)] | noDups l2} -> Bool @-}
+inertia :: (Ord a, Ord b) => [a] -> [(a,b)] -> [(a,b)] -> Bool
+inertia [] l1 l2 = elts l1 == elts l2
+inertia (k:ks) l1 l2 = inertia ks (delete' k l1) (delete' k l2)
+-} 
 
 {-@ predicate Mem E L = member E (keys L) @-}
 {-@ predicate Subset S L = (isSubsetOf (keys S) (keys L)) @-}
@@ -91,6 +111,12 @@ delete' x ((x', y) : xs)
 -- deleteClose
 -- <>
 
+{-@ reflect getValue @-}
+getValue :: PubKeyHash -> [(PubKeyHash, Value)] -> Value
+getValue pkh accts = case lookup' pkh accts of
+  Just v  -> v
+  Nothing -> 0
+
 {-@ lem_lookMem :: k:_ -> l:_ -> { ((lookup' k l) == Nothing) <=> (not (Mem k l))} @-}
 --lem_lookMem :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
 lem_lookMem :: Eq a => a -> [(a, b)] -> ()
@@ -98,11 +124,15 @@ lem_lookMem x [] = ()
 lem_lookMem x ((x',y):xs) | x == x' = ()
                           | otherwise = lem_lookMem x xs
 
-{-@ reflect getValue @-}
-getValue :: PubKeyHash -> [(PubKeyHash, Value)] -> Value
-getValue pkh accts = case lookup' pkh accts of
-  Just v  -> v
-  Nothing -> 0
+{- (Mem K L1 => (listElts L1) == union (listElts L2) (singleton (K,specialVal L1 K))) && (not (Mem K L1) => listElts L1 == listElts L2)@-}
+
+
+{-@ lem_1 :: key:PubKeyHash -> vlue:Value -> {lst:[(PubKeyHash, Value)]| not (Mem key lst)} -> { elts (delete' key ((key,vlue):lst)) == elts lst  } @-}
+lem_1 :: PubKeyHash -> Value -> [(PubKeyHash, Value)] -> ()
+lem_1 x y [] = ()
+lem_1 x y ((x',y'):xs) | x == x' = ()
+                       | otherwise = lem_1 x y xs
+
 
 {-@ lem_delSum :: pkh:_ -> accts:_ ->  { sumAux (delete' pkh accts) + (getValue pkh accts) = sumAux accts } @-}
 lem_delSum :: PubKeyHash -> [(PubKeyHash, Value)] -> ()
@@ -210,47 +240,20 @@ getVal i = case i of
 
 {-@ reflect transition @-}
 --{-@ transition :: State -> AccountInput -> Maybe State @-}
---{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | (((isOpen i) && not (isIn (getPkh i) (accounts st1))) => ( (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts (fromJust st2)) == 0))) && ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2)))) && ((isDeposit i) && (isIn (getPkh i) (accounts st1)) && getVal i >= 0 => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) + getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && ((isWithdraw i) && (isIn (getPkh i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && (((isTransfer i) && (isIn (getPkh i) (accounts st1)) && (isIn (getPkh2 i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i && getVal i >= 0 && ((getPkh i) /= (getPkh2 i))) => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2))) && (isIn (getPkh2 i) (accounts (fromJust st2))) && (getValue (getPkh2 i) (accounts st1)) + getVal i == (getValue (getPkh2 i) (accounts (fromJust st2))) ) }@-}
-{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2))))  }@-}
+{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | (((isOpen i) && not (isIn (getPkh i) (accounts st1))) => ( (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts (fromJust st2)) == 0))) && ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2)))) && ((isDeposit i) && (isIn (getPkh i) (accounts st1)) && getVal i >= 0 => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) + getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && ((isWithdraw i) && (isIn (getPkh i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && (((isTransfer i) && (isIn (getPkh i) (accounts st1)) && (isIn (getPkh2 i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i && getVal i >= 0 && ((getPkh i) /= (getPkh2 i))) => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2))) && (isIn (getPkh2 i) (accounts (fromJust st2))) && (getValue (getPkh2 i) (accounts st1)) + getVal i == (getValue (getPkh2 i) (accounts (fromJust st2))) ) }@-}
+--{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2))))  }@-}
 transition :: State -> AccountInput -> Maybe State
-transition (State (Balances accts) currV) i = case i of
+transition st i = case i of
 
-    (Open pkh) -> case lookup' pkh accts of
-        Just _  -> Nothing 
-        Nothing ->
-            Just (State (Balances (((pkh, 0) : accts) `withProof` (lem_lookMem pkh accts))) currV)
+    (Open _) -> openFunc st i
 
-    (Close pkh) -> case lookup' pkh accts of
-        Nothing -> Nothing
-        (Just v0) -> if (v0 == 0) then
-            Just (State (Balances ((delete' pkh accts) `withProof` (lem_delSum pkh accts)  `withProof` (lem_memIsIn pkh (delete' pkh accts)))) currV)
-                    else Nothing
+    (Close _) -> closeFunc st i
                   
-    (Deposit (WDArgs pkh v))
-           -> case (lookup' pkh accts) of
-                   Nothing -> Nothing
-                   (Just v0) -> if v >= 0 then -- !!
-                       Just (State (Balances 
-                       ((pkh, v0 + v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV + v))
-                            else Nothing
+    (Deposit _) -> depositFunc st i
 
-    (Withdraw (WDArgs pkh v))
-           -> case (lookup' pkh accts) of
-                   Nothing -> Nothing
-                   (Just v0) -> if (v <= v0) then
-                       Just (State (Balances 
-                       ((pkh, v0 - v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV - v))
-                                else Nothing
+    (Withdraw _) -> withdrawFunc st i
 
-    (Transfer (TransferArgs pkh1 pkh2 v)) -> case ((lookup' pkh1 accts),(lookup' pkh2 accts)) of
-        (Nothing,_) -> Nothing
-        (_,Nothing) -> Nothing
-        (Just v1, Just v2) -> if (v <= v1) && (v >= 0) && (pkh1 /= pkh2) then -- !!
-            Just (State (Balances ( d1 `withProof` lem_delOth pkh1 pkh2 accts `withProof` lem_delOth2 pkh2 pkh1 d2 )) currV)
-                                else Nothing
-                where
-                    d1 = (pkh1,v1-v) : (delete' pkh1 d2) `withProof` (lem_delSum pkh1 d2)
-                    d2 = (pkh2,v2+v) : (delete' pkh2 accts) `withProof` (lem_delSum pkh2 accts)
+    (Transfer _) -> transferFunc st i
 
 --    _ -> Nothing -- todo
 
@@ -273,71 +276,107 @@ property st (x:xs) = case (transition st x) of
 die :: String -> State
 die msg = error msg
 
+{-@ reflect inertia @-}
+{-@ inertia :: k:_ -> {l1:[(_, _)] | noDups l1} -> {l2:[(_, _)] | noDups l2} -> Bool @-}
+inertia :: (Ord a, Ord b) => a -> [(a,b)] -> [(a,b)] -> Bool
+inertia k l1 l2 = elts (delete' k l1) == elts (delete' k l2)
+
+{-@ predicate StateInertia K S1 S2 = elts (delete' K (accounts S1)) == elts (delete' K (accounts (fromJust S2))) @-}   
+--inertia K (accounts S1) (accounts (fromJust S2)) 
+{-@ predicate StateInertia2 K1 K2 S1 S2 = elts (delete' K1 (delete' K2 (accounts S1))) == elts (delete' K1 (delete' K2(accounts (fromJust S2))))@-}
+--inertia K1 (delete' K2 (accounts S1)) (delete' K2 (accounts (fromJust S2))) 
+--            StateInertia (getPkh i) st1 st2
+
+
 --add that all other accounts are still there
-{-@ p_open :: 
-        st1:State -> {i:AccountInput | (isOpen i) && not (isIn (getPkh i) (accounts st1))} ->
-            {st2:State | (isIn (getPkh i) (accounts st2)) && (getValue (getPkh i) (accounts st2) == 0) }@-}
-p_open :: State -> AccountInput -> State
-p_open (State (Balances accts) currV) i = case i of
+{-@ predicate OpenPre I S = ((isOpen I) && not (isIn (getPkh I) (accounts S))) @-}
+{-@ predicate OpenPost I S1 S2 = ((isJust S2) && (isIn (getPkh I) (accounts (fromJust S2))) &&
+            getValue (getPkh I) (accounts (fromJust S2)) == 0) @-}
+
+{-@ reflect openFunc @-}
+{-@ openFunc :: st1:State -> i:AccountInput -> {st2:Maybe State | (OpenPre i st1 => (OpenPost i st1 st2 && 
+            True)) && ((not OpenPre i st1) => (isNothing st2))}@-}
+openFunc :: State -> AccountInput -> Maybe State
+openFunc (State (Balances accts) currV) i = case i of
     (Open pkh) -> case lookup' pkh accts of
-        Just _ -> die "in account map"
-        Nothing -> case (transition (State (Balances accts) currV) i) of
-            Nothing  -> die "broken"
-            Just st' -> st'
-    _ -> die "not Open"
+        Just _  -> Nothing 
+        Nothing ->
+            Just (State (Balances (((pkh, 0) : accts) `withProof` (lem_lookMem pkh accts))) currV)
+    _ -> Nothing
 
 
-{-@ p_close :: st1:State -> {i:AccountInput | (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0)} -> {st2:State | not (isIn (getPkh i) (accounts st2)) }@-}
-p_close :: State -> AccountInput -> State
-p_close (State (Balances accts) currV) i = case i of
+{-@ predicate ClosePre I S = ((isClose I) && (isIn (getPkh I) (accounts S)) && 
+            getValue (getPkh I) (accounts S) == 0 ) @-}
+{-@ predicate ClosePost I S1 S2 = ((isJust S2) && not (isIn (getPkh I) (accounts (fromJust S2)))) @-}
+
+{-@ reflect closeFunc @-}
+{-@ closeFunc :: st1:State -> i:AccountInput -> {st2:Maybe State | (ClosePre i st1 => (ClosePost i st1 st2 &&
+            True)) && ((not ClosePre i st1) => (isNothing st2))}@-}                         
+closeFunc :: State -> AccountInput -> Maybe State
+closeFunc (State (Balances accts) currV) i = case i of
     (Close pkh) -> case lookup' pkh accts of
-        Nothing -> die "not in account map"
+        Nothing -> Nothing
         (Just v0) -> if (v0 == 0) then
-            case (transition (State (Balances accts) currV) i) of
-                Nothing  -> die "broken"
-                Just st' -> st'
-                    else die "is not zero"
-    _ -> die "not Close"
+            Just (State (Balances 
+                ((delete' pkh accts) `withProof` (lem_delSum pkh accts)  `withProof` 
+                    (lem_memIsIn pkh (delete' pkh accts)))) currV)
+                        else Nothing
+    _ -> Nothing
 
 
-{-@ p_deposit :: st1:State -> {i:AccountInput | (isDeposit i) && (isIn (getPkh i) (accounts st1)) && getVal i >= 0} -> {st2:State | (isIn (getPkh i) (accounts st2)) && (getValue (getPkh i) (accounts st1)) + getVal i == (getValue (getPkh i) (accounts st2))}@-}
-p_deposit :: State -> AccountInput -> State
-p_deposit (State (Balances accts) currV) i = case i of
+{-@ predicate WithdrawPre I S = ((isWithdraw I) && (isIn (getPkh I) (accounts S)) && 
+            getValue (getPkh I) (accounts S) >= getVal I) @-}
+{-@ predicate WithdrawPost I S1 S2 = ((isJust S2) && (isIn (getPkh I) (accounts (fromJust S2))) && 
+            (getValue (getPkh I) (accounts S1)) - getVal i == (getValue (getPkh i) (accounts (fromJust S2)))) @-}
+
+{-@ reflect withdrawFunc @-}
+{-@ withdrawFunc :: st1:State -> i:AccountInput -> {st2:Maybe State | (WithdrawPre i st1 => (WithdrawPost i st1 st2 &&
+            StateInertia (getPkh i) st1 st2)) && ((not WithdrawPre i st1) => (isNothing st2))}@-}                         
+withdrawFunc :: State -> AccountInput -> Maybe State
+withdrawFunc (State (Balances accts) currV) i = case i of
+    (Withdraw (WDArgs pkh v)) -> case (lookup' pkh accts) of
+        Nothing -> Nothing
+        (Just v0) -> if (v <= v0) then
+            Just (State (Balances 
+                ((pkh, v0 - v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV - v))
+                    else Nothing
+    _ -> Nothing
+
+
+{-@ predicate DepositPre I S = ((isDeposit I) && (isIn (getPkh I) (accounts S)) && getVal I >= 0) @-}
+{-@ predicate DepositPost I S1 S2 = ((isJust S2) && (isIn (getPkh I) (accounts (fromJust S2))) && 
+            (getValue (getPkh I) (accounts S1)) + getVal i == (getValue (getPkh i) (accounts (fromJust S2)))) @-}
+
+{-@ reflect depositFunc @-}
+{-@ depositFunc :: st1:State -> i:AccountInput -> {st2:Maybe State | (DepositPre i st1 => (DepositPost i st1 st2 &&
+            StateInertia (getPkh i) st1 st2)) && ((not DepositPre i st1) => (isNothing st2))}@-}                         
+depositFunc :: State -> AccountInput -> Maybe State
+depositFunc (State (Balances accts) currV) i = case i of
     (Deposit (WDArgs pkh v)) -> case (lookup' pkh accts) of
-        Nothing -> die "not in account map"
-        (Just v0) -> if v >= 0 then 
-            case (transition (State (Balances accts) currV) i) of
-                Nothing  -> die "broken"
-                Just st' -> st'
-                    else die "negative value"
-    _ -> die "not Deposit"
+        Nothing -> Nothing
+        (Just v0) -> if v >= 0 then
+            Just (State (Balances 
+                ((pkh, v0 + v) : ((delete' pkh accts) `withProof` (lem_delSum pkh accts)))) (currV + v))
+                    else Nothing
+    _ -> Nothing
 
---also not says other things are unmodified
-{-@ p_transfer :: 
-        st1:State -> {i:AccountInput | ((isTransfer i) && (isIn (getPkh i) (accounts st1)) && 
-            (isIn (getPkh2 i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i && getVal i >= 0 && 
-                ((getPkh i) /= (getPkh2 i)))} -> {st2:State | (isIn (getPkh i) (accounts st2)) && 
-                    (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts st2)) && 
-                        (isIn (getPkh2 i) (accounts st2)) && (getValue (getPkh2 i) (accounts st1)) + getVal i == 
-                            (getValue (getPkh2 i) (accounts st2))}@-}
-p_transfer :: State -> AccountInput -> State
-p_transfer (State (Balances accts) currV) i = case i of
-    (Transfer (TransferArgs pkh1 pkh2 v)) ->        
-        case ((lookup' pkh1 accts),(lookup' pkh2 accts)) of
-        (Nothing,_) -> die "pkh1 not in account map"
-        (_,Nothing) -> die "pkh2 not in account map" 
-        (Just v1, Just v2) -> if (v <= v1) && (v >= 0) && (pkh1 /= pkh2) then 
-            case (transition (State (Balances accts) currV) i) of
-                Nothing  -> die "broken"
-                Just st' -> st'
-                    else die "illegal value or transfer to self"
-    _ -> die "not Transfer"
 
-{-
-
-{-@@-}
-transferFunc
-        case ((lookup' pkh1 accts),(lookup' pkh2 accts)) of
+--also not says other things are unmodified !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+{-@ predicate TransferPre I S = ((isTransfer I) && (isIn (getPkh I) (accounts S)) && 
+            (isIn (getPkh2 I) (accounts S)) && getValue (getPkh I) (accounts S) >= getVal I && getVal I >= 0 && 
+                ((getPkh I) /= (getPkh2 I))) @-}
+{-@ predicate TransferPost I S1 S2 = ((isJust S2) && (isIn (getPkh I) (accounts (fromJust S2))) && 
+            (getValue (getPkh I) (accounts S1)) - getVal I == (getValue (getPkh I) (accounts (fromJust S2))) && 
+                (isIn (getPkh2 I) (accounts (fromJust S2))) && (getValue (getPkh2 I) (accounts S1)) + getVal I == 
+                    (getValue (getPkh2 I) (accounts (fromJust S2))))@-}
+--StateInertia2 (getPkh i) (getPkh2 i) st1 st2
+{-@ reflect transferFunc @-}
+{-@ transferFunc :: 
+        st1:State -> i:AccountInput -> {st2:Maybe State | (TransferPre i st1 => (TransferPost i st1 st2 &&
+        True)) && ((not TransferPre i st1) => (isNothing st2))}@-}                         
+transferFunc :: State -> AccountInput -> Maybe State
+transferFunc (State (Balances accts) currV) i = case i of
+    (Transfer (TransferArgs pkh1 pkh2 v)) -> case ((lookup' pkh1 accts),(lookup' pkh2 accts)) of
         (Nothing,_) -> Nothing
         (_,Nothing) -> Nothing
         (Just v1, Just v2) -> if (v <= v1) && (v >= 0) && (pkh1 /= pkh2) then -- !!
@@ -346,8 +385,10 @@ transferFunc
                 where
                     d1 = (pkh1,v1-v) : (delete' pkh1 d2) `withProof` (lem_delSum pkh1 d2)
                     d2 = (pkh2,v2+v) : (delete' pkh2 accts) `withProof` (lem_delSum pkh2 accts)
+    _ -> Nothing
 
 
+{-
 {-@ p_close :: st1:State -> {i:AccountInput | (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0)} -> {st2:State | not (isIn (getPkh i) (accounts st2)) }@-}
 p_close :: State -> AccountInput -> State
 p_close (State (Balances accts) currV) i = case i of
@@ -369,4 +410,74 @@ p_deposit (State (Balances accts) currV) i = case i of
                        ((pkh, v0 + v) : (((delete' pkh accts) `withProof` (lem_delSum pkh accts)) `withProof` (lem_memIsIn pkh (delete' pkh accts))))) (currV + v))
                             else die "negative value"
         _ -> die "not Deposit"
+
+
+
+      {-          
+            
+                            {st2: Maybe State | (isIn pkh1 accts) && (isIn pkh2 accts) && (getValue pkh1 accts >= v) && (v >= 0) &&
+                (pkh1 /= pkh2) => (isJust st) && (isIn pkh1 (accounts (fromJust st))) && (getValue pkh1 accts) - v == 
+                    (getValue pkh1 (accounts (fromJust st))) && (isIn pkh2 (accounts (fromJust st))) && 
+                        (getValue pkh2 accts) + v == (getValue pkh2 (accounts (fromJust st)))}@-}
+
+
+
+{-@ p_transfer :: 
+        st1:State -> {i:AccountInput | ((isTransfer i) && (isIn (getPkh i) (accounts st1)) && 
+            (isIn (getPkh2 i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i && getVal i >= 0 && 
+                ((getPkh i) /= (getPkh2 i)))} -> {st2:State | (isIn (getPkh i) (accounts st2)) && 
+                    (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts st2)) && 
+                        (isIn (getPkh2 i) (accounts st2)) && (getValue (getPkh2 i) (accounts st1)) + getVal i == 
+                            (getValue (getPkh2 i) (accounts st2))}@-}
+p_transfer :: State -> AccountInput -> State
+p_transfer (State (Balances accts) currV) i = case i of
+    (Transfer (TransferArgs pkh1 pkh2 v)) ->        
+        case ((lookup' pkh1 accts),(lookup' pkh2 accts)) of
+        (Nothing,_) -> die "pkh1 not in account map"
+        (_,Nothing) -> die "pkh2 not in account map" 
+        (Just v1, Just v2) -> if (v <= v1) && (v >= 0) && (pkh1 /= pkh2) then 
+            case (transition (State (Balances accts) currV) i) of
+                Nothing  -> die "broken"
+                Just st' -> st'
+                    else die "illegal value or transfer to self"
+    _ -> die "not Transfer"
+
+
+
+{-@ p_deposit :: st1:State -> {i:AccountInput | (isDeposit i) && (isIn (getPkh i) (accounts st1)) && getVal i >= 0} -> {st2:State | (isIn (getPkh i) (accounts st2)) && (getValue (getPkh i) (accounts st1)) + getVal i == (getValue (getPkh i) (accounts st2))}@-}
+p_deposit :: State -> AccountInput -> State
+p_deposit (State (Balances accts) currV) i = case i of
+    (Deposit (WDArgs pkh v)) -> case (lookup' pkh accts) of
+        Nothing -> die "not in account map"
+        (Just v0) -> if v >= 0 then 
+            case (transition (State (Balances accts) currV) i) of
+                Nothing  -> die "broken"
+                Just st' -> st'
+                    else die "negative value"
+    _ -> die "not Deposit"
+
+{-@ p_close :: st1:State -> {i:AccountInput | (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0)} -> {st2:State | not (isIn (getPkh i) (accounts st2)) }@-}
+p_close :: State -> AccountInput -> State
+p_close (State (Balances accts) currV) i = case i of
+    (Close pkh) -> case lookup' pkh accts of
+        Nothing -> die "not in account map"
+        (Just v0) -> if (v0 == 0) then
+            case (transition (State (Balances accts) currV) i) of
+                Nothing  -> die "broken"
+                Just st' -> st'
+                    else die "is not zero"
+    _ -> die "not Close"
+
+{-@ p_open :: 
+        st1:State -> {i:AccountInput | (isOpen i) && not (isIn (getPkh i) (accounts st1))} ->
+            {st2:State | (isIn (getPkh i) (accounts st2)) && (getValue (getPkh i) (accounts st2) == 0) }@-}
+p_open :: State -> AccountInput -> State
+p_open (State (Balances accts) currV) i = case i of
+    (Open pkh) -> case lookup' pkh accts of
+        Just _ -> die "in account map"
+        Nothing -> case (transition (State (Balances accts) currV) i) of
+            Nothing  -> die "broken"
+            Just st' -> st'
+    _ -> die "not Open"
+
 -}
