@@ -1,6 +1,28 @@
 {-@ LIQUID "--reflection" @-}
 {-@ LIQUID "--ple"        @-}
+--dont use ple always
 
+{-
+{-@ LIQUID "--ple-local" @-}
+{-@ ple foo @-}
+foo :: Int -> Int
+foo _ = 5
+-}
+
+{-
+inline = less constrained, but will break on recurison
+         translates haskell into SMT repres verbatim, no definition, just the body
+         writing so the you can reason transparently about the body
+predicate deprecated?
+
+measure = function with one argument, must pattern match on the constructor of the argument
+          can be recursive (adding a refinement type to the constructor)
+          becomes a constraint
+^
+fully understood by LH
+least automated, more versatile ->
+reflect = reason about the body after doing EXACTLY one expansion
+-}
 module Demo.PositiveValues where
 
 import           Data.Maybe
@@ -10,15 +32,21 @@ import           Language.Haskell.Liquid.ProofCombinators
 type PubKeyHash = String
 type Value = Integer
 
-{-@ type UniqList a b = {l:[(a,b)] | noDups l} @-}
+{-@ type UniqList a b = {l:[(a,b)] | noDups l} @-} --sometimes might miss that a list isn't UniqList
+-- write proof that relates head and tail -> call proof when pattern matching
+
+
+--{-@ type UniqList a b = [(a,b)]<{\x y -> fst x /= fst y}> @-}
+-- get information on the rest of the list when pattern matching
 
 {-@ data Balances <p :: Value -> Bool> = Balances (UniqList PubKeyHash Value<p>) @-}
-data Balances = Balances [(PubKeyHash, Value)]
+data Balances = Balances [(PubKeyHash, Value)] --use data refinement instead
+--maybe not use abstract refinements <>
 
 --sumVal (Balances []) = 0
 --sumVal (Balances (x:xs)) = (second x) + sumVal (Balances xs)
 
-{-@ reflect isNothing@-}
+{-@ reflect isNothing @-}
 isNothing         :: Maybe a -> Bool
 isNothing Nothing = True
 isNothing _       = False
@@ -26,13 +54,13 @@ isNothing _       = False
 {-@ measure sumVal@-}
 sumVal :: Balances -> Value
 sumVal (Balances xs) = sumAux xs
+-- dont call a reflected function in a measure
 
 {-@ reflect sumAux @-}
 {-@ sumAux :: [(PubKeyHash, Value)] -> Value @-}
 sumAux :: [(PubKeyHash, Value)] -> Value
 sumAux [] = 0
 sumAux (x:xs) = (second x) + sumAux xs
-
 
 {-@ measure second @-}
 {-@ second:: (a,b) -> b @-}
@@ -126,8 +154,11 @@ lem_lookMem x ((x',y):xs) | x == x' = ()
 
 {- (Mem K L1 => (listElts L1) == union (listElts L2) (singleton (K,specialVal L1 K))) && (not (Mem K L1) => listElts L1 == listElts L2)@-}
 
+{-@ inline add_one_elem @-}
+add_one_elem :: k -> v -> [(k, v)] -> [(k, v)]
+add_one_elem k v l = (k, v) : l
 
-{-@ lem_1 :: key:PubKeyHash -> vlue:Value -> {lst:[(PubKeyHash, Value)]| not (Mem key lst)} -> { elts (delete' key ((key,vlue):lst)) == elts lst  } @-}
+{-@ lem_1 :: key:PubKeyHash -> vlue:Value -> {lst:[(PubKeyHash, Value)]| not (Mem key lst)} -> { elts (delete' key (add_one_elem key vlue lst)) == elts lst  } @-}
 lem_1 :: PubKeyHash -> Value -> [(PubKeyHash, Value)] -> ()
 lem_1 x y [] = ()
 lem_1 x y ((x',y'):xs) | x == x' = ()
@@ -301,8 +332,10 @@ openFunc (State (Balances accts) currV) i = case i of
     (Open pkh) -> case lookup' pkh accts of
         Just _  -> Nothing 
         Nothing ->
-            Just (State (Balances (((pkh, 0) : accts) `withProof` (lem_lookMem pkh accts))) currV)
+            Just (State (Balances ((((pkh, 0) : accts) `withProof` (lem_lookMem pkh accts) `withProof` (lem_1 pkh 0 accts)))) currV)
     _ -> Nothing
+--StateInertia (getPkh i) st1 st2
+--{-@ lem_1 :: key:PubKeyHash -> vlue:Value -> {lst:[(PubKeyHash, Value)]| not (Mem key lst)} -> { elts (delete' key (add_one_elem key vlue lst)) == elts lst  } @-}
 
 
 {-@ predicate ClosePre I S = ((isClose I) && (isIn (getPkh I) (accounts S)) && 

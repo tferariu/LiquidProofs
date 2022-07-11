@@ -21,6 +21,7 @@ library
       Demo.Test
       Demo.Tudor
       Demo.UniqList
+      Demo.Proofs
   hs-source-dirs:
       src
   build-depends:
