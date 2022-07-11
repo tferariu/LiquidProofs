@@ -192,26 +192,45 @@ getBalances (bal, _) = bal
 {-@
 openPreservesOthers
     ::   pkh1:PubKeyHash
-    ->     s0:State
+    -> {   s0:State | isJust (openFunc s0 (Open pkh1)) }
     -> { pkh2:PubKeyHash | pkh2 /= pkh1 }
-    -> { (isJust (openFunc s0 (Open pkh1))) => 
-        (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (openFunc s0 (Open pkh1))))) }
+    -> { lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (openFunc s0 (Open pkh1)))) }
 @-}
 openPreservesOthers :: PubKeyHash -> State -> PubKeyHash -> Proof
-openPreservesOthers pkh1 (accts, currV) pkh2
-    | (isJust (openFunc (accts, currV) (Open pkh1))) =
-        case lookup pkh1 accts of
-            Nothing ->  lookup pkh2 (getBalances (fromJust (openFunc (accts, currV) (Open pkh1))))
-                    === lookup pkh2 (getBalances (fromJust (Just ((insert pkh1 0 accts), currV))))
-                    === lookup pkh2 (getBalances ((insert pkh1 0 accts), currV))
-                    === lookup pkh2 (insert pkh1 0 accts) ? insertPreservesOthers pkh1 0 accts pkh2 
-                    === lookup pkh2 accts               -- lookup b xxs == lookup b (insert a val xxs)
-                    === lookup pkh2 (getBalances (accts, currV)) *** QED
-            Just v ->   True
-                    === isJust (openFunc (accts, currV) (Open pkh1))
-                    === isJust Nothing
-                    === False *** QED
-    | otherwise = ()
+openPreservesOthers pkh1 (accts, currV) pkh2 =
+    case lookup pkh1 accts of
+        Nothing ->  lookup pkh2 (getBalances (fromJust (openFunc (accts, currV) (Open pkh1))))
+                === lookup pkh2 (getBalances (fromJust (Just ((insert pkh1 0 accts), currV))))
+                === lookup pkh2 (getBalances ((insert pkh1 0 accts), currV))
+                === lookup pkh2 (insert pkh1 0 accts) ? insertPreservesOthers pkh1 0 accts pkh2 
+                === lookup pkh2 accts               -- lookup b xxs == lookup b (insert a val xxs)
+                === lookup pkh2 (getBalances (accts, currV)) *** QED
+        Just v ->   True
+                === isJust (openFunc (accts, currV) (Open pkh1))
+                === isJust Nothing
+                === False *** QED
+
+
+{-@
+xxxxx
+    ::    pkh:PubKeyHash
+    -> {   s0:State | isJust (transition s0 (Open pkh)) }
+    -> { isJust (openFunc s0 (Open pkh)) }
+@-}
+xxxxx :: PubKeyHash -> State -> Proof
+xxxxx pkh s0 =  transition s0 (Open pkh) *** QED
+
+--step in CBCAST
+{-@ reflect transition @-}
+{-@ transition :: State -> AccountInput -> Maybe State @-}
+transition :: State -> AccountInput -> Maybe State
+transition st i = case i of
+    (Open _) -> openFunc st i
+    (Close _) -> closeFunc st i               
+    (Deposit _) -> depositFunc st i
+    (Withdraw _) -> withdrawFunc st i
+    (Transfer _) -> transferFunc st i
+
 
 {-@ reflect closeFunc @-}                     
 closeFunc :: State -> AccountInput -> Maybe State
@@ -226,9 +245,9 @@ closeFunc (accts, currV) i = case i of
 {-@
 closePreservesOthers
     ::   pkh1:PubKeyHash
-    ->     s0:State
+    -> {   s0:State | (isJust (closeFunc s0 (Close pkh1))) }
     -> { pkh2:PubKeyHash | pkh2 /= pkh1 }
-    -> { (isJust (closeFunc s0 (Close pkh1))) => (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (closeFunc s0 (Close pkh1))))) }
+    -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (closeFunc s0 (Close pkh1))))) }
 @-}
 closePreservesOthers :: PubKeyHash -> State -> PubKeyHash -> Proof
 closePreservesOthers pkh1 (accts, currV) pkh2
@@ -265,10 +284,10 @@ withdrawFunc (accts, currV) i = case i of
 {-@
 withdrawPreservesOthers
     ::   pkh1:PubKeyHash
-    ->    val:Value
-    ->     s0:State
+    ->    val:Integer
+    -> {   s0:State | (isJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))) }
     -> { pkh2:PubKeyHash | pkh2 /= pkh1 }
-    -> { (isJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))) => (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))))) }
+    -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))))) }
 @-}
 withdrawPreservesOthers :: PubKeyHash -> Value -> State -> PubKeyHash -> Proof
 withdrawPreservesOthers pkh1 val (accts, currV) pkh2
@@ -306,10 +325,10 @@ depositFunc (accts, currV) i = case i of
 {-@
 depositPreservesOthers
     ::   pkh1:PubKeyHash
-    ->    val:Value
-    ->     s0:State
+    ->    val:Integer
+    -> {   s0:State | (isJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))) }
     -> { pkh2:PubKeyHash | pkh2 /= pkh1 }
-    -> { (isJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))) => (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))))) }
+    -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))))) }
 @-}
 depositPreservesOthers :: PubKeyHash -> Value -> State -> PubKeyHash -> Proof
 depositPreservesOthers pkh1 val (accts, currV) pkh2
@@ -349,10 +368,10 @@ transferFunc  (accts, currV) i = case i of
 transferPreservesOthers
     ::   pkh1:PubKeyHash
     ->   pkh2:PubKeyHash
-    ->    val:Value
-    ->     s0:State
+    ->    val:Integer
+    -> {   s0:State | (isJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 val)))) }
     -> { pkh3:PubKeyHash | pkh3 /= pkh2 && pkh3 /= pkh1 }
-    -> { (isJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 val)))) => (lookup pkh3 (getBalances s0) == lookup pkh3 (getBalances (fromJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 val)))))) }
+    -> { (lookup pkh3 (getBalances s0) == lookup pkh3 (getBalances (fromJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 val)))))) }
 @-}
 transferPreservesOthers :: PubKeyHash -> PubKeyHash -> Value -> State -> PubKeyHash -> Proof
 transferPreservesOthers pkh1 pkh2 val (accts, currV) pkh3
@@ -385,24 +404,10 @@ transferPreservesOthers pkh1 pkh2 val (accts, currV) pkh3
     | otherwise = ()
 
 
-{-@ reflect transition @-}
-{-@ transition :: State -> AccountInput -> Maybe State @-}
---{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | (((isOpen i) && not (isIn (getPkh i) (accounts st1))) => ( (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts (fromJust st2)) == 0))) && ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2)))) && ((isDeposit i) && (isIn (getPkh i) (accounts st1)) && getVal i >= 0 => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) + getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && ((isWithdraw i) && (isIn (getPkh i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2)))) && (((isTransfer i) && (isIn (getPkh i) (accounts st1)) && (isIn (getPkh2 i) (accounts st1)) && getValue (getPkh i) (accounts st1) >= getVal i && getVal i >= 0 && ((getPkh i) /= (getPkh2 i))) => (isJust st2) && (isIn (getPkh i) (accounts (fromJust st2))) && (getValue (getPkh i) (accounts st1)) - getVal i == (getValue (getPkh i) (accounts (fromJust st2))) && (isIn (getPkh2 i) (accounts (fromJust st2))) && (getValue (getPkh2 i) (accounts st1)) + getVal i == (getValue (getPkh2 i) (accounts (fromJust st2))) ) }@-}
---{-@ transition :: st1:State -> i:AccountInput -> {st2:Maybe State | ( (isClose i) && (isIn (getPkh i) (accounts st1)) && (getValue (getPkh i) (accounts st1) == 0) => (isJust st2) && not (isIn (getPkh i) (accounts (fromJust st2))))  }@-}
-transition :: State -> AccountInput -> Maybe State
-transition st i = case i of
-
-    (Open _) -> openFunc st i
-
-    (Close _) -> closeFunc st i
-                  
-    (Deposit _) -> depositFunc st i
-
-    (Withdraw _) -> withdrawFunc st i
-
-    (Transfer _) -> transferFunc st i
     
 --    _ -> Nothing -- todo
+
+
 
 {-@ measure getPkh @-}
 getPkh :: AccountInput -> PubKeyHash
@@ -423,40 +428,21 @@ getPkh2 (Transfer (TransferArgs pkh1 pkh2 v)) = pkh2
 {-@
 transitionPreservesOthers
     ::   s0:State
-    ->    i:AccountInput
+    -> {  i:AccountInput | (isJust (transition s0 i)) }
     -> {  k:PubKeyHash | k /= (getPkh i) && k /= (getPkh2 i)}
-    -> { (isJust (transition s0 i)) ==> (lookup k (getBalances s0) == lookup k (getBalances (fromJust (transition s0 i)))) }
+    -> { (lookup k (getBalances s0) == lookup k (getBalances (fromJust (transition s0 i)))) }
 @-}
 transitionPreservesOthers :: State -> AccountInput -> PubKeyHash -> Proof
-transitionPreservesOthers (accts, currV) i k 
-    | isJust (transition (accts, currV) i) = case i of
-        (Open pkh) -> case (isJust (openFunc (accts, currV) (Open pkh))) of
-            True -> lookup k (getBalances (fromJust (transition (accts, currV) i)))
-                === lookup k (getBalances (fromJust (openFunc (accts, currV) (Open pkh)))) 
-                    ? openPreservesOthers pkh (accts, currV) k *** Admit
---                === lookup k (getBalances (accts, currV)) *** QED
-            False -> True
-                 === isJust (transition (accts, currV) i) 
-                 === isJust (openFunc (accts, currV) (Open pkh))
-                 === False *** QED
-{-
-{-@
-openPreservesOthers
-    ::   pkh1:PubKeyHash
-    ->     s0:State
-    -> { pkh2:PubKeyHash | pkh2 /= pkh1 }
-    -> { (isJust (openFunc s0 (Open pkh1))) => 
-    (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (openFunc s0 (Open pkh1))))) }
-@-}
-openPreservesOthers :: PubKeyHash -> State -> PubKeyHash -> Proof
-openPreservesOthers pkh1 (accts, currV) pkh2
--}
-                  
-        (Close pkh) -> () *** Admit
-        (Deposit (WDArgs pkh v)) -> () *** Admit
-        (Withdraw (WDArgs pkh v)) -> () *** Admit
-        (Transfer (TransferArgs pkh1 pkh2 v)) -> () *** Admit
-    | otherwise = ()
+transitionPreservesOthers (accts, currV) i k =
+    let st = ((accts, currV) ? transition (accts, currV) i) in
+        case i of
+            (Open pkh) -> openPreservesOthers pkh st k  *** QED           
+            (Close pkh) -> closePreservesOthers pkh st k *** QED
+            (Deposit (WDArgs pkh v)) -> depositPreservesOthers pkh v st k *** QED
+            (Withdraw (WDArgs pkh v)) -> withdrawPreservesOthers pkh v st k *** QED
+            (Transfer (TransferArgs pkh1 pkh2 v)) -> transferPreservesOthers pkh1 pkh2 v st k *** QED
+
+
 
 {-
 
