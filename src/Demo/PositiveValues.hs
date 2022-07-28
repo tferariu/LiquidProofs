@@ -39,6 +39,13 @@ type Value = Integer
 --{-@ type UniqList a b = [(a,b)]<{\x y -> fst x /= fst y}> @-}
 -- get information on the rest of the list when pattern matching
 
+{-
+TransferPreservesNoDups
+    AccountInput  
+    -> { State | noDups getBalances state } 
+    -> {nodups (getbalances (transiton state AccountInput }
+-}
+
 {-@ data Balances <p :: Value -> Bool> = Balances (UniqList PubKeyHash Value<p>) @-}
 data Balances = Balances [(PubKeyHash, Value)] --use data refinement instead
 --maybe not use abstract refinements <>
