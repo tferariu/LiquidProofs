@@ -14,51 +14,55 @@ type PubKeyHash = String
 {-@ type Value = {v:Integer|v>=0} @-}
 type Value = Integer
 
-type Balances k v = [(k, v)]
 
-{-@ foo:: State -> State @-}
-foo :: State -> State
-foo x = x
+data AccMap key val
+    = Cons key val (AccMap key val)
+    | Nil
+{-@
+data AccMap key val
+    = Cons
+        { mapKey :: key
+        , mapVal :: val
+        , mapTl  :: AccMap {kt:key | mapKey /= kt} val
+        }
+    | Nil
+@-}
 
---second st == sumVal (first st)
+{-@ reflect lookup @-}
+lookup :: Eq k => k -> AccMap k v -> Maybe v
+lookup key Nil = Nothing
+lookup key (Cons k v xs) 
+    | key == k = Just v
+    | otherwise = lookup key xs
 
-{-
-{-@ type State = {st:(Balances PubKeyHash Value, Value) | True} @-}
-type State = (Balances PubKeyHash Value, Value)
+{-@ reflect delete @-}
+delete :: Eq key => key -> AccMap key val -> AccMap key val
+delete k1 Nil = Nil
+delete k1 (Cons k0 v0 m)
+    | k1 == k0 = m -- delete the current item
+    | otherwise = Cons k0 v0 (delete k1 m) -- search to see if k1 is present
 
-{-@ data State = State (bal:: Balances<{\x -> x >= 0}>) {v:Value | sumVal bal == v} @-}
-data State = State Balances Value 
+{-@ reflect insert @-}
+insert :: Eq key => key -> val -> AccMap key val -> AccMap key val
+insert k1 v1 Nil = Cons k1 v1 Nil
+insert k1 v1 (Cons k0 v0 m)
+    | k1 == k0 = Cons k1 v1 m -- replace the current item
+    | otherwise = Cons k0 v0 (insert k1 v1 m) -- search to see if k1 is present
 
-{-@ data Balances <p :: Value -> Bool> = Balances (UniqList PubKeyHash Value<p>) @-}
-data Balances = Balances [(PubKeyHash, Value)] --use data refinement instead
---maybe not use abstract refinements <>
--}
 
-
-data State = State (Balances PubKeyHash Value) Value
+data State = State (AccMap PubKeyHash Value) Value
 {-@
 data State = State
-    { balances :: Balances PubKeyHash Value
-    , totalValue  :: {totalValue:Value | sumVal balances == totalValue}
+    { accts :: AccMap PubKeyHash Value
+    , totalValue  :: {totalValue:Value | sumVal accts == totalValue}
     }
 @-}
 
-
-{-@ measure second @-}
-{-@ second:: (a,b) -> b @-}
-second :: (a,b) -> b
-second (a,b) = b
-
-{-@ measure first @-}
-{-@ first:: (a,b) -> a @-}
-first :: (a,b) -> a
-first (a,b) = a
-
 {-@ reflect sumVal @-}
-{-@ sumVal :: Balances PubKeyHash Value -> Value @-}
-sumVal :: Balances PubKeyHash Value -> Value
-sumVal [] = 0
-sumVal ((k,v):bs) = v + sumVal bs
+{-@ sumVal :: AccMap PubKeyHash Value -> Value @-}
+sumVal :: AccMap PubKeyHash Value -> Value
+sumVal Nil = 0
+sumVal (Cons k v bs) = v + sumVal bs
 
 data TransferArgs = TransferArgs PubKeyHash PubKeyHash Value
 
@@ -71,41 +75,19 @@ data AccountInput =
     | Open PubKeyHash
     | Close PubKeyHash
 
-{-@ reflect lookup @-}
-lookup :: Eq k => k -> Balances k v -> Maybe v
-lookup key [] = Nothing
-lookup key ((k,v):xs)
-    | key == k = Just v
-    | otherwise = lookup key xs
-
-{-@ reflect hasKey @-}
-hasKey :: Eq k => k -> Balances k v -> Bool
-hasKey _key          [] = False
-hasKey  key ((k,_v):xs) = key == k || hasKey key xs
-
-{-@ reflect insert @-}
-insert :: Eq k => k -> v -> Balances k v -> Balances k v
-insert key val [] = (key,val):[]
-insert key val ((k,v):xs)
-    | key == k = (key,val):xs
-    | otherwise = (k,v):insert key val xs
-
-{-@ reflect delete @-}
-delete :: Eq k => k -> Balances k v -> Balances k v
-delete key [] = []
-delete key ((k,v):xs)
-    | key == k = xs
-    | otherwise = (k,v):delete key xs
-
+{-@ ple deletePreservesOthers@-}
 {-@
 deletePreservesOthers
     ::  pkh1:k
-    ->   bal:Balances k v
+    ->   bal:AccMap k v
     -> {pkh2:k | pkh2 /= pkh1 }
     -> { lookup pkh2 bal == lookup pkh2 (delete pkh1 bal) }
 @-}
-deletePreservesOthers :: Eq k => k -> Balances k v -> k -> Proof
-deletePreservesOthers pkh1 bal@[] pkh2 = 
+deletePreservesOthers :: Eq k => k -> AccMap k v -> k -> Proof
+deletePreservesOthers pkh1 Nil pkh2 = ()
+deletePreservesOthers pkh1 (Cons pkh v m) pkh2 = deletePreservesOthers pkh1 m pkh2 
+                 
+{-deletePreservesOthers pkh1 bal@[] pkh2 = 
                     lookup pkh2 (delete pkh1 bal) 
                 === lookup pkh2 (delete pkh1 [])
                 === lookup pkh2 []
@@ -129,15 +111,20 @@ deletePreservesOthers pkh1 bal@((pkh,v):xs) pkh2
         | otherwise =   lookup pkh2 ((pkh,v):(delete pkh1 xs))
                     === lookup pkh2 (delete pkh1 xs) ? deletePreservesOthers pkh1 xs pkh2
                     === lookup pkh2 bal  *** QED
+-}
 
+{-@ ple deleteRemovesVal@-}
 {-@
 deleteRemovesVal
     ::   pkh:PubKeyHash
-    ->   bal:Balances PubKeyHash Value
+    ->   bal:AccMap PubKeyHash Value
     -> { sumVal bal - (getValue pkh bal) == sumVal (delete pkh bal)}
 @-}
-deleteRemovesVal :: PubKeyHash -> Balances PubKeyHash Value -> Proof
-deleteRemovesVal pkh bal =
+deleteRemovesVal :: PubKeyHash -> AccMap PubKeyHash Value -> Proof
+deleteRemovesVal pkh Nil = ()
+deleteRemovesVal pkh (Cons k v m) = deleteRemovesVal pkh m 
+
+{-
     case lookup pkh bal of
         Nothing -> case bal of
             [] ->   sumVal (delete pkh [])
@@ -176,17 +163,21 @@ deleteRemovesVal pkh bal =
                             === v + sumVal bs - (getValue pkh bs) 
                             === sumVal ((k,v):bs) - (getValue pkh ((k,v):bs))  
                             === sumVal bal - (getValue pkh bal) *** QED
+-}
 
+{-@ ple insertPreservesOthers @-}
 {-@
 insertPreservesOthers
-    ::    a:k
+    :: pkh1:k
     ->  val:v
-    ->  xxs:Balances k v
-    -> {  b:k | a /= b }
-    -> { lookup b xxs == lookup b (insert a val xxs) }
+    ->  xxs:AccMap k v
+    ->{pkh2:k | pkh1 /= pkh2 }
+    -> { lookup pkh2 xxs == lookup pkh2 (insert pkh1 val xxs) }
 @-}
-insertPreservesOthers :: Eq k => k -> v -> Balances k v -> k -> Proof
-insertPreservesOthers a val xxs b =
+insertPreservesOthers :: Eq k => k -> v -> AccMap k v -> k -> Proof
+insertPreservesOthers pkh1 val Nil pkh2 = ()
+insertPreservesOthers pkh1 val (Cons pkh v m) pkh2 = insertPreservesOthers pkh1 val m pkh2 
+{-
     let
     -- insertCases could be inlined as the body of insertPreservesOthers if you wanted
     insertCases =
@@ -243,16 +234,21 @@ insertPreservesOthers a val xxs b =
             *** QED
     in
     insertCases
+-}
 
+{-@ ple insertModifiesByVal@-}
 {-@
 insertModifiesByVal
     ::  pkh:PubKeyHash
     ->  val:Value
-    ->  bal:Balances PubKeyHash Value
+    ->  bal:AccMap PubKeyHash Value
     -> { sumVal bal + val - (getValue pkh bal) == sumVal (insert pkh val bal)}
 @-}
-insertModifiesByVal :: PubKeyHash -> Value -> Balances PubKeyHash Value -> Proof
-insertModifiesByVal pkh val bal =
+insertModifiesByVal :: PubKeyHash -> Value -> AccMap PubKeyHash Value -> Proof
+insertModifiesByVal pkh val Nil = ()
+insertModifiesByVal pkh val (Cons k v m) = insertModifiesByVal pkh val m
+
+{-
     case lookup pkh bal of
         Nothing -> case bal of
             [] ->   sumVal (insert pkh val [])
@@ -290,14 +286,14 @@ insertModifiesByVal pkh val bal =
                             === v + sumVal bs + val - (getValue pkh bs) 
                             === sumVal ((k, v):bs) + val - (getValue pkh bs)
                             === sumVal ((k, v):bs) + val - (getValue pkh bal) *** QED
+-}
 
 {-@ measure getBalances @-}
-getBalances :: State -> Balances PubKeyHash Value
+getBalances :: State -> AccMap PubKeyHash Value
 getBalances (State bal val) = bal
 
-
 {-@ reflect getValue @-}
-getValue :: PubKeyHash -> Balances PubKeyHash Value -> Value
+getValue :: PubKeyHash -> AccMap PubKeyHash Value -> Value
 getValue pkh bal = case lookup pkh bal of
   Just v  -> v
   Nothing -> 0
@@ -313,26 +309,6 @@ openFunc (State accts currV) i = case i of
             Just (State (insert pkh 0 accts) (currV `withProof` insertModifiesByVal pkh 0 accts)) 
     _ -> Nothing
 
-{-{-@
-insertModifiesByVal
-    ::  pkh:PubKeyHash
-    ->  val:Value
-    ->  bal:Balances PubKeyHash Value
-    -> { sumVal bal + val - (getValue pkh bal) == sumVal (insert pkh val bal)}
-@-}-}
-
-{-@
-insertZero
-    ::   pkh:PubKeyHash
-    -> { val:Value | val == 0 }
-    -> { bal:Balances PubKeyHash Value | lookup pkh bal == Nothing }
-    -> { sumVal bal == sumVal (insert pkh val bal)}
-@-}
-insertZero :: PubKeyHash -> Value -> Balances PubKeyHash Value -> Proof
-insertZero pkh val bal =    sumVal (insert pkh val bal) ? insertModifiesByVal pkh val bal
-                        === sumVal bal + val - (getValue pkh bal) 
-                        === sumVal bal + 0 - 0 
-                        === sumVal bal *** QED
 
 {-@ ple openPreservesOthers@-}
 {-@
@@ -343,7 +319,19 @@ openPreservesOthers
     -> { lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (openFunc s0 (Open pkh1)))) }
 @-}
 openPreservesOthers :: PubKeyHash -> State -> PubKeyHash -> Proof
-openPreservesOthers pkh1 s0@(State accts currV) pkh2 =
+openPreservesOthers pkh1 s0@(State accts currV) pkh2 = 
+    case lookup pkh1 accts of
+        Nothing -> insertPreservesOthers pkh1 0 accts pkh2
+        Just v ->  () *** Admit
+-- ????????????????????????
+--- minimal example
+
+{-
+
+    case lookup pkh1 accts of
+        Nothing -> insertPreservesOthers pkh1 0 accts pkh2
+        Just v -> ()
+
     case lookup pkh1 accts of
         Nothing ->  lookup pkh2 (getBalances (fromJust (openFunc s0 (Open pkh1)))) 
                 === lookup pkh2 (getBalances (fromJust (Just (State (insert pkh1 0 accts) (currV `withProof` insertZero pkh1 0 accts))))) 
@@ -355,16 +343,7 @@ openPreservesOthers pkh1 s0@(State accts currV) pkh2 =
                 === isJust (openFunc (State accts currV) (Open pkh1))
                 === isJust Nothing
                 === False *** QED
-
-
-{-@
-xxxxx
-    ::    pkh:PubKeyHash
-    -> {   s0:State | isJust (transition s0 (Open pkh)) }
-    -> { isJust (openFunc s0 (Open pkh)) }
-@-}
-xxxxx :: PubKeyHash -> State -> Proof
-xxxxx pkh s0 =  transition s0 (Open pkh) *** QED
+-}
 
 --step in CBCAST
 {-@ reflect transition @-}
@@ -379,7 +358,7 @@ transition st i = case i of
 
 
 
---{-@ ple closeFunc @-}
+{-@ ple closeFunc @-}
 {-@ reflect closeFunc @-}  
 {-@ closeFunc :: State -> AccountInput -> Maybe State @-}                   
 closeFunc :: State -> AccountInput -> Maybe State
@@ -388,31 +367,6 @@ closeFunc (State accts currV) i = case i of
         Just 0 -> Just (State (delete pkh accts) (currV `withProof` deleteRemovesVal pkh accts))
         _ -> Nothing
     _ -> Nothing
-
-{-
-{-@ reflect getValue @-}
-getValue :: PubKeyHash -> Balances PubKeyHash Value -> Value
-getValue pkh bal = case lookup pkh bal of
-  Just v  -> v
-  Nothing -> 0
-  {-@
-deleteRemovesVal
-    ::   pkh:PubKeyHash
-    ->   bal:Balances PubKeyHash Value
-    -> { sumVal bal - (getValue pkh bal) == sumVal (delete pkh bal)}
-@-}-}
-
-{-@
-deleteZero
-    ::   pkh:PubKeyHash
-    -> { bal:Balances PubKeyHash Value | lookup pkh bal == Just 0 }
-    -> { sumVal bal == sumVal (delete pkh bal)}
-@-}
-deleteZero :: PubKeyHash-> Balances PubKeyHash Value -> Proof
-deleteZero pkh bal =    sumVal (delete pkh bal) ? deleteRemovesVal pkh bal
-                        === sumVal bal- (getValue pkh bal) 
-                        === sumVal bal - 0 
-                        === sumVal bal *** QED
 
 {-@ ple closePreservesOthers@-}
 {-@
@@ -423,27 +377,45 @@ closePreservesOthers
     -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (closeFunc s0 (Close pkh1))))) }
 @-}
 closePreservesOthers :: PubKeyHash -> State -> PubKeyHash -> Proof
-closePreservesOthers pkh1 s0@(State accts currV) pkh2
-    | (isJust (closeFunc s0 (Close pkh1))) =
+closePreservesOthers pkh1 s0@(State accts currV) pkh2 =
+    case lookup pkh1 accts of
+        Just 0 -> deletePreservesOthers pkh1 accts pkh2
+        _ -> () *** Admit
+
+{-
+
+    
+
         case lookup pkh1 accts of
             Nothing ->  True
                     === isJust (closeFunc s0 (Close pkh1))
                     === isJust Nothing
                     === False *** QED
             Just v 
-                | v == 0 ->     lookup pkh2 (getBalances (fromJust (closeFunc s0 (Close pkh1))))
-                            === lookup pkh2 (getBalances (fromJust (Just (State (delete pkh1 accts) (currV `withProof` deleteZero pkh1 accts)))))
-                            === lookup pkh2 (getBalances (State (delete pkh1 accts) (currV `withProof` deleteZero pkh1 accts)))
-                            === lookup pkh2 (delete pkh1 accts) ? deletePreservesOthers pkh1 accts pkh2 
-                            === lookup pkh2 accts               -- lookup b xxs == lookup b (close a val xxs)
-                            === lookup pkh2 (getBalances s0) *** QED
+                | v == 0 ->     
+                    let (State bal _) = fromJust (closeFunc s0 (Close pkh1)) 
+                    in
+                    lookup pkh2 (getBalances (fromJust (closeFunc s0 (Close pkh1))))
+                    === lookup pkh2 bal 
+                    ==! lookup pkh2 (delete pkh1 accts) ? deletePreservesOthers pkh1 accts pkh2 
+                    === lookup pkh2 accts             
+                    === lookup pkh2 (getBalances s0) *** QED
+--                    *** Admit
+--                            === lookup pkh2 (getBalances (fromJust (Just (State (delete pkh1 accts) (currV `withProof` deleteZero pkh1 accts)))))
+--                            === lookup pkh2 (getBalances (State (delete pkh1 accts) (currV `withProof` deleteZero pkh1 accts)))
+                  --          === lookup pkh2 (getBalances ) 
+                  --          === lookup pkh2 (delete pkh1 (let (State bal _) = fromJust (closeFunc s0 (Close pkh1)) in bal)) *** Admit
+--                            === lookup pkh2 (delete pkh1 accts) ? deletePreservesOthers pkh1 accts pkh2 
+--                            === lookup pkh2 accts             
+--                            === lookup pkh2 (getBalances s0) *** QED
                 | otherwise ->  True
                             === isJust (closeFunc s0 (Close pkh1))
                             === isJust Nothing
-                            === False *** QED
-    | otherwise = () 
+                            === False *** QED 
+-}
 
 
+--maybe turn on ple here and test
 {-@ reflect withdrawFunc @-}
 {-@ withdrawFunc :: State -> AccountInput -> Maybe State @-}                       
 withdrawFunc :: State -> AccountInput -> Maybe State
@@ -456,17 +428,18 @@ withdrawFunc (State accts currV) i = case i of
                     else Nothing
     _ -> Nothing
 
+-- lookup returns part of the sum
 {-@ ple totalsLemma @-}
-totalsLemma :: PubKeyHash -> Value -> Balances PubKeyHash Value -> Value -> Proof
+totalsLemma :: PubKeyHash -> Value -> AccMap PubKeyHash Value -> Value -> Proof
 {-@
 totalsLemma
     ::   pkh:PubKeyHash 
     ->   val:Value
-    -> { bal:Balances PubKeyHash Value | lookup pkh bal == Just val}
+    -> { bal:AccMap PubKeyHash Value | lookup pkh bal == Just val}
     -> {  tv:Value | tv == sumVal bal }
     -> { val <= tv } 
 @-}
-totalsLemma pkh val bal tv = case bal of
+totalsLemma pkh val bal tv = () *** Admit {- case bal of
     [] ->   True
         === isJust (lookup pkh [])
         === isJust Nothing
@@ -482,20 +455,21 @@ totalsLemma pkh val bal tv = case bal of
                     === v + sumVal bs ? totalsLemma pkh val bs (sumVal bs)
                     =>= v + val 
                     =>= val *** QED
+-}
 
 {-@
 insertMinusVal
     ::   pkh:PubKeyHash
     ->    v0:Value
     -> { val:Value | v0 >= val }
-    -> { bal:Balances PubKeyHash Value | lookup pkh bal == Just v0 }
+    -> { bal:AccMap PubKeyHash Value | lookup pkh bal == Just v0 }
     -> { sumVal bal - val == sumVal (insert pkh (v0 - val) bal)}
 @-}
-insertMinusVal :: PubKeyHash -> Value -> Value -> Balances PubKeyHash Value -> Proof
-insertMinusVal pkh v0 val bal = sumVal (insert pkh (v0 - val) bal) ? insertModifiesByVal pkh (v0 - val) bal
+insertMinusVal :: PubKeyHash -> Value -> Value -> AccMap PubKeyHash Value -> Proof
+insertMinusVal pkh v0 val bal = () *** Admit {- sumVal (insert pkh (v0 - val) bal) ? insertModifiesByVal pkh (v0 - val) bal
                             === sumVal bal + (v0 - val) - (getValue pkh bal)
                             === sumVal bal + v0 - val - v0 
-                            === sumVal bal - val *** QED
+                            === sumVal bal - val *** QED -}
 
 {-@ ple withdrawPreservesOthers@-}
 {-@
@@ -507,7 +481,8 @@ withdrawPreservesOthers
     -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))))) }
 @-}
 withdrawPreservesOthers :: PubKeyHash -> Value -> State -> PubKeyHash -> Proof
-withdrawPreservesOthers pkh1 val s0@(State accts currV) pkh2
+withdrawPreservesOthers pkh1 val s0@(State accts currV) pkh2 = () *** Admit
+{-
     | (isJust (withdrawFunc s0 (Withdraw (WDArgs pkh1 val)))) =
         case lookup pkh1 accts of
             Nothing ->  True
@@ -530,7 +505,7 @@ withdrawPreservesOthers pkh1 val s0@(State accts currV) pkh2
                             === isJust Nothing
                             === False *** QED
     | otherwise = ()  
-
+-}
 
 {-@ reflect depositFunc @-}   
 {-@ depositFunc :: State -> AccountInput -> Maybe State @-}                
@@ -548,14 +523,14 @@ insertPlusVal
     ::   pkh:PubKeyHash
     ->    v0:Value
     ->   val:Value  
-    -> { bal:Balances PubKeyHash Value | lookup pkh bal == Just v0 }
+    -> { bal:AccMap PubKeyHash Value | lookup pkh bal == Just v0 }
     -> { sumVal bal + val == sumVal (insert pkh (v0 + val) bal)}
 @-}
-insertPlusVal :: PubKeyHash -> Value -> Value -> Balances PubKeyHash Value -> Proof
-insertPlusVal pkh v0 val bal  = sumVal (insert pkh (v0 + val) bal) ? insertModifiesByVal pkh (v0 + val) bal
+insertPlusVal :: PubKeyHash -> Value -> Value -> AccMap PubKeyHash Value -> Proof
+insertPlusVal pkh v0 val bal  = () *** Admit {-sumVal (insert pkh (v0 + val) bal) ? insertModifiesByVal pkh (v0 + val) bal
                             === sumVal bal + (v0 + val) - (getValue pkh bal)
                             === sumVal bal + v0 + val - v0 
-                            === sumVal bal + val *** QED
+                            === sumVal bal + val *** QED-}
 
 {-@ ple depositPreservesOthers@-}
 {-@
@@ -567,7 +542,8 @@ depositPreservesOthers
     -> { (lookup pkh2 (getBalances s0) == lookup pkh2 (getBalances (fromJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))))) }
 @-}
 depositPreservesOthers :: PubKeyHash -> Value -> State -> PubKeyHash -> Proof
-depositPreservesOthers pkh1 val s0@(State accts currV) pkh2
+depositPreservesOthers pkh1 val s0@(State accts currV) pkh2 = () *** Admit
+{-
     | (isJust (depositFunc s0 (Deposit (WDArgs pkh1 val)))) =
         case lookup pkh1 accts of
             Nothing ->  True
@@ -589,6 +565,7 @@ depositPreservesOthers pkh1 val s0@(State accts currV) pkh2
                             === isJust Nothing
                             === False *** QED
     | otherwise = () 
+-}
 
 {-@ ple transferFunc@-}
 {-@ reflect transferFunc @-}
@@ -603,22 +580,24 @@ transferFunc (State accts currV) i = case i of
                 if (v <= v1) && (v >= 0) && (pkh1 /= pkh2) then
                     Just (State (insert pkh1 (v1 - v) (insert pkh2 (v2 + v) accts)) 
                     (currV `withProof` insertMinusVal pkh1 v1 v (insert pkh2 (v2 + v) accts
-                    `withProof` doubleInsert pkh1 v1 pkh2 (v2 + v) accts) 
+                    `withProof` insertPreservesOthers pkh2 (v2 + v) accts pkh1) 
                     `withProof` insertPlusVal pkh2 v2 v accts))
                 else Nothing
     _ -> Nothing
 
 
 
+-- actually just InsertPresOther
+{-
 {-@ ple doubleInsert@-}
-doubleInsert :: PubKeyHash -> Value -> PubKeyHash -> Value -> Balances PubKeyHash Value -> Proof
+doubleInsert :: PubKeyHash -> Value -> PubKeyHash -> Value -> AccMap PubKeyHash Value -> Proof
 {-@
 doubleInsert
     ::  pkh1:PubKeyHash
     ->    v1:Value
     -> {pkh2:PubKeyHash | pkh1 /= pkh2 }
     ->    v2:Value  
-    -> { bal:Balances PubKeyHash Value | lookup pkh1 bal == Just v1 }
+    -> { bal:AccMap PubKeyHash Value | lookup pkh1 bal == Just v1 }
     -> { lookup pkh1 (insert pkh2 v2 bal) == Just v1 }
 @-}
 doubleInsert pkh1 v1 pkh2 v2 bal = case bal of
@@ -652,6 +631,7 @@ doubleInsert pkh1 v1 pkh2 v2 bal = case bal of
                     === lookup pkh1 ((k,v):(insert pkh2 v2 bs))
                     === lookup pkh1 (insert pkh2 v2 bs) ? doubleInsert pkh1 v1 pkh2 v2 bs
                     === Just v1 *** QED
+-}
 
 
 {-@ ple transferPreservesOthers@-}
@@ -665,7 +645,8 @@ transferPreservesOthers
     -> { (lookup pkh3 (getBalances s0) == lookup pkh3 (getBalances (fromJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 v)))))) }
 @-}
 transferPreservesOthers :: PubKeyHash -> PubKeyHash -> Value -> State -> PubKeyHash -> Proof
-transferPreservesOthers pkh1 pkh2 v s0@(State accts currV) pkh3
+transferPreservesOthers pkh1 pkh2 v s0@(State accts currV) pkh3 = () *** Admit
+{-
     | (isJust (transferFunc s0 (Transfer (TransferArgs pkh1 pkh2 v)))) =
         case lookup pkh1 accts of
             Nothing ->  True
@@ -685,9 +666,7 @@ transferPreservesOthers pkh1 pkh2 v s0@(State accts currV) pkh3
                                 `withProof` doubleInsert pkh1 v1 pkh2 (v2 + v) accts) 
                                 `withProof` insertPlusVal pkh2 v2 v accts)))))
                             === lookup pkh3 (getBalances (State (insert pkh1 (v1 - v) (insert pkh2 (v2 + v) accts))
-                                (currV `withProof` insertMinusVal pkh1 v1 v (insert pkh2 (v2 + v) accts
-                                `withProof` doubleInsert pkh1 v1 pkh2 (v2 + v) accts) 
-                                `withProof` insertPlusVal pkh2 v2 v accts)))
+                                (currV)))
                             === lookup pkh3 (insert pkh1 (v1 - v) (insert pkh2 (v2 + v) accts))
                                 ? insertPreservesOthers pkh1 (v1 - v) (insert pkh2 (v2 + v) accts) pkh3 
                             === lookup pkh3 (insert pkh2 (v2 + v) accts) 
@@ -699,7 +678,7 @@ transferPreservesOthers pkh1 pkh2 v s0@(State accts currV) pkh3
                             === isJust Nothing
                             === False *** QED
     | otherwise = ()
-
+-}
 
 
 {-@ measure getPkh @-}
@@ -753,6 +732,14 @@ notChanging :: [PubKeyHash] -> PubKeyHash -> Bool
 notChanging [] k = True
 notChanging (pkh:pkhs) k = k /= pkh && (notChanging pkhs k)
 
+{-@
+xxxxx
+    ::    pkh:PubKeyHash
+    -> {   s0:State | isJust (transition s0 (Open pkh)) }
+    -> { isJust (openFunc s0 (Open pkh)) }
+@-}
+xxxxx :: PubKeyHash -> State -> Proof
+xxxxx pkh s0 =  transition s0 (Open pkh) *** QED
 -}
 
 

@@ -1,7 +1,8 @@
 {-@ LIQUID "--reflection" @-}
 {-@ LIQUID "--ple-local" @-}
 {-@ LIQUID "--exact-data-cons" @-}
-
+--- CORRECTNESS PROOFS!!
+--certora merkle trees?
 module Demo.Proofs2 where
 
 import           Prelude                                    hiding (tail, lookup, elem)
@@ -22,7 +23,7 @@ type Balances k v = [(k, v)]
 foo :: State -> State
 foo x = x
 
---{-@ type State = (Balances PubKeyHash Value, Value) @-}
+--{-@ type State = (Balances PubKeyHash Value, Value)<{\x y -> sumval x == y}> @-}
 type State = (Balances PubKeyHash Value, Value)
 
 data TransferArgs = TransferArgs PubKeyHash PubKeyHash Value
@@ -74,9 +75,7 @@ deletePreservesOthers :: Eq k => k -> Balances k v -> k -> Proof
 deletePreservesOthers pkh1 bal@[] pkh2 = 
                     lookup pkh2 (delete pkh1 bal) 
                 === lookup pkh2 (delete pkh1 [])
-                === lookup pkh2 []
-                === Nothing
-                === lookup pkh2 (delete pkh1 bal) *** QED
+                === lookup pkh2 [] *** QED
 deletePreservesOthers pkh1 bal@((pkh,v):xs) pkh2
                 | pkh == pkh1 =  lookup pkh2 (delete pkh1 bal)
                              === lookup pkh2 (delete pkh1 ((pkh,v):xs))

@@ -22,6 +22,9 @@ library
       Demo.Tudor
       Demo.UniqList
       Demo.Proofs
+      Demo.Proofs2
+      Demo.MultiUTxO
+      Demo.HangsEndlessly
   hs-source-dirs:
       src
   build-depends:
