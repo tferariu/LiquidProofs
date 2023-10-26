@@ -1,4 +1,4 @@
-module DEX where
+module OpSem_DEX where
 
 {-
 import Relation.Binary.PropositionalEquality as Eq
@@ -81,8 +81,8 @@ data Currency : Set where
   C1    : Currency
   C2    : Currency
   Other : Currency
+  
 record State : Set where
- -- constructor state{_,_,_,_,_}
   field
     curr1 : Currency
     curr2 : Currency
@@ -90,6 +90,51 @@ record State : Set where
     omap2 : Map ℚ ( Map String ℤ )
 
 open State
+
+data _↝_ : State → State → Set where
+
+  offer-C₁ : ∀ {v r pkh s}
+    → 0ℤ Data.Integer.<  v
+    → 0ℚ Data.Rational.< r
+      ----------------------------------------------------------------------------------
+    → s ↝ record s { omap1 = (insert r (singleton pkh v) (omap1 s)) }
+
+  offer-C₂ : ∀ {v r pkh s}
+    → 0ℤ Data.Integer.<  v
+    → 0ℚ Data.Rational.< r
+      ----------------------------------------------------------------------------------
+    → s ↝ record s { omap2 = (insert r (singleton pkh v) (omap2 s)) }
+
+
+  
+{-
+  offer-C₂ :
+
+    -------------
+    s ↝⟨ "offer" ⟩ s′
+
+offer s ... = s′
+----------------
+keys s ≤ keys s′
+
+s ↝⟨ "offer" ⟩ s′
+----------------
+keys s ≤ keys s′
+
+s ↝⟨ "request" ⟩ s′
+----------------
+⋯
+-}
+
+
+
+
+
+
+
+
+
+
 
 offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
 offer st pkh v cur r with cur
@@ -333,31 +378,7 @@ prop3 {curr = Other} = {!!} -}
 -- -}
 
 -- ALTERNATIVE: transition relation instead of (computable) functions
-{-
-data _↝_ : State → → State → Set where
-  offer-C₁ : ∀ {v r pkh}
-    → 0ℤ Data.Integer.<  v
-    → 0ℚ Data.Rational.< r
-      ----------------------------------------------------------------------------------
-      s ↝⟨ "offer" ⟩ record s { omap1 = insertm r (λ x -> if x == pkh then v else 0ℤ) (s .omap1) }
 
-  offer-C₂ :
-
-    -------------
-    s ↝⟨ "offer" ⟩ s′
-
-offer s ... = s′
-----------------
-keys s ≤ keys s′
-
-s ↝⟨ "offer" ⟩ s′
-----------------
-keys s ≤ keys s′
-
-s ↝⟨ "request" ⟩ s′
-----------------
-⋯
--}
 
 -- module _ (_<?_ : Dec _<_) (_≤?_ : Dec _≤_) where
 
