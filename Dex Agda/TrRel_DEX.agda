@@ -1,4 +1,4 @@
-module OpSem_DEX where
+module TrRel_DEX where
 
 {-
 import Relation.Binary.PropositionalEquality as Eq
