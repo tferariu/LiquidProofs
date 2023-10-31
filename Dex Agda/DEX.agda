@@ -1,3 +1,5 @@
+{-# OPTIONS --rewriting #-}
+
 module DEX where
 
 {-
@@ -29,10 +31,14 @@ open import Data.Bool.Base using (if_then_else_)
 open import Data.Nat using (ℕ; zero; suc; _+_; _*_; _∸_)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 open import Relation.Nullary using (¬_; Dec; yes; no)
+open import Relation.Nullary.Decidable using (dec-yes)
 open import Data.Integer hiding (_⊔_) -- hiding (_≤_;)
 open import Data.Rational  hiding (_⊔_) -- hiding (_≤_;)
 open import Data.String
 open import Data.Maybe
+open import Data.Sum
+open import Data.Product
+open import Agda.Builtin.Equality.Rewrite
 -- open import Agda.Builtin.Sigma
 -- open import Agda.Primitive
 
@@ -179,12 +185,72 @@ prop3 {v = -[1+_] n} {curr = Other} = refl
 prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (cancel st pkh v Other r) ≡ nothing
 prop4 = refl
 
-prop5 : ∀ {s : State}
-  -> ∃[ pkh ] ∃[ c ] ∃[ v ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) )
+lemma1 : ∀ (n : ℕ) -> ( (n Data.Nat.<ᵇ ℕ.suc n) ≡ true )
+lemma1 zero = refl
+lemma1 (ℕ.suc n) = lemma1 n
+
+lemma2 : ∀ (n : ℕ) -> ( (n Data.Nat.≤ᵇ n) ≡ true )
+lemma2 zero = refl
+lemma2 (ℕ.suc n) = lemma1 n
+
+lemma3 : ∀ (z : ℤ) -> ( (Dec.does ( z Data.Integer.≤? z )) ≡ true )
+lemma3 (+_ n) = lemma2 n
+lemma3 (-[1+_] n) = lemma2 n
+
+lemma' : ∀ (n : ℕ) (pkh : String) (r : ℚ) (s : State)
+  -> query pkh (query r (omap1 s)) ≡ +[1+ n ]
+  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
+lemma' n pkh r s q rewrite q = lemma2 (ℕ.suc n)
+
+lemma'' : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
+  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
+  -> ( (if Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) then i else j) ≡ i)
+lemma'' i j n pkh r s d rewrite d = refl
+
+prop5 : ∀ (s : State)
+  -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap1 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
+  -> ∃[ pkh ] ∃[ v ] ∃[ c ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) )
 -----------------------------------------
 --  -> cancel s pkh c r ≡ just s' 
 -- ∨ (∃ c map s' -> reqest s c map = just s')
-prop5 = ⟨ {!!} , {!!} ⟩
+prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemma'' (just (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) nothing n pkh r s (lemma' n pkh r s x))
+...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , y ⟩ ⟩ ⟩ ⟩ ⟩
+
+
+-- with ( lemma' n pkh r s x) in H
+-- ...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
+
+-- with (lemma3  +[1+ n ] ) in H ... | y
+
+
+-- ... | false = {!!}
+prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ = {!!}
+
+ghjk : ∀ {n} -> n Data.Nat.≤ n
+ghjk {zero} = Data.Nat.z≤n
+ghjk {ℕ.suc n} = Data.Nat.s≤s ghjk
+
+asdf : ∀ {n} -> +[1+ n ] Data.Integer.≤ +[1+ n ]
+asdf = +≤+ (Data.Nat.s≤s ghjk)
+
+
+test : ∀ (n : ℕ) -> (+[1+ n ] Data.Integer.≤? +[1+ n ]) ≡ yes (asdf)
+test zero = {!!}
+test (ℕ.suc n) = {!!}
+
+
+
+{-
+prop5 s = λ
+      { ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩
+        → ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r ,
+        ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
+      ;  ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ → {!!}}
+
+-}
+
+
+--  ⟨ pkh , ⟨ v , ⟨ C1 , ⟨ r , ⟨ {!!} , {! !} ⟩ ⟩ ⟩ ⟩ ⟩
 
 {-
 prop3 {v = +_ zero} {curr = C1} = refl

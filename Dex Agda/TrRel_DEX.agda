@@ -77,6 +77,7 @@ postulate
   _≤ᵐ_ : Map A B → Map A B → Set
   _≤?ᵐ_ : ∀ (m m′ : Map A B) → Dec (m ≤ᵐ m′)
   _~_ : (m : Map A B) (m′ : Map A B) {_ : m ≤ᵐ m′} → Map A B
+  _only_ : Map A B -> A -> Set
   
   -- key equality
 
@@ -85,44 +86,60 @@ data Currency : Set where
   C1    : Currency
   C2    : Currency
   Other : Currency
+-- variable c : Currency
   
 record State : Set where
   field
     curr1 : Currency
     curr2 : Currency
-    omap : Map ℚ ( Map String (Map Currency ℤ) )
-  --  omap2 : Map ℚ ( Map String (Map  ℤ) )
+    omap  : Map Currency ( Map String (Map ℚ ℤ) )
+  --  omap2 : Map ℚ ( Map String ℤ )
 
 open State
 
 -- ∀ s -> ∃ s' -> s ↝ s' ∧ s' lessValue s
 
 -- ∀ s -> s ↝ s' 
-
 {-
-ofr : State -> String -> ℤ -> Currency -> ℚ -> State
-ofr s pkh v cur r = case cur of λ where
+data C1⊎C2 : Currency → Set where
+  C1 : C1⊎C2 C1
+  C2 : C1⊎C2 C2
+-- variable cur : C1⊎C2 c
+
+ofr : State -> String -> ℤ -> ℚ -> (c : Currency) ->  (C1⊎C2 c) -> State
+ofr s pkh v r c' x = case x of λ where
         C1 -> record s { omap1 = (insert r (singleton pkh v) (omap1 s)) }
         C2 -> record s { omap2 = (insert r (singleton pkh v) (omap2 s)) }
-        Other -> s
+
+
+can : State -> String -> ℤ -> ℚ 
 -}
 
 data _↝_ : State → State → Set where
 
-  offer : ∀ {v r pkh s cur}
+  offer : ∀ {v r pkh s cur }
     → 0ℤ Data.Integer.<  v
     → 0ℚ Data.Rational.< r
     → ( cur ≡ C1 ⊎ cur ≡ C2 )
       ---------------------------------------------------------------------------
-    → s ↝ record s { omap = (insert r (singleton pkh (singleton cur v)) (omap s)) }
+    → s ↝ record s { omap = (insert cur (singleton pkh (singleton r v)) (omap s)) }
 
-  cancel : ∀ {s pkh v cur r}
-    → v Data.Integer.≤ (query cur (query pkh (query r (omap s))))
+-- s ↝ ofr s pkh v r c cur
+
+-- record s { omap = (insert r (singleton pkh (singleton cur v)) (omap s)) }
+
+  cancel : ∀ {s pkh v r cur}
+    → v Data.Integer.≤ ( query r (query pkh (query cur (omap s))))
     ----------------------------------------------------------------
-    → s ↝ record s { omap = insert r (singleton pkh (singleton cur ( (query cur (query pkh (query r (omap s)))) Data.Integer.- v ))) (omap s)}
+    → s ↝ record s { omap = insert cur (singleton pkh (singleton r ( (query r (query pkh (query cur (omap s)))) Data.Integer.- v ))) (omap s) }
        
 
- --  request : ∀ {map }
+  request : ∀ {s map cur }
+    → map ≤ᵐ (omap s)
+    → map only cur
+    → ( cur ≡ C1 ⊎ cur ≡ C2 )
+    -------------------------------------------
+    → s ↝ record s { omap = (omap s) -ᵐ map }
 
 
 
