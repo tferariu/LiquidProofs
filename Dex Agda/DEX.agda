@@ -29,10 +29,12 @@ open import Data.Bool.Base using (if_then_else_)
 open import Data.Nat using (ℕ; zero; suc; _+_; _*_; _∸_)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 open import Relation.Nullary using (¬_; Dec; yes; no)
-open import Data.Integer -- hiding (_≤_;)
-open import Data.Rational -- hiding (_≤_;)
+open import Data.Integer hiding (_⊔_) -- hiding (_≤_;)
+open import Data.Rational  hiding (_⊔_) -- hiding (_≤_;)
 open import Data.String
 open import Data.Maybe
+-- open import Agda.Builtin.Sigma
+-- open import Agda.Primitive
 
 {-
 data Dec (A : Set) : Set where
@@ -57,6 +59,27 @@ private variable A B : Set
 --
 --  g : B × A
 --  g = ⟨ b , a ⟩
+
+{-
+infix 2 Σ-syntax
+
+private variable a b : Level
+
+Σ-syntax : (A : Set a) → (A → Set b) → Set (a ⊔ b)
+Σ-syntax = Σ
+
+syntax Σ-syntax A (λ x → B) = Σ[ x ∈ A ] B
+
+∃ : ∀ {A : Set a} → (A → Set b) → Set (a ⊔ b)
+∃ = Σ _
+
+infix 2 ∃-syntax
+
+∃-syntax : ∀ {A : Set a} → (A → Set b) → Set (a ⊔ b)
+∃-syntax = ∃
+
+syntax ∃-syntax (λ x → B) = ∃[ x ] B
+-}
 
 postulate
   -- Map ℕ ℤ
@@ -155,6 +178,13 @@ prop3 {v = -[1+_] n} {curr = Other} = refl
 
 prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (cancel st pkh v Other r) ≡ nothing
 prop4 = refl
+
+prop5 : ∀ {s : State}
+  -> ∃[ pkh ] ∃[ c ] ∃[ v ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) )
+-----------------------------------------
+--  -> cancel s pkh c r ≡ just s' 
+-- ∨ (∃ c map s' -> reqest s c map = just s')
+prop5 = ⟨ {!!} , {!!} ⟩
 
 {-
 prop3 {v = +_ zero} {curr = C1} = refl

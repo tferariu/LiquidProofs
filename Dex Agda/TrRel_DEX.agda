@@ -33,6 +33,9 @@ open import Data.Integer -- hiding (_≤_;)
 open import Data.Rational -- hiding (_≤_;)
 open import Data.String
 open import Data.Maybe
+open import Data.Sum.Base
+open import Data.Product
+open import Function.Base
 
 {-
 data Dec (A : Set) : Set where
@@ -74,6 +77,7 @@ postulate
   _≤ᵐ_ : Map A B → Map A B → Set
   _≤?ᵐ_ : ∀ (m m′ : Map A B) → Dec (m ≤ᵐ m′)
   _~_ : (m : Map A B) (m′ : Map A B) {_ : m ≤ᵐ m′} → Map A B
+  
   -- key equality
 
 
@@ -86,24 +90,50 @@ record State : Set where
   field
     curr1 : Currency
     curr2 : Currency
-    omap1 : Map ℚ ( Map String ℤ )
-    omap2 : Map ℚ ( Map String ℤ )
+    omap : Map ℚ ( Map String (Map Currency ℤ) )
+  --  omap2 : Map ℚ ( Map String (Map  ℤ) )
 
 open State
 
+-- ∀ s -> ∃ s' -> s ↝ s' ∧ s' lessValue s
+
+-- ∀ s -> s ↝ s' 
+
+{-
+ofr : State -> String -> ℤ -> Currency -> ℚ -> State
+ofr s pkh v cur r = case cur of λ where
+        C1 -> record s { omap1 = (insert r (singleton pkh v) (omap1 s)) }
+        C2 -> record s { omap2 = (insert r (singleton pkh v) (omap2 s)) }
+        Other -> s
+-}
+
 data _↝_ : State → State → Set where
 
-  offer-C₁ : ∀ {v r pkh s}
+  offer : ∀ {v r pkh s cur}
     → 0ℤ Data.Integer.<  v
     → 0ℚ Data.Rational.< r
-      ----------------------------------------------------------------------------------
-    → s ↝ record s { omap1 = (insert r (singleton pkh v) (omap1 s)) }
+    → ( cur ≡ C1 ⊎ cur ≡ C2 )
+      ---------------------------------------------------------------------------
+    → s ↝ record s { omap = (insert r (singleton pkh (singleton cur v)) (omap s)) }
 
-  offer-C₂ : ∀ {v r pkh s}
-    → 0ℤ Data.Integer.<  v
-    → 0ℚ Data.Rational.< r
+  cancel : ∀ {s pkh v cur r}
+    → v Data.Integer.≤ (query cur (query pkh (query r (omap s))))
+    ----------------------------------------------------------------
+    → s ↝ record s { omap = insert r (singleton pkh (singleton cur ( (query cur (query pkh (query r (omap s)))) Data.Integer.- v ))) (omap s)}
+       
+
+ --  request : ∀ {map }
+
+
+
+
+-- record s { omap1 = (insert r (singleton pkh v) (omap1 s)) }
+
+--  offer-C₂ : ∀ {v r pkh s}
+--    → 0ℤ Data.Integer.<  v
+--    → 0ℚ Data.Rational.< r
       ----------------------------------------------------------------------------------
-    → s ↝ record s { omap2 = (insert r (singleton pkh v) (omap2 s)) }
+--    → s ↝ record s { omap2 = (insert r (singleton pkh v) (omap2 s)) }
 
 
   
@@ -135,9 +165,9 @@ s ↝⟨ "request" ⟩ s′
 
 
 
-
-offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
-offer st pkh v cur r with cur
+{-
+offer' : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+offer' st pkh v cur r with cur
 ... | C1 = if (Dec.does (0ℤ Data.Integer.<? v))
   then if (Dec.does (0ℚ Data.Rational.<? r))
     then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)) } )
@@ -150,8 +180,8 @@ offer st pkh v cur r with cur
   else nothing
 ... | Other = nothing
 
-request : State -> Currency -> Map ℚ (Map String ℤ) -> Maybe State
-request st cur smap with cur
+request' : State -> Currency -> Map ℚ (Map String ℤ) -> Maybe State
+request' st cur smap with cur
 ... | C1 = if (Dec.does (smap ≤?ᵐ (omap1 st)))
   then just (record st { omap1 = (omap1 st) -ᵐ smap })
   else nothing
@@ -160,9 +190,10 @@ request st cur smap with cur
   else nothing
 ... | Other = nothing
 
+-- ∀ s -> (∃ pkh z c r s' -> cancel s pkh c r = just s' ) ∨ (∃ c map s' -> reqest s c map = just s')
 
-cancel : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
-cancel st pkh v cur r with cur
+cancel' : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+cancel' st pkh v cur r with cur
 ... | C1 = if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap1 st))) ))
   then just (record st { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap1 st)} )
   else nothing
@@ -178,16 +209,16 @@ cancel st pkh v cur r with cur
 -}
 
 
-prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (offer st pkh v Other r) ≡ nothing
+prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (offer' st pkh v Other r) ≡ nothing
 prop1 = refl
 
-prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer st pkh -1ℤ curr r) ≡ nothing
+prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer' st pkh -1ℤ curr r) ≡ nothing
 prop2 {curr = C1} = refl
 prop2 {curr = C2} = refl
 prop2 {curr = Other} = refl
 
 
-prop3 : ∀ {st : State} {pkh : String} {v : ℤ} {curr : Currency} -> (offer st pkh v curr -½ ) ≡ nothing
+prop3 : ∀ {st : State} {pkh : String} {v : ℤ} {curr : Currency} -> (offer' st pkh v curr -½ ) ≡ nothing
 prop3 {v = +_ zero} {curr = C1} = refl
 prop3 {v = +[1+ n ]} {curr = C1} = refl
 prop3 {v = -[1+_] n} {curr = C1} = refl
@@ -198,8 +229,10 @@ prop3 {v = +_ zero} {curr = Other} = refl
 prop3 {v = +[1+ n ]} {curr = Other} = refl
 prop3 {v = -[1+_] n} {curr = Other} = refl
 
-prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (cancel st pkh v Other r) ≡ nothing
+prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (cancel' st pkh v Other r) ≡ nothing
 prop4 = refl
+
+-}
 
 {-
 prop3 {v = +_ zero} {curr = C1} = refl
