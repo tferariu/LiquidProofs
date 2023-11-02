@@ -151,7 +151,7 @@ cancel st pkh v cur r with cur
   then just (record st { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap1 st)} )
   else nothing
 ... | C2 = if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap2 st))) ))
-  then just (record st { omap2 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap2 st)} )
+  then just (record st { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 st))) Data.Integer.- v )) (omap2 st)} )
   else nothing
 ... | Other = nothing
 
@@ -202,20 +202,38 @@ lemma' : ∀ (n : ℕ) (pkh : String) (r : ℚ) (s : State)
   -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
 lemma' n pkh r s q rewrite q = lemma2 (ℕ.suc n)
 
-lemma'' : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
+lemmaC1 : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
   -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
   -> ( (if Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) then i else j) ≡ i)
-lemma'' i j n pkh r s d rewrite d = refl
+lemmaC1 i j n pkh r s d rewrite d = refl
+
+lemma'' : ∀ (n : ℕ) (pkh : String) (r : ℚ) (s : State)
+  -> query pkh (query r (omap2 s)) ≡ +[1+ n ]
+  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) ≡ true )
+lemma'' n pkh r s q rewrite q = lemma2 (ℕ.suc n)
+
+lemmaC2 : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
+  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) ≡ true )
+  -> ( (if Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) then i else j) ≡ i)
+lemmaC2 i j n pkh r s d rewrite d = refl
 
 prop5 : ∀ (s : State)
-  -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap1 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
+  -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap2 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
   -> ∃[ pkh ] ∃[ v ] ∃[ c ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) )
 -----------------------------------------
 --  -> cancel s pkh c r ≡ just s' 
 -- ∨ (∃ c map s' -> reqest s c map = just s')
-prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemma'' (just (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) nothing n pkh r s (lemma' n pkh r s x))
+prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC1 (just (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) nothing n pkh r s (lemma' n pkh r s x))
 ...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , y ⟩ ⟩ ⟩ ⟩ ⟩
 
+prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC2 (just (record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} )) nothing n pkh r s (lemma'' n pkh r s y))
+...| x = ⟨ pkh , ⟨ +[1+ n ] , ⟨ C2 , ⟨ r , ⟨  record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} , x ⟩ ⟩ ⟩ ⟩ ⟩
+
+
+--with (x)
+--... | z =  ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
+
+--subst? variables unify, terms don't variables at the bottom of inference rules
 
 -- with ( lemma' n pkh r s x) in H
 -- ...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
@@ -224,7 +242,6 @@ prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ 
 
 
 -- ... | false = {!!}
-prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ = {!!}
 
 ghjk : ∀ {n} -> n Data.Nat.≤ n
 ghjk {zero} = Data.Nat.z≤n
@@ -233,10 +250,9 @@ ghjk {ℕ.suc n} = Data.Nat.s≤s ghjk
 asdf : ∀ {n} -> +[1+ n ] Data.Integer.≤ +[1+ n ]
 asdf = +≤+ (Data.Nat.s≤s ghjk)
 
-
-test : ∀ (n : ℕ) -> (+[1+ n ] Data.Integer.≤? +[1+ n ]) ≡ yes (asdf)
-test zero = {!!}
-test (ℕ.suc n) = {!!}
+-- test : ∀ (n : ℕ) -> (+[1+ n ] Data.Integer.≤? +[1+ n ]) ≡ yes (asdf)
+-- test zero = {!!}
+-- test (ℕ.suc n) = {!!}
 
 
 
@@ -253,13 +269,13 @@ prop5 s = λ
 --  ⟨ pkh , ⟨ v , ⟨ C1 , ⟨ r , ⟨ {!!} , {! !} ⟩ ⟩ ⟩ ⟩ ⟩
 
 {-
-prop3 {v = +_ zero} {curr = C1} = refl
-prop3 {v = +[1+ n ]} {curr = C1} = refl
-prop3 {v = -[1+_] n} {curr = C1} = refl
-prop3 {v = +_ zero} {curr = C2} = refl
-prop3 {v = +[1+ n ]} {curr = C2} = refl
-prop3 {v = -[1+_] n} {curr = C2} = refl
-prop3 {curr = Other} = {!!} -}
+   prop3 {v = +_ zero} {curr = C1} = refl
+   prop3 {v = +[1+ n ]} {curr = C1} = refl
+   prop3 {v = -[1+_] n} {curr = C1} = refl
+   prop3 {v = +_ zero} {curr = C2} = refl
+   prop3 {v = +[1+ n ]} {curr = C2} = refl
+   prop3 {v = -[1+_] n} {curr = C2} = refl
+   prop3 {curr = Other} = {!!} -}
 
 
 
