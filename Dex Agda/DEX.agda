@@ -110,16 +110,76 @@ data Currency : Set where
   C1    : Currency
   C2    : Currency
   Other : Currency
+  
 record State : Set where
- -- constructor state{_,_,_,_,_}
   field
     curr1 : Currency
     curr2 : Currency
     omap1 : Map ℚ ( Map String ℤ )
     omap2 : Map ℚ ( Map String ℤ )
+    v1    : ℤ
+    v2    : ℤ
+    out   : Map String (Map Currency ℤ)
 
 open State
 
+data _cof_ : Currency -> State -> Set where
+
+  first : ∀ {cur s}
+    -> cur ≡ (curr1 s)
+    --------------------
+    -> cur cof s
+
+  second : ∀ {cur s}
+    -> cur ≡ (curr2 s)
+    -------------------
+    -> cur cof s
+
+{-
+  neither : ∀ {cur s}
+    ->
+    ->
+    ------------------
+    -> 
+-}
+
+
+_c=?_ : ∀ (x y : Currency) -> Dec (x ≡ y)
+C1 c=? C1 = yes refl
+C1 c=? C2 = no (λ ())
+C1 c=? Other = no (λ ())
+C2 c=? C1 = no (λ ())
+C2 c=? C2 = yes refl
+C2 c=? Other = no (λ ())
+Other c=? C1 = no (λ ())
+Other c=? C2 = no (λ ())
+Other c=? Other = yes refl
+
+offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+offer st pkh v cur r =
+  if (Dec.does (0ℤ Data.Integer.<? v))
+    then if (Dec.does (0ℚ Data.Rational.<? r))
+      then if (Dec.does (cur c=? (curr1 st)))
+        then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)) } )
+        else if (Dec.does (cur c=? (curr2 st)))
+          then just (record st { omap2 = (insert r (singleton pkh v) (omap2 st)) } )
+          else nothing
+      else nothing
+    else nothing
+
+{-if (Dec.does (0ℤ Data.Integer.<? v))
+  then if (Dec.does (0ℚ Data.Rational.<? r))
+    then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)) } )
+    else nothing
+  else nothing
+... | C2 = if (Dec.does (0ℤ Data.Integer.<? v))
+  then if (Dec.does (0ℚ Data.Rational.<? r))
+    then just (record st { omap2 = (insert r (singleton pkh v) (omap2 st)) } )
+    else nothing
+  else nothing
+... | Other = nothing -}
+
+{-
 offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
 offer st pkh v cur r with cur
 ... | C1 = if (Dec.does (0ℤ Data.Integer.<? v))
@@ -133,6 +193,8 @@ offer st pkh v cur r with cur
     else nothing
   else nothing
 ... | Other = nothing
+
+-}
 
 request : State -> Currency -> Map ℚ (Map String ℤ) -> Maybe State
 request st cur smap with cur
@@ -160,6 +222,8 @@ cancel st pkh v cur r with cur
   then just (record st { omap2 = (insertm r ( λ x -> if x == pkh then ( (((omap2 st) r) pkh) Data.Integer.- v) else 0ℤ) (omap2 st)) } )
  
 -}
+
+{-
 
 
 prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (offer st pkh v Other r) ≡ nothing
@@ -229,6 +293,8 @@ prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ 
 prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC2 (just (record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} )) nothing n pkh r s (lemma'' n pkh r s y))
 ...| x = ⟨ pkh , ⟨ +[1+ n ] , ⟨ C2 , ⟨ r , ⟨  record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} , x ⟩ ⟩ ⟩ ⟩ ⟩
 
+
+-}
 
 --with (x)
 --... | z =  ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
