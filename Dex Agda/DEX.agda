@@ -21,6 +21,7 @@ open import Data.String
 open import Data.Rational
 open import Data.Maybe
 open import Data.Integer
+
 -}
 
 import Relation.Binary.PropositionalEquality as Eq
@@ -38,7 +39,9 @@ open import Data.String
 open import Data.Maybe
 open import Data.Sum
 open import Data.Product
-open import Agda.Builtin.Equality.Rewrite
+open import Data.Empty
+open import Relation.Binary.PropositionalEquality.Core
+open import Agda.Builtin.Equality --.Rewrite
 -- open import Agda.Builtin.Sigma
 -- open import Agda.Primitive
 
@@ -49,7 +52,7 @@ data Dec (A : Set) : Set where
 -}
 
 
-private variable A B : Set
+private variable A B C : Set
 
 -- ** simple way
 -- f : A → B → A × B
@@ -87,6 +90,12 @@ infix 2 ∃-syntax
 syntax ∃-syntax (λ x → B) = ∃[ x ] B
 -}
 
+
+data Currency : Set where
+  C1    : Currency
+  C2    : Currency
+  Other : Currency
+
 postulate
   -- Map ℕ ℤ
   Map : (A : Set) → (B : Set) → Set
@@ -103,13 +112,12 @@ postulate
   _≤ᵐ_ : Map A B → Map A B → Set
   _≤?ᵐ_ : ∀ (m m′ : Map A B) → Dec (m ≤ᵐ m′)
   _~_ : (m : Map A B) (m′ : Map A B) {_ : m ≤ᵐ m′} → Map A B
+  compute : Map A (Map B C) -> Currency -> Currency -> Map B (Map Currency C)
+  sum : Map A B -> B
   -- key equality
 
 
-data Currency : Set where
-  C1    : Currency
-  C2    : Currency
-  Other : Currency
+
   
 record State : Set where
   field
@@ -123,6 +131,7 @@ record State : Set where
 
 open State
 
+{-
 data _cof_ : Currency -> State -> Set where
 
   first : ∀ {cur s}
@@ -135,7 +144,7 @@ data _cof_ : Currency -> State -> Set where
     -------------------
     -> cur cof s
 
-{-
+
   neither : ∀ {cur s}
     ->
     ->
@@ -160,9 +169,9 @@ offer st pkh v cur r =
   if (Dec.does (0ℤ Data.Integer.<? v))
     then if (Dec.does (0ℚ Data.Rational.<? r))
       then if (Dec.does (cur c=? (curr1 st)))
-        then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)) } )
+        then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)); v1 = (v1 st) Data.Integer.+ v } )
         else if (Dec.does (cur c=? (curr2 st)))
-          then just (record st { omap2 = (insert r (singleton pkh v) (omap2 st)) } )
+          then just (record st { omap2 = (insert r (singleton pkh v) (omap2 st)) ; v2 = (v2 st) Data.Integer.+ v } )
           else nothing
       else nothing
     else nothing
@@ -194,7 +203,7 @@ offer st pkh v cur r with cur
   else nothing
 ... | Other = nothing
 
--}
+
 
 request : State -> Currency -> Map ℚ (Map String ℤ) -> Maybe State
 request st cur smap with cur
@@ -205,8 +214,45 @@ request st cur smap with cur
   then just (record st { omap2 = (omap2 st) -ᵐ smap })
   else nothing
 ... | Other = nothing
+-}
 
 
+
+request : State -> Currency -> Map ℚ (Map String ℤ) -> Maybe State
+request st cur smap =
+  if (Dec.does (cur c=? (curr1 st)))
+    then if (Dec.does (smap ≤?ᵐ (omap1 st)))
+      then just (record st { omap1 = (omap1 st) -ᵐ smap ; out = compute smap cur (curr2 st)
+        ; v1 = (v1 st) Data.Integer.- sum(sum smap)}) -- VALUE
+      else nothing
+    else if (Dec.does (cur c=? (curr2 st)))
+      then if (Dec.does (smap ≤?ᵐ (omap2 st)))
+        then just (record st { omap2 = (omap2 st) -ᵐ smap ; out = compute smap cur (curr1 st)
+          ; v2 = (v1 st) Data.Integer.- sum(sum smap)})
+        else nothing
+      else nothing
+
+
+
+cancel : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+cancel st pkh v cur r =
+  if (Dec.does (cur c=? (curr1 st)))
+    then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap1 st))) ))
+      then just (record st { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap1 st)
+        ; v1 = (v1 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
+      else nothing
+    else if (Dec.does (cur c=? (curr2 st)))
+      then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap2 st))) ))
+        then just (record st { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 st))) Data.Integer.- v )) (omap2 st)
+          ; v2 = (v2 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
+        else nothing
+      else nothing
+
+
+
+
+
+{-
 cancel : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
 cancel st pkh v cur r with cur
 ... | C1 = if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap1 st))) ))
@@ -217,37 +263,101 @@ cancel st pkh v cur r with cur
   else nothing
 ... | Other = nothing
 
+-}
+
+
+
 {-
 (Dec.does ( v Data.Integer.≤? (((omap2 st) r) pkh) ))
   then just (record st { omap2 = (insertm r ( λ x -> if x == pkh then ( (((omap2 st) r) pkh) Data.Integer.- v) else 0ℤ) (omap2 st)) } )
  
 -}
 
-{-
 
+{-offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+offer st pkh v cur r =
+  if (Dec.does (0ℤ Data.Integer.<? v))
+    then if (Dec.does (0ℚ Data.Rational.<? r))
+      then if (Dec.does (cur c=? (curr1 st)))
+        then just (record st { omap1 = (insert r (singleton pkh v) (omap1 st)); v1 = (v1 st) Data.Integer.+ v } )
+        else if (Dec.does (cur c=? (curr2 st)))
+          then just (record st { omap2 = (insert r (singleton pkh v) (omap2 st)) ; v2 = (v2 st) Data.Integer.+ v } )
+          else nothing
+      else nothing
+    else nothing-}
 
-prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (offer st pkh v Other r) ≡ nothing
-prop1 = refl
+exFalso : {A : Set} -> ⊥ -> A
+exFalso ()
+
+prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
+      -> (cur ≢ (curr1 st) )
+      -> (cur ≢ (curr2 st) )
+      --------------------------
+      -> (offer st pkh v cur r) ≡ nothing
+prop1 {v = +_ zero} nc1 nc2 = refl
+prop1 {v = -[1+_] n} nc1 nc2 = refl
+prop1 {v = +[1+ n ]} {mkℚ (-[1+_] n₁) denominator-1 isCoprime} nc1 nc2 = refl
+prop1 {v = +[1+ n ]} {mkℚ (+_ zero) denominator-1 isCoprime} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = ⊥-elim (nc1 refl)
+prop1 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
+prop1 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
+prop1 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
+prop1 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
+prop1 {record { curr1 = C2 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc1 refl)
+prop1 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
+prop1 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
+prop1 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
+prop1 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
+prop1 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop1 {record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc1 refl)
+
 
 prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer st pkh -1ℤ curr r) ≡ nothing
-prop2 {curr = C1} = refl
-prop2 {curr = C2} = refl
-prop2 {curr = Other} = refl
-
+prop2 = refl
 
 prop3 : ∀ {st : State} {pkh : String} {v : ℤ} {curr : Currency} -> (offer st pkh v curr -½ ) ≡ nothing
-prop3 {v = +_ zero} {curr = C1} = refl
-prop3 {v = +[1+ n ]} {curr = C1} = refl
-prop3 {v = -[1+_] n} {curr = C1} = refl
-prop3 {v = +_ zero} {curr = C2} = refl
-prop3 {v = +[1+ n ]} {curr = C2} = refl
-prop3 {v = -[1+_] n} {curr = C2} = refl
-prop3 {v = +_ zero} {curr = Other} = refl
-prop3 {v = +[1+ n ]} {curr = Other} = refl
-prop3 {v = -[1+_] n} {curr = Other} = refl
+prop3 {v = +_ zero}  = refl
+prop3 {v = +[1+ n ]} = refl
+prop3 {v = -[1+_] n} = refl
 
-prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} -> (cancel st pkh v Other r) ≡ nothing
-prop4 = refl
+
+prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
+      -> (cur ≢ (curr1 st) )
+      -> (cur ≢ (curr2 st) )
+      --------------------------
+      -> (cancel st pkh v cur r) ≡ nothing
+prop4 {record { curr1 = C1 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc1 refl)
+prop4 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
+prop4 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
+prop4 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
+prop4 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
+prop4 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
+prop4 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
+prop4 {record { curr1 = C2 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc1 refl)
+prop4 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
+prop4 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
+prop4 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
+prop4 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
+prop4 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
+prop4 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
+prop4 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc2 refl)
+prop4 {record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc1 refl)
+
+
 
 lemma1 : ∀ (n : ℕ) -> ( (n Data.Nat.<ᵇ ℕ.suc n) ≡ true )
 lemma1 zero = refl
@@ -288,11 +398,11 @@ prop5 : ∀ (s : State)
 --  -> cancel s pkh c r ≡ just s' 
 -- ∨ (∃ c map s' -> reqest s c map = just s')
 prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC1 (just (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) nothing n pkh r s (lemma' n pkh r s x))
-...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , y ⟩ ⟩ ⟩ ⟩ ⟩
+...| y = ⟨ pkh , ⟨  +[1+ n ] , ⟨ C1 , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
 
 prop5 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC2 (just (record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} )) nothing n pkh r s (lemma'' n pkh r s y))
-...| x = ⟨ pkh , ⟨ +[1+ n ] , ⟨ C2 , ⟨ r , ⟨  record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} , x ⟩ ⟩ ⟩ ⟩ ⟩
-
+...| x = ⟨ pkh , ⟨ +[1+ n ] , ⟨ C2 , ⟨ r , ⟨  record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.-  +[1+ n ] )) (omap2 s)} , {!!} ⟩ ⟩ ⟩ ⟩ ⟩
+{-
 
 -}
 
