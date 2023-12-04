@@ -229,7 +229,7 @@ request st cur smap =
     else if (Dec.does (cur c=? (curr2 st)))
       then if (Dec.does (smap ≤?ᵐ (omap2 st)))
         then just (record st { omap2 = (omap2 st) -ᵐ smap ; out = compute smap cur (curr1 st)
-          ; v2 = (v1 st) Data.Integer.- sum(sum smap)})
+          ; v2 = (v2 st) Data.Integer.- sum(sum smap)})
         else nothing
       else nothing
 
@@ -239,12 +239,12 @@ cancel : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
 cancel st pkh v cur r =
   if (Dec.does (cur c=? (curr1 st)))
     then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap1 st))) ))
-      then just (record st { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap1 st)
+      then just (record st { omap1 = insert r (singleton pkh ( Data.Integer.- v )) (omap1 st)
         ; v1 = (v1 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
       else nothing
     else if (Dec.does (cur c=? (curr2 st)))
       then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap2 st))) ))
-        then just (record st { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 st))) Data.Integer.- v )) (omap2 st)
+        then just (record st { omap2 = insert r (singleton pkh ( Data.Integer.- v )) (omap2 st)
           ; v2 = (v2 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
         else nothing
       else nothing
@@ -359,6 +359,7 @@ prop4 {record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; 
 
 -}
 
+{-
 lemma1 : ∀ (n : ℕ) -> ( (n Data.Nat.<ᵇ ℕ.suc n) ≡ true )
 lemma1 zero = refl
 lemma1 (ℕ.suc n) = lemma1 n
@@ -486,20 +487,19 @@ lemmaCUR2 record { curr1 = Other ; curr2 = C1 ; pf = pf } n pkh r prf rewrite pr
 lemmaCUR2 record { curr1 = Other ; curr2 = C2 ; pf = pf } n pkh r prf rewrite prf | lemma2 n = refl
 lemmaCUR2 record { curr1 = Other ; curr2 = Other ; pf = pf } n pkh r prf = ⊥-elim (pf refl)
 
-lemmonus1 : ∀ (m n : ℕ) -> Data.Integer.- (+ m) Data.Integer.< +[1+ n ]
-lemmonus1 zero n = +<+ (Data.Nat.s≤s Data.Nat.z≤n)
-lemmonus1 (ℕ.suc m) n = -<+
+lemneg : ∀ (m n : ℕ) -> Data.Integer.- (+ m) Data.Integer.< +[1+ n ]
+lemneg zero n = +<+ (Data.Nat.s≤s Data.Nat.z≤n)
+lemneg (ℕ.suc m) n = -<+
 
 obviously : ∀ (m n : ℕ) -> m Data.Nat.≤ n -> m Data.Nat.≤ ℕ.suc n
 obviously zero n Data.Nat.z≤n = Data.Nat.z≤n
 obviously (ℕ.suc n) (ℕ.suc m) (Data.Nat.s≤s p) = Data.Nat.s≤s (obviously n m p)
 
-
-lemmonus2 : ∀ (m n : ℕ) -> m ∸ n Data.Nat.≤ m
-lemmonus2 zero zero = Data.Nat.z≤n
-lemmonus2 zero (ℕ.suc n) = Data.Nat.z≤n
-lemmonus2 (ℕ.suc m) zero = Data.Nat.s≤s (lemmonus2 m zero)
-lemmonus2 (ℕ.suc m) (ℕ.suc n) = obviously (m ∸ n) m (lemmonus2 m n)
+lemmonus : ∀ (m n : ℕ) -> m ∸ n Data.Nat.≤ m
+lemmonus zero zero = Data.Nat.z≤n
+lemmonus zero (ℕ.suc n) = Data.Nat.z≤n
+lemmonus (ℕ.suc m) zero = Data.Nat.s≤s (lemmonus m zero)
+lemmonus (ℕ.suc m) (ℕ.suc n) = obviously (m ∸ n) m (lemmonus m n)
 
 lemplus : ∀ (m n : ℕ) -> m Data.Nat.≤ m Data.Nat.+ n
 lemplus zero zero = Data.Nat.z≤n
@@ -507,18 +507,18 @@ lemplus (ℕ.suc m) zero = Data.Nat.s≤s (lemplus m zero)
 lemplus zero (ℕ.suc n) = Data.Nat.z≤n
 lemplus (ℕ.suc m) (ℕ.suc n) = Data.Nat.s≤s (lemplus m (ℕ.suc n))
 
-
 lemminus : ∀ (z : ℤ) (n : ℕ)
   -> 0ℤ Data.Integer.< + n
   -> z Data.Integer.- + n  Data.Integer.< z
 lemminus (+_ m) zero (+<+ ())
 lemminus (+_ zero) (ℕ.suc n) p = -<+
 lemminus +[1+ m ] (ℕ.suc n) p with m Data.Nat.<ᵇ n
-... | true = lemmonus1 (n ∸ m) m
-... | false = +<+ (Data.Nat.s≤s (lemmonus2 m n))
+... | true = lemneg (n ∸ m) m
+... | false = +<+ (Data.Nat.s≤s (lemmonus m n))
 lemminus (-[1+_] n) zero (+<+ ())
 lemminus (-[1+_] zero) (ℕ.suc n) p = -<- (Data.Nat.s≤s Data.Nat.z≤n)
 lemminus (-[1+_] (ℕ.suc m)) (ℕ.suc n) p = -<- (Data.Nat.s≤s (Data.Nat.s≤s (lemplus m n)))
+
 
 
 prop5 : ∀ (s : State)
@@ -529,6 +529,85 @@ prop5 : ∀ (s : State)
 -- ∨ (∃ c map s' -> reqest s c map = just s')
 prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₁ x , a ⟩ ⟩ ⟩ ⟩ = ⟨ pkh , ⟨ ( +_ n) , ⟨ (curr1 s) , ⟨ r , ⟨ ( (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.- ( +_ n) )) (omap1 s) ; v1 = (v1 s) Data.Integer.- ( +_ n) ; out = singleton pkh (singleton (curr1 s) ( +_ n)) })) ,  ⟨ lemmaCUR1 s n pkh r x , inj₁ (lemminus (v1 s) n a) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
 prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₂ y , a ⟩ ⟩ ⟩ ⟩ = ⟨ pkh , ⟨ ( +_ n) , ⟨ (curr2 s) , ⟨ r , ⟨ ( (record s { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 s))) Data.Integer.- ( +_ n) )) (omap2 s) ; v2 = (v2 s) Data.Integer.- ( +_ n) ; out = singleton pkh (singleton (curr2 s) ( +_ n)) })) , ⟨ lemmaCUR2 s n pkh r y , inj₂ ((lemminus (v2 s) n a)) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
+-}
+
+
+eqLemma : ∀ {a b c : Currency} -> a ≡ b -> a ≡ c -> b ≡ c
+eqLemma ab ac rewrite ac = sym ab
+
+postulate
+  mapLemma : ∀ {map : Map ℚ (Map String ℤ)} {r : ℚ} {pkh : String} {v : ℤ} -> sum (sum (insert r (singleton pkh v) map)) ≡ sum (sum map) Data.Integer.+ v 
+
+
+sumLemma : ∀ {map : Map ℚ (Map String ℤ)} {r : ℚ} {pkh : String} {x v : ℤ} -> sum (sum map) ≡ x -> x Data.Integer.+ v ≡ sum (sum (insert r (singleton pkh v) map))
+sumLemma refl = sym mapLemma
+
+prop6 : ∀ (s : State) (pkh : String) (v : ℤ) (cur : Currency) (r : ℚ)
+  -> (v1 s ≡ sum (sum (omap1 s)))
+  -> (v2 s ≡ sum (sum (omap2 s)))
+  -> ∃[ s' ] ((offer s pkh v cur r ≡ just s') × ((v1 s' ≡ sum (sum (omap1 s'))) × (v2 s' ≡ sum (sum (omap2 s'))))) ⊎ ( offer s pkh v cur r ≡ nothing )
+prop6 s pkh (+_ zero) cur r p1 p2 = inj₂ refl
+prop6 s pkh +[1+ n ] cur (mkℚ (+_ zero) denominator-1 isCoprime) p1 p2 = inj₂ refl
+prop6 s pkh +[1+ n ] cur (mkℚ +[1+ n₁ ] denominator-1 isCoprime) p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s)
+... | yes x | yes z = ⊥-elim (pf s (eqLemma x z))
+... | yes x | no t  = inj₁ ⟨ (record s { omap1 = (insert (mkℚ +[1+ n₁ ] denominator-1 isCoprime) (singleton pkh +[1+ n ]) (omap1 s)); v1 = (v1 s) Data.Integer.+ +[1+ n ] } ) , ⟨ refl , ⟨ sumLemma (sym p1) , p2 ⟩ ⟩ ⟩
+... | no y  | yes z = inj₁ ⟨ (record s { omap2 = (insert (mkℚ +[1+ n₁ ] denominator-1 isCoprime) (singleton pkh +[1+ n ]) (omap2 s)); v2 = (v2 s) Data.Integer.+ +[1+ n ] } ) , ⟨ refl , ⟨ p1 , (sumLemma (sym p2)) ⟩ ⟩ ⟩
+... | no y  | no  t = inj₂ refl
+prop6 s pkh +[1+ n ] cur (mkℚ (-[1+_] n₁) denominator-1 isCoprime) p1 p2 = inj₂ refl
+prop6 s pkh (-[1+_] n) cur r p1 p2 = inj₂ refl
+
+
+
+postulate
+  mapMinusLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} -> sum (sum (map1 -ᵐ map2)) ≡ sum (sum map1) Data.Integer.- sum (sum map2) 
+
+
+minusMLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} {x : ℤ} -> sum (sum map1) ≡ x -> x Data.Integer.- sum (sum map2) ≡ sum (sum (map1 -ᵐ map2))
+minusMLemma refl = sym mapMinusLemma
+
+prop7 : ∀ (s : State) (cur : Currency) (map : Map ℚ (Map String ℤ))
+  -> (v1 s ≡ sum (sum (omap1 s)))
+  -> (v2 s ≡ sum (sum (omap2 s)))
+  -> ∃[ s' ] ((request s cur map ≡ just s') × ((v1 s' ≡ sum (sum (omap1 s'))) × (v2 s' ≡ sum (sum (omap2 s'))))) ⊎ ( request s cur map ≡ nothing )
+prop7 s cur map p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | map ≤?ᵐ (omap1 s) | map ≤?ᵐ (omap2 s)
+... | yes x | yes y | _ | _ = ⊥-elim (pf s (eqLemma x y))
+... | yes _ | no _  | yes _ | _ = inj₁ ⟨ (record s { omap1 = (omap1 s) -ᵐ map ; out = compute map cur (curr2 s) ; v1 = (v1 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ minusMLemma (sym p1) , p2 ⟩ ⟩ ⟩
+... | yes _ | no _  | no _  | _ = inj₂ refl
+... | no _  | yes _ | _ | yes _ = inj₁ ⟨ (record s { omap2 = (omap2 s) -ᵐ map ; out = compute map cur (curr1 s) ; v2 = (v2 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ p1 , minusMLemma (sym p2) ⟩ ⟩ ⟩
+... | no _  | yes _ | _ | no _  = inj₂ refl
+... | no _  | no  _ | _ | _ = inj₂ refl
+
+
+{-
+
+cancel : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
+cancel st pkh v cur r =
+  if (Dec.does (cur c=? (curr1 st)))
+    then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap1 st))) ))
+      then just (record st { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 st))) Data.Integer.- v )) (omap1 st)
+        ; v1 = (v1 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
+      else nothing
+    else if (Dec.does (cur c=? (curr2 st)))
+      then if (Dec.does ( v Data.Integer.≤? (query pkh (query r (omap2 st))) ))
+        then just (record st { omap2 = insert r (singleton pkh ( (query pkh (query r (omap2 st))) Data.Integer.- v )) (omap2 st)
+          ; v2 = (v2 st) Data.Integer.- v ; out = singleton pkh (singleton cur v) })
+        else nothing
+      else nothing
+-}
+
+prop8 : ∀ (s : State) (pkh : String) (v : ℤ) (cur : Currency) (r : ℚ)
+  -> (v1 s ≡ sum (sum (omap1 s)))
+  -> (v2 s ≡ sum (sum (omap2 s)))
+  -> ∃[ s' ] ((cancel s pkh v cur r ≡ just s') × ((v1 s' ≡ sum (sum (omap1 s'))) × (v2 s' ≡ sum (sum (omap2 s'))))) ⊎ (cancel s pkh v cur r ≡ nothing)
+prop8 s pkh v cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | v Data.Integer.≤? (query pkh (query r (omap1 s))) | v Data.Integer.≤? (query pkh (query r (omap2 s)))
+... | yes x | yes y | _ | _ = ⊥-elim (pf s (eqLemma x y)) 
+... | yes _ | no  _ | yes _ | _ = inj₁ ⟨ (record s { omap1 = insert r (singleton pkh ( Data.Integer.- v )) (omap1 s) ; v1 = (v1 s) Data.Integer.- v ; out = singleton pkh (singleton cur v) }) , ⟨ refl , ⟨ sumLemma (sym p1) , p2 ⟩ ⟩ ⟩
+... | yes _ | no  _ | no _ | _  = inj₂ refl
+... | no  _ | yes _ | _ | yes _ = inj₁ ⟨  (record s { omap2 = insert r (singleton pkh ( Data.Integer.- v )) (omap2 s) ; v2 = (v2 s) Data.Integer.- v ; out = singleton pkh (singleton cur v) }) , ⟨ refl , ⟨ p1 , sumLemma (sym p2) ⟩ ⟩ ⟩
+... | no  _ | yes _ | _ | no _  = inj₂ refl
+... | no  _ | no  _ | _ | _ = inj₂ refl
+
+
 
 {-
 s ⟨ pkh , ⟨ r , ⟨ +[1+ n ] , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ with (lemmaC1 (just (record s { omap1 = insert r (singleton pkh ( (query pkh (query r (omap1 s))) Data.Integer.-  +[1+ n ] )) (omap1 s)} )) nothing n pkh r s (lemma' n pkh r s x))
