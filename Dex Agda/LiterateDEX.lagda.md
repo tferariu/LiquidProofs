@@ -1,6 +1,6 @@
 This is the example I wrote in the e-mail with the specification, I decided to paste it in
 here as a refresher of what we are looking at, but feel free to skip to later on if you
-remember this part well. 
+remember this part well. The SPECIFICATION itself has changed though. 
 
 The idea is that each individual instance of an Order Book DEx contract serves as an exchange
 point for 2 currencies. Users can then post offers on this contract, saying that they are
@@ -154,6 +154,7 @@ record State : Set where
 open State
 
 ```
+
 State here encompasses both internal contract state and blockchain UTxO state.
 Internally:
 
@@ -182,8 +183,8 @@ who need to be paid, Currency is the currency they need to be paid in, and ℤ t
 
 I am abstracting inputs and signatures away completely, and assuming that if they are part
 of the input to the transition function, they also valid blockchain inputs and signatures.
-```agda
 
+```agda
 
 offer : State -> String -> ℤ -> Currency -> ℚ -> Maybe State
 offer st pkh v cur r =
@@ -307,47 +308,10 @@ v2 = (v2 st) Data.Integer.- v ;
  
 out = singleton pkh (singleton cur v)
 
+------------------------------------------------------------------
+LIQUIDITY:
+
 ```agda
-
-
-
-
-prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
-      -> (cur ≢ (curr1 st) )
-      -> (cur ≢ (curr2 st) )
-      --------------------------
-      -> (offer st pkh v cur r) ≡ nothing
-prop1 {v = +_ zero} nc1 nc2 = refl
-prop1 {v = -[1+_] n} nc1 nc2 = refl
-prop1 {v = +[1+ n ]} {mkℚ (-[1+_] n₁) denominator-1 isCoprime} nc1 nc2 = refl
-prop1 {v = +[1+ n ]} {mkℚ (+_ zero) denominator-1 isCoprime} nc1 nc2 = refl
-prop1 {st}  {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
-...| yes x | _     = ⊥-elim (nc1 x)
-...| no  x | yes y = ⊥-elim (nc2 y)
-...| no  x | no  y = refl
-
-
-prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer st pkh -1ℤ curr r) ≡ nothing
-prop2 = refl
-
-prop3 : ∀ {st : State} {pkh : String} {v : ℤ} {curr : Currency} -> (offer st pkh v curr -½ ) ≡ nothing
-prop3 {v = +_ zero}  = refl
-prop3 {v = +[1+ n ]} = refl
-prop3 {v = -[1+_] n} = refl
-
-
-prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
-      -> (cur ≢ (curr1 st) )
-      -> (cur ≢ (curr2 st) )
-      --------------------------
-      -> (cancel st pkh v cur r) ≡ nothing
-prop4 {st} {cur = cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
-...| yes x | _     = ⊥-elim (nc1 x)
-...| no  x | yes y = ⊥-elim (nc2 y)
-...| no  x | no  y = refl
-
-
-
 
 lemma1 : ∀ (n : ℕ) -> ( (n Data.Nat.<ᵇ ℕ.suc n) ≡ true )
 lemma1 zero = refl
@@ -356,7 +320,6 @@ lemma1 (ℕ.suc n) = lemma1 n
 lemma2 : ∀ (n : ℕ) -> ( (n Data.Nat.≤ᵇ n) ≡ true )
 lemma2 zero = refl
 lemma2 (ℕ.suc n) = lemma1 n
-
 
 lemmaCUR1 : ∀ (s : State) (n : ℕ) (pkh : String) (r : ℚ) {mst : Maybe State}
   -> (query pkh (query r (omap1 s)) ≡ (+ n))
@@ -393,10 +356,6 @@ lemmaCUR1 s (ℕ.suc n) pkh r pf (Data.Nat.s≤s pn) with curr1 s c=? curr1 s
 ... | yes x rewrite pf | lemma1 n = refl
 ... | no  x = ⊥-elim (x refl)
 
-
-
-
-
 lemmaCUR2 : ∀ (s : State) (n : ℕ) (pkh : String) (r : ℚ) {mst : Maybe State}
   -> (query pkh (query r (omap2 s)) ≡ (+ n))
   -> 0 Data.Nat.< n
@@ -431,6 +390,10 @@ lemmaCUR2 s (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) with curr2 s c=? curr1 s |
 ... | no  x | yes y rewrite prf | lemma1 n = refl
 ... | no  x | no  y = ⊥-elim (y refl)
 
+```
+Above I have some unpleasant looking lemmas that I use basically just to do re-writing in the proof of liquidity.
+Below are some not particularly interesting lemmas dealing with inequalities which are also needed for liquidity.
+```agda
 
 lemneg : ∀ (m n : ℕ) -> Data.Integer.- (+ m) Data.Integer.< +[1+ n ]
 lemneg zero n = +<+ (Data.Nat.s≤s Data.Nat.z≤n)
@@ -465,16 +428,46 @@ lemminus (-[1+_] zero) (ℕ.suc n) p = -<- (Data.Nat.s≤s Data.Nat.z≤n)
 lemminus (-[1+_] (ℕ.suc m)) (ℕ.suc n) p = -<- (Data.Nat.s≤s (Data.Nat.s≤s (lemplus m n)))
 
 
--- Liquidity
+```
+I have formulated the Liquidity property as follows:
+∀ States, if ∃ (pkh r v) such that querying either omap1 or omap2 results in a value v that is strictly positive,
+then, ∃ (pkh v curr rate) and state s' such that we can transition to s', and the value in s' is less than s.
+
+In particular, the transition from s to s' in this case is always cancel, because what matters for liquidity
+is that ∃ some transition that removed the value from the state, not which, since in our case there are
+multiple. I could make a version for request as well.
+```agda
+
+--(Liquidity)
 prop5 : ∀ (s : State)
   -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap2 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
   -> ∃[ pkh ] ∃[ v ] ∃[ c ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) × (v1 s' Data.Integer.< v1 s ⊎ v2 s' Data.Integer.< v2 s ) )
 -----------------------------------------
 --  -> cancel s pkh c r ≡ just s' 
 -- ∨ (∃ c map s' -> reqest s c map = just s')
-prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ = ⟨ pkh , ⟨ (+_ n) , ⟨ (curr1 s) , ⟨ r , ⟨ ((record s { omap1 = insert r (singleton pkh (Data.Integer.- (+ n))) (omap1 s) ; v1 = (v1 s) Data.Integer.- (+_ n) ; out = singleton pkh (singleton (curr1 s) (+_ n)) })) , ⟨ lemmaCUR1 s n pkh r x m<n , inj₁ (lemminus (v1 s) n (+<+ m<n)) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
-prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ = ⟨ pkh , ⟨ (+_ n) , ⟨ (curr2 s) , ⟨ r , ⟨ ((record s { omap2 = insert r (singleton pkh (Data.Integer.- (+ n))) (omap2 s) ; v2 = (v2 s) Data.Integer.- (+_ n) ; out = singleton pkh (singleton (curr2 s) (+_ n)) })) , ⟨ lemmaCUR2 s n pkh r y m<n , inj₂ (lemminus (v2 s) n (+<+ m<n)) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
+prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₁ x , +<+ m<n ⟩ ⟩ ⟩ ⟩ =
+  ⟨ pkh , ⟨ (+_ n) , ⟨ (curr1 s) , ⟨ r , ⟨ ((record s
+                                           { omap1 = insert r (singleton pkh (Data.Integer.- (+ n))) (omap1 s)
+                                           ; v1 = (v1 s) Data.Integer.- (+_ n)
+                                           ; out = singleton pkh (singleton (curr1 s) (+_ n)) }))
+                                           , ⟨ lemmaCUR1 s n pkh r x m<n , inj₁ (lemminus (v1 s) n (+<+ m<n)) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
+prop5 s ⟨ pkh , ⟨ r , ⟨ +_ n , ⟨ inj₂ y , +<+ m<n ⟩ ⟩ ⟩ ⟩ =
+  ⟨ pkh , ⟨ (+_ n) , ⟨ (curr2 s) , ⟨ r , ⟨ ((record s
+                                           { omap2 = insert r (singleton pkh (Data.Integer.- (+ n))) (omap2 s)
+                                           ; v2 = (v2 s) Data.Integer.- (+_ n)
+                                           ; out = singleton pkh (singleton (curr2 s) (+_ n)) }))
+                                           , ⟨ lemmaCUR2 s n pkh r y m<n , inj₂ (lemminus (v2 s) n (+<+ m<n)) ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
 
+
+```
+The proof has two main cases, if the value is in curr1, and thus omap1, or curr2 and omap2 respectively.
+The meat of the proof is on the final line of each case, a pair with the proof that s' is the state
+we transition to, and a proof that either v1 or v2 are decreasing.
+
+
+----------------------------------------------------------------------
+Internal State Value == UTxO Value (Tentative name: DaoBug-Proof)
+```agda
 
 eqLemma : ∀ {a b c : Currency} -> a ≡ b -> a ≡ c -> b ≡ c
 eqLemma ab ac rewrite ac = sym ab
@@ -486,8 +479,24 @@ postulate
 sumLemma : ∀ {map : Map ℚ (Map String ℤ)} {r : ℚ} {pkh : String} {x v : ℤ} -> sum (sum map) ≡ x -> x Data.Integer.+ v ≡ sum (sum (insert r (singleton pkh v) map))
 sumLemma refl = sym mapLemma
 
+```
+Above are some helper lemmas that are needed in the proofs, mostly to do rewriting
+where needed, but maybe more improtantly a postulated property of maps. Since I do
+not have an implementation of maps, the property can not be proven, and thus it is
+postulated. The property states that inserting an element and then summing over all
+values in the new map is the same as summing over the old map and then adding the value.
+"sum" needs to be called twice since this is a nested map.
 
---DaoProof
+The property is split into three, one for each possible transition. In a general sense
+it is formulated as such:
+
+∀ s : State and {list of inputs of the transition}, given that the on-chain values are equal
+to the sum of the respective internal map for the s, then either (∃ s' that we transition to,
+and the updated on-chain values are still equal to the sum of the modified maps) or the
+transition is invalid and returns nothing instead of an actual state.
+```agda
+
+--DaoBug-Proof for offer
 prop6 : ∀ (s : State) (pkh : String) (v : ℤ) (cur : Currency) (r : ℚ)
   -> (v1 s ≡ sum (sum (omap1 s)))
   -> (v2 s ≡ sum (sum (omap2 s)))
@@ -505,25 +514,31 @@ prop6 s pkh (-[1+_] n) cur r p1 p2 = inj₂ refl
 
 
 postulate
-  mapMinusLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} -> sum (sum (map1 -ᵐ map2)) ≡ sum (sum map1) Data.Integer.- sum (sum map2) 
+  mapMinusLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} -> map2 ≤ᵐ map1 -> sum (sum (map1 -ᵐ map2)) ≡ sum (sum map1) Data.Integer.- sum (sum map2) 
 
+minusMLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} {x : ℤ} -> map2 ≤ᵐ map1 -> sum (sum map1) ≡ x -> x Data.Integer.- sum (sum map2) ≡ sum (sum (map1 -ᵐ map2))
+minusMLemma pf refl = sym (mapMinusLemma pf)
 
-minusMLemma : ∀ {map1 map2 : Map ℚ (Map String ℤ)} {x : ℤ} -> sum (sum map1) ≡ x -> x Data.Integer.- sum (sum map2) ≡ sum (sum (map1 -ᵐ map2))
-minusMLemma refl = sym mapMinusLemma
+```
+Another lemma for rewriting, and another postulated property of maps, that when map2 ≤ᵐ map1,
+then summing over (map1 - map2) is the same as (sum map1) - (sum map2). 
+```agda
 
+--DaoBug-Proof for request
 prop7 : ∀ (s : State) (cur : Currency) (pkh : String) (map : Map ℚ (Map String ℤ))
   -> (v1 s ≡ sum (sum (omap1 s)))
   -> (v2 s ≡ sum (sum (omap2 s)))
   -> ∃[ s' ] ((request s pkh cur map ≡ just s') × ((v1 s' ≡ sum (sum (omap1 s'))) × (v2 s' ≡ sum (sum (omap2 s'))))) ⊎ ( request s pkh cur map ≡ nothing )
 prop7 s cur pkh map p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | map ≤?ᵐ (omap1 s) | map ≤?ᵐ (omap2 s)
 ... | yes x | yes y | _ | _ = ⊥-elim (pf s (eqLemma x y))
-... | yes _ | no _  | yes _ | _ = inj₁ ⟨ (record s { omap1 = (omap1 s) -ᵐ map ; out = compute map pkh cur (curr2 s) ; v1 = (v1 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ minusMLemma (sym p1) , p2 ⟩ ⟩ ⟩
+... | yes _ | no _  | yes x | _ = inj₁ ⟨ (record s { omap1 = (omap1 s) -ᵐ map ; out = compute map pkh cur (curr2 s) ; v1 = (v1 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ minusMLemma x (sym p1) , p2 ⟩ ⟩ ⟩
 ... | yes _ | no _  | no _  | _ = inj₂ refl
-... | no _  | yes _ | _ | yes _ = inj₁ ⟨ (record s { omap2 = (omap2 s) -ᵐ map ; out = compute map pkh cur (curr1 s) ; v2 = (v2 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ p1 , minusMLemma (sym p2) ⟩ ⟩ ⟩
+... | no _  | yes _ | _ | yes x = inj₁ ⟨ (record s { omap2 = (omap2 s) -ᵐ map ; out = compute map pkh cur (curr1 s) ; v2 = (v2 s) Data.Integer.- sum(sum map)}) , ⟨ refl , ⟨ p1 , minusMLemma x (sym p2) ⟩ ⟩ ⟩
 ... | no _  | yes _ | _ | no _  = inj₂ refl
 ... | no _  | no  _ | _ | _ = inj₂ refl
 
 
+--DaoBug-Proof for cancel
 prop8 : ∀ (s : State) (pkh : String) (v : ℤ) (cur : Currency) (r : ℚ)
   -> (v1 s ≡ sum (sum (omap1 s)))
   -> (v2 s ≡ sum (sum (omap2 s)))
@@ -545,9 +560,27 @@ prop8 s pkh +[1+ n ] cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | +[
 ... | no  _ | no  _ | _ | _ = inj₂ refl
 
 
+```
+--------------------------------
+
+Finally of the more interesting properties I have tackled is "Authorized Access".
+
+Informally, this is the property that only the correct users (represented by pkh)
+can remove value from the account. This one I am less sure about but I am leaving
+it in for now. The property does not apply to offers, or requests, since any pkh
+can call the transition provided the other inputs are correct.
+
+In the case of cancel, i have formalized it as such:
+∀ s : State and pkh, v, cur, r (cancel inputs), if querying both omap1 and omap2
+for the pkh returns 0 (remember this is equivalent to the key not being in the map),
+then the transition is guaranteed to fail.
+```agda
 
 nonsenseLemma : ∀ {a : ℤ} {n : ℕ} -> +[1+ n ] Data.Integer.≤ a -> a ≡ +0 -> ⊥
 nonsenseLemma (+≤+ ()) refl
+
+lemma0 : ∀ {n : ℕ} -> +[1+ n ] Data.Integer.≤ 0ℤ -> ⊥
+lemma0 (+≤+ ())
 
 -- Authorized Access
 prop9 : ∀ (s : State) (pkh : String) (v : ℤ) (cur : Currency) (r : ℚ)
@@ -564,14 +597,59 @@ prop9 s pkh (-[1+_] n) cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s)
 ... | no  _ | no  _ = refl 
 prop9 s pkh +[1+ n ] cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | +[1+ n ] Data.Integer.≤? (query pkh (query r (omap1 s))) | +[1+ n ] Data.Integer.≤? (query pkh (query r (omap2 s)))
 ... | yes x | yes y | _ | _ = ⊥-elim (pf s (eqLemma x y)) 
-... | yes x | no  y | yes z | _ = ⊥-elim (nonsenseLemma z p1)
+... | yes x | no  y | yes z | _ =  ⊥-elim (lemma0 (subst (+[1+ n ] Data.Integer.≤_) p1 z))  --⊥-elim (nonsenseLemma z p1)
 ... | yes _ | no  _ | no _ | _  = refl
 ... | no  x | yes y | _ | yes z = ⊥-elim (nonsenseLemma z p2)
 ... | no  _ | yes _ | _ | no _  = refl
 ... | no  _ | no  _ | _ | _ = refl
 
+```
+Maybe of some interest in this proof, I tried two different ways of proving a
+contradiction, one using a rewriting lemma as I have been doing throughout
+the previous proofs, and one where I used "subst". It seemed more convenient
+to me to keep using my initial approach.
 
 
+Finally, I have some simple correctness properties that I proved at the start,
+they are not particularly interesting and non-exhaustive, but I decided to leave
+them in.
+```agda
+
+--Offering a currency different from the expected 2 results in failure
+prop1 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
+      -> (cur ≢ (curr1 st) )
+      -> (cur ≢ (curr2 st) )
+      --------------------------
+      -> (offer st pkh v cur r) ≡ nothing
+prop1 {v = +_ zero} nc1 nc2 = refl
+prop1 {v = -[1+_] n} nc1 nc2 = refl
+prop1 {v = +[1+ n ]} {mkℚ (-[1+_] n₁) denominator-1 isCoprime} nc1 nc2 = refl
+prop1 {v = +[1+ n ]} {mkℚ (+_ zero) denominator-1 isCoprime} nc1 nc2 = refl
+prop1 {st}  {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
+...| yes x | _     = ⊥-elim (nc1 x)
+...| no  x | yes y = ⊥-elim (nc2 y)
+...| no  x | no  y = refl
+
+--Offering a negative value results in failure
+prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer st pkh -1ℤ curr r) ≡ nothing
+prop2 = refl
+
+--Offering  a negative rate results in failure
+prop3 : ∀ {st : State} {pkh : String} {v : ℤ} {curr : Currency} -> (offer st pkh v curr -½ ) ≡ nothing
+prop3 {v = +_ zero}  = refl
+prop3 {v = +[1+ n ]} = refl
+prop3 {v = -[1+_] n} = refl
+
+--Cancelling for a currency different from the expected 2 results in failure
+prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
+      -> (cur ≢ (curr1 st) )
+      -> (cur ≢ (curr2 st) )
+      --------------------------
+      -> (cancel st pkh v cur r) ≡ nothing
+prop4 {st} {cur = cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
+...| yes x | _     = ⊥-elim (nc1 x)
+...| no  x | yes y = ⊥-elim (nc2 y)
+...| no  x | no  y = refl
 
 
 
