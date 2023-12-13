@@ -1,6 +1,6 @@
 --{-# OPTIONS --rewriting #-}
 
-module DEX where
+module DEX2 where
 
 {-
 import Relation.Binary.PropositionalEquality as Eq
@@ -298,27 +298,10 @@ prop1 {v = +_ zero} nc1 nc2 = refl
 prop1 {v = -[1+_] n} nc1 nc2 = refl
 prop1 {v = +[1+ n ]} {mkℚ (-[1+_] n₁) denominator-1 isCoprime} nc1 nc2 = refl
 prop1 {v = +[1+ n ]} {mkℚ (+_ zero) denominator-1 isCoprime} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = curr2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = ⊥-elim (nc1 refl)
-prop1 {record { curr1 = C2 ; curr2 = C1  }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = C2 ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
-prop1 {record { curr1 = C2 ; curr2 = Other }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
-prop1 {record { curr1 = Other ; curr2 = C1  }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = Other ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
-prop1 {record { curr1 = Other ; curr2 = Other }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C1} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = C1 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = C1 ; curr2 = Other  }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
-prop1 {record { curr1 = C2 ; curr2 = curr2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc1 refl)
-prop1 {record { curr1 = Other ; curr2 = C1 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
-prop1 {record { curr1 = Other ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = Other ; curr2 = Other }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {C2} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = C1 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
-prop1 {record { curr1 = C1 ; curr2 = Other }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = C2 ; curr2 = C1 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
-prop1 {record { curr1 = C2 ; curr2 = C2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 = refl
-prop1 {record { curr1 = C2 ; curr2 = Other }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop1 {record { curr1 = Other ; curr2 = curr2 }} {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {Other} nc1 nc2 =  ⊥-elim (nc1 refl)
+prop1 {st}  {v = +[1+ n ]} {mkℚ +[1+ n₁ ] denominator-1 isCoprime} {cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
+...| yes x | _     = ⊥-elim (nc1 x)
+...| no  x | yes y = ⊥-elim (nc2 y)
+...| no  x | no  y = refl
 
 
 prop2 : ∀ {st : State} {pkh : String} {curr : Currency} {r : ℚ} -> (offer st pkh -1ℤ curr r) ≡ nothing
@@ -335,27 +318,11 @@ prop4 : ∀ {st : State} {pkh : String} {v : ℤ} {r : ℚ} {cur : Currency}
       -> (cur ≢ (curr2 st) )
       --------------------------
       -> (cancel st pkh v cur r) ≡ nothing
-prop4 {record { curr1 = C1 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc1 refl)
-prop4 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
-prop4 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
-prop4 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
-prop4 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C1} nc1 nc2 = refl
-prop4 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
-prop4 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
-prop4 {record { curr1 = C2 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc1 refl)
-prop4 {record { curr1 = Other ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
-prop4 {record { curr1 = Other ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = Other ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = C2} nc1 nc2 = refl
-prop4 {record { curr1 = C1 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
-prop4 {record { curr1 = C1 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
-prop4 {record { curr1 = C1 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = C2 ; curr2 = C1 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
-prop4 {record { curr1 = C2 ; curr2 = C2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 = refl
-prop4 {record { curr1 = C2 ; curr2 = Other ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc2 refl)
-prop4 {record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }} {cur = Other} nc1 nc2 =  ⊥-elim (nc1 refl)
+prop4 {st} {cur = cur} nc1 nc2 with cur c=? curr1 st | cur c=? curr2 st
+...| yes x | _     = ⊥-elim (nc1 x)
+...| no  x | yes y = ⊥-elim (nc2 y)
+...| no  x | no  y = refl
+
 
 
 
@@ -366,36 +333,6 @@ lemma1 (ℕ.suc n) = lemma1 n
 lemma2 : ∀ (n : ℕ) -> ( (n Data.Nat.≤ᵇ n) ≡ true )
 lemma2 zero = refl
 lemma2 (ℕ.suc n) = lemma1 n
-
-lemma3 : ∀ (z : ℤ) -> ( (Dec.does ( z Data.Integer.≤? z )) ≡ true )
-lemma3 (+_ n) = lemma2 n
-lemma3 (-[1+_] n) = lemma2 n
-
-lemma' : ∀ (n : ℕ) (pkh : String) (r : ℚ) (s : State)
-  -> query pkh (query r (omap1 s)) ≡ +[1+ n ]
-  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
-lemma' n pkh r s q rewrite q = lemma2 (ℕ.suc n)
-
-lemmaC1 : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
-  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) ≡ true )
-  -> ( (if Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap1 s))) then i else j) ≡ i)
-lemmaC1 i j n pkh r s d rewrite d = refl
-
-lemma'' : ∀ (n : ℕ) (pkh : String) (r : ℚ) (s : State)
-  -> query pkh (query r (omap2 s)) ≡ +[1+ n ]
-  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) ≡ true )
-lemma'' n pkh r s q rewrite q = lemma2 (ℕ.suc n)
-
-lemmaC2 : ∀ (i j : Maybe State) -> (n : ℕ) (pkh : String) (r : ℚ) (s : State)
-  -> (Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) ≡ true )
-  -> ( (if Dec.does (+[1+ n ] Data.Integer.≤? query pkh (query r (omap2 s))) then i else j) ≡ i)
-lemmaC2 i j n pkh r s d rewrite d = refl
-
-
-dingus : ∀ (s : State) ->  (Dec.does (curr1 s c=? curr1 s)) ≡ true
-dingus record { curr1 = C1 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out } = refl
-dingus record { curr1 = C2 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out } = refl
-dingus record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out } = refl
 
 
 lemmaCUR1 : ∀ (s : State) (n : ℕ) (pkh : String) (r : ℚ) {mst : Maybe State}
@@ -429,9 +366,10 @@ lemmaCUR1 : ∀ (s : State) (n : ℕ) (pkh : String) (r : ℚ) {mst : Maybe Stat
        ; out = singleton pkh (singleton (curr1 s) (+ n))
        ; pf = pf s
        })
-lemmaCUR1 record { curr1 = C1 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out } (ℕ.suc n) pkh r pf (Data.Nat.s≤s pn) rewrite pf | lemma1 n = refl
-lemmaCUR1 record { curr1 = C2 ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out } (ℕ.suc n) pkh r pf (Data.Nat.s≤s pn) rewrite pf | lemma1 n = refl
-lemmaCUR1 record { curr1 = Other ; curr2 = curr2 ; omap1 = omap1 ; omap2 = omap2 ; v1 = v1 ; v2 = v2 ; out = out }  (ℕ.suc n) pkh r pf (Data.Nat.s≤s pn) rewrite pf | lemma1 n = refl
+lemmaCUR1 s (ℕ.suc n) pkh r pf (Data.Nat.s≤s pn) with curr1 s c=? curr1 s
+... | yes x rewrite pf | lemma1 n = refl
+... | no  x = ⊥-elim (x refl)
+
 
 
 
@@ -465,29 +403,25 @@ lemmaCUR2 : ∀ (s : State) (n : ℕ) (pkh : String) (r : ℚ) {mst : Maybe Stat
             ; out = singleton pkh (singleton (curr2 s) (+ n))
             ; pf = pf s
             })
-lemmaCUR2 record { curr1 = C1 ; curr2 = C1 ; pf = pf } n pkh r prf pn = ⊥-elim (pf refl)
-lemmaCUR2 record { curr1 = C1 ; curr2 = C2 ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = C1 ; curr2 = Other ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = C2 ; curr2 = C1 ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = C2 ; curr2 = C2 ; pf = pf } n pkh r prf pn = ⊥-elim (pf refl)
-lemmaCUR2 record { curr1 = C2 ; curr2 = Other ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = Other ; curr2 = C1 ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = Other ; curr2 = C2 ; pf = pf } (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) rewrite prf | lemma2 (ℕ.suc n) = refl
-lemmaCUR2 record { curr1 = Other ; curr2 = Other ; pf = pf } n pkh r prf pn = ⊥-elim (pf refl)
+lemmaCUR2 s (ℕ.suc n) pkh r prf (Data.Nat.s≤s pn) with curr2 s c=? curr1 s | curr2 s c=? curr2 s
+... | yes x | _ = ⊥-elim (pf s (sym x)) --rewrite pf | lemma1 n = refl
+... | no  x | yes y rewrite prf | lemma1 n = refl
+... | no  x | no  y = ⊥-elim (y refl)
+
 
 lemneg : ∀ (m n : ℕ) -> Data.Integer.- (+ m) Data.Integer.< +[1+ n ]
 lemneg zero n = +<+ (Data.Nat.s≤s Data.Nat.z≤n)
 lemneg (ℕ.suc m) n = -<+
 
-obviously : ∀ (m n : ℕ) -> m Data.Nat.≤ n -> m Data.Nat.≤ ℕ.suc n
-obviously zero n Data.Nat.z≤n = Data.Nat.z≤n
-obviously (ℕ.suc n) (ℕ.suc m) (Data.Nat.s≤s p) = Data.Nat.s≤s (obviously n m p)
+lemsuc : ∀ (m n : ℕ) -> m Data.Nat.≤ n -> m Data.Nat.≤ ℕ.suc n
+lemsuc zero n Data.Nat.z≤n = Data.Nat.z≤n
+lemsuc (ℕ.suc n) (ℕ.suc m) (Data.Nat.s≤s p) = Data.Nat.s≤s (lemsuc n m p)
 
 lemmonus : ∀ (m n : ℕ) -> m ∸ n Data.Nat.≤ m
 lemmonus zero zero = Data.Nat.z≤n
 lemmonus zero (ℕ.suc n) = Data.Nat.z≤n
 lemmonus (ℕ.suc m) zero = Data.Nat.s≤s (lemmonus m zero)
-lemmonus (ℕ.suc m) (ℕ.suc n) = obviously (m ∸ n) m (lemmonus m n)
+lemmonus (ℕ.suc m) (ℕ.suc n) = lemsuc (m ∸ n) m (lemmonus m n)
 
 lemplus : ∀ (m n : ℕ) -> m Data.Nat.≤ m Data.Nat.+ n
 lemplus zero zero = Data.Nat.z≤n
