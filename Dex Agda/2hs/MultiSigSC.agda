@@ -1,4 +1,4 @@
-module MultiSig where
+module MultiSigSC where
 
 open import Haskell.Prelude
 --open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)

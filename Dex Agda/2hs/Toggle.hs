@@ -12,8 +12,8 @@ toggled Circle Square = True
 toggled Square Circle = True
 toggled Square Square = False
 
-toggle :: Shape -> Input -> Shape -> Bool
-toggle s i s'
+toggle :: Shape -> Input -> Shape -> ScriptContext -> Bool
+toggle s i s' ctx
   = case i of
         Other -> False
         Toggle -> toggled s s'
