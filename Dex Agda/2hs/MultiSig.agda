@@ -6,6 +6,11 @@ open import Haskell.Prelude
 
 ScriptPurpose = String
 
+Interval = Bool
+
+before : Integer -> Interval -> Bool
+before a b = b
+
 record TxInfo : Set where
   field
     txInfoInputs                : Nat --[V2.TxInInfo]
@@ -27,53 +32,77 @@ record ScriptContext : Set where
         scriptContextPurpose : ScriptPurpose
 open ScriptContext public
 
-Sig = String
+PubKeyHash = String
 
-{-# COMPILE AGDA2HS Sig #-}
-
-Pkh = String
-
-{-# COMPILE AGDA2HS Pkh #-}
+{-# COMPILE AGDA2HS PubKeyHash #-}
 
 data State : Set where
   Holding : State
-  Collecting : Nat -> Pkh -> Nat -> List Sig -> State
+  Collecting : Integer -> PubKeyHash -> Integer -> List PubKeyHash -> State
 
 {-# COMPILE AGDA2HS State #-}
 
 data Input : Set where
-  Propose : Nat -> Pkh -> Nat -> Input
-  Add     : Sig -> Input
+  Propose : Integer -> PubKeyHash -> Integer -> Input
+  Add     : PubKeyHash -> Input
   Pay     : Input
   Cancel  : Input
 
 {-# COMPILE AGDA2HS Input #-}
 
-Inputs = List (Nat × String)
 Outputs = List (Nat × String)
-Time = Nat
 
-{-# COMPILE AGDA2HS Time #-}
-{-# COMPILE AGDA2HS Inputs #-}
 {-# COMPILE AGDA2HS Outputs #-}
 
-agdaValidator : List Sig -> State -> Input -> ScriptContext -> Bool
-agdaValidator sigs s i c = True
-{-
+_∈_ : PubKeyHash -> List PubKeyHash -> Bool
+_∈_ pkh [] = False
+_∈_ pkh (x ∷ l') = (x == pkh) || (pkh ∈ l')
+
+{-_∈_ pkh l = case l of λ where
+  [] -> False
+  (x ∷ l') → (x == pkh) || (pkh ∈ l')
+-}
+
+insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
+insert pkh [] = (pkh ∷ [])
+insert pkh (x ∷ l') = if (x == pkh)
+  then (x ∷ l')
+  else (x ∷ (insert pkh l'))
+
+{-# COMPILE AGDA2HS _∈_ #-}
+{-# COMPILE AGDA2HS insert #-}
+
+postulate
+  checkSigned : PubKeyHash -> Bool
+  checkPayment : PubKeyHash -> Integer -> Outputs -> Bool
+
+
+agdaValidator : List PubKeyHash -> State -> Input -> Interval -> Outputs -> State -> Bool
 agdaValidator l s i t o s' = case s of λ where
   (Collecting v pkh d sigs) -> case i of λ where
 
     (Propose _ _ _) -> False
-    (Add sig) -> True --wip
-    Pay -> True --wip
-    Cancel -> t > d 
+
+    (Add sig) -> case s' of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> checkSigned sig && sig ∈ l && (v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))))
+
+    Pay -> case s' of λ where
+      Holding -> checkPayment pkh v o
+      (Collecting _ _ _ _) -> False
+      
+    Cancel -> case s' of λ where
+      Holding -> before d t
+      (Collecting _ _ _ _) -> False
   
   Holding -> case i of λ where
 
     (Propose v pkh d) -> case s' of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs) -> (v == v' && (pkh == pkh' && (d == d' && (sigs == []))))
+      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == []))))
     (Add _) -> False
     Pay -> False
-    Cancel -> False-}
+    Cancel -> False
+
+{-# COMPILE AGDA2HS agdaValidator #-}
   
