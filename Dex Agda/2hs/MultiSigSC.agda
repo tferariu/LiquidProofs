@@ -4,20 +4,22 @@ open import Haskell.Prelude
 --open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 
 
-ScriptPurpose = String
-
 Placeholder = String
+POSIXTimeRange = Placeholder
+ScriptPurpose = Placeholder
+ThreadToken = Placeholder
 
 record TxInfo : Set where
   field
     txInfoInputs                : Placeholder --[V2.TxInInfo]
     txInfoReferenceInputs       : Nat --[V2.TxInInfo]
     txInfoOutputs               : Placeholder --[V2.TxOut]
-    txInfoValidRange            : Placeholder --V2.POSIXTimeRange
+    txInfoValidRange            : POSIXTimeRange
     txInfoSignatories           : Placeholder --[V2.PubKeyHash]
     txInfoRedeemers             : Nat --Map ScriptPurpose V2.Redeemer
     txInfoData                  : Nat --Map V2.DatumHash V2.Datum
     txInfoId                    : Nat --V2.TxId
+open TxInfo public
 
 record ScriptContext : Set where
     field
@@ -25,28 +27,83 @@ record ScriptContext : Set where
         scriptContextPurpose : ScriptPurpose
 open ScriptContext public
 
-
 PubKeyHash = String
 
-{-# COMPILE AGDA2HS PubKeyHash #-}
+data Datum : Set where
+  Holding : ThreadToken -> Datum
+  Collecting : ThreadToken -> Integer -> PubKeyHash -> Integer -> List PubKeyHash -> Datum
 
-data State : Set where
-  Holding : State
-  Collecting : Nat -> PubKeyHash -> Nat -> List PubKeyHash -> State
+{-# COMPILE AGDA2HS Datum #-}
 
-{-# COMPILE AGDA2HS State #-}
+data Redeemer : Set where
+  Propose : Integer -> PubKeyHash -> Integer -> Redeemer
+  Add     : PubKeyHash -> Redeemer
+  Pay     : Redeemer
+  Cancel  : Redeemer
 
-data Input : Set where
-  Propose : Nat -> PubKeyHash -> Nat -> Input
-  Add     : PubKeyHash -> Input
-  Pay     : Input
-  Cancel  : Input
+{-# COMPILE AGDA2HS Redeemer #-}
 
-{-# COMPILE AGDA2HS Input #-}
+_∈_ : PubKeyHash -> List PubKeyHash -> Bool
+_∈_ pkh [] = False
+_∈_ pkh (x ∷ l') = (x == pkh) || (pkh ∈ l')
 
+insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
+insert pkh [] = (pkh ∷ [])
+insert pkh (x ∷ l') = if (x == pkh)
+  then (x ∷ l')
+  else (x ∷ (insert pkh l'))
 
-agdaValidator : List PubKeyHash -> State -> Input -> ScriptContext -> Bool
-agdaValidator sigs s i c = True
+count : List PubKeyHash -> Nat
+count [] = 0
+count (x ∷ l) = 1 + (count l)
+
+{-# COMPILE AGDA2HS _∈_ #-}
+{-# COMPILE AGDA2HS insert #-}
+{-# COMPILE AGDA2HS count #-}
+
+postulate
+  txSignedBy : TxInfo -> PubKeyHash -> Bool
+  checkSigned : PubKeyHash -> Bool
+  checkPayment : PubKeyHash -> Integer -> TxInfo -> Bool
+  after : Integer -> TxInfo -> Bool
+  oDat : ScriptContext -> Datum
+  checkToken : ThreadToken -> ScriptContext -> Bool
+
+record Params : Set where
+    field
+        authSigs  : List PubKeyHash
+        nr : Nat
+open Params public
+
+agdaValidator : Params -> Datum -> Redeemer -> ScriptContext -> Bool
+agdaValidator param dat red ctx = case dat of λ where
+  (Collecting tok v pkh d sigs) -> (checkToken tok ctx) && (case red of λ where
+
+    (Propose _ _ _) -> False
+
+    (Add sig) -> case (oDat ctx) of λ where
+      (Holding _) -> False
+      (Collecting tok' v' pkh' d' sigs') -> checkSigned sig && sig ∈ (authSigs param) && ( tok == tok' && v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))))
+
+    Pay -> case (oDat ctx) of λ where
+      (Holding tok') -> tok == tok' && (count sigs) >= (nr param) && checkPayment pkh v (scriptContextTxInfo ctx)
+      (Collecting _ _ _ _ _) -> False
+      
+    Cancel -> case (oDat ctx) of λ where
+      (Holding tok') -> tok == tok' && after d (scriptContextTxInfo ctx)
+      (Collecting _ _ _ _ _) -> False )
+  
+  (Holding tok) -> checkToken tok ctx && (case red of λ where
+
+    (Propose v pkh d) -> case (oDat ctx) of λ where
+      (Holding _) -> False
+      (Collecting tok' v' pkh' d' sigs') -> tok == tok' && (v == v' && (pkh == pkh' && (d == d' && (sigs' == []))))
+    (Add _) -> False
+    Pay -> False
+    Cancel -> False )
+
+{-# COMPILE AGDA2HS agdaValidator #-}
+
 {-
 agdaValidator l s i t o s' = case s of λ where
   (Collecting v pkh d sigs) -> case i of λ where
