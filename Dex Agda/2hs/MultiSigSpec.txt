@@ -1,5 +1,3 @@
-PubKeyHash
-
 Parameters: 
 auth : List Sig
 n : Integer
