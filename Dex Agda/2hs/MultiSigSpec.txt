@@ -1,0 +1,53 @@
+PubKeyHash
+
+Parameters: 
+auth : List Sig
+n : Integer
+
+State: 
+value : Value
+label : Label
+
+Labels: 
+Holding
+Collecting val pkh d sigs
+
+
+Transitions:
+
+propose val pkh deadline
+Pre:
+oldValue >= value
+oldLabel == Holding
+Post:
+newLabel == Collecting val pkh d []
+newValue == oldValue
+
+add sig
+Pre:
+oldLabel == Collecting val pkh d sigs
+sig \in auth
+signedBy sig
+Post:
+newLabel == Colecting val pkh d (sigs+sig)
+
+pay
+Pre:
+oldLabel == Collecting val pkh d sigs
+|sigs| >=n
+Post:
+newLabel == Holding
+Effect:
+PayOut: (pkh,val)
+
+cancel
+Pre:
+oldLabel == Collecting pkh val d sigs
+expired d
+Post:
+newLabel == Holding
+
+
+
+
+

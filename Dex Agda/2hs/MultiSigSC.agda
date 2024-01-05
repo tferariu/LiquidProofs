@@ -28,15 +28,17 @@ record ScriptContext : Set where
 open ScriptContext public
 
 PubKeyHash = String
+Value = Integer
+Deadline = Integer
 
 data Datum : Set where
-  Holding : ThreadToken -> Datum
-  Collecting : ThreadToken -> Integer -> PubKeyHash -> Integer -> List PubKeyHash -> Datum
+  Holding : Datum
+  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Datum
 
 {-# COMPILE AGDA2HS Datum #-}
 
 data Redeemer : Set where
-  Propose : Integer -> PubKeyHash -> Integer -> Redeemer
+  Propose : Value -> PubKeyHash -> Deadline -> Redeemer
   Add     : PubKeyHash -> Redeemer
   Pay     : Redeemer
   Cancel  : Redeemer
@@ -53,7 +55,7 @@ insert pkh (x ∷ l') = if (x == pkh)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
-count : List PubKeyHash -> Nat
+count : List PubKeyHash -> Integer
 count [] = 0
 count (x ∷ l) = 1 + (count l)
 
@@ -64,43 +66,47 @@ count (x ∷ l) = 1 + (count l)
 postulate
   txSignedBy : TxInfo -> PubKeyHash -> Bool
   checkSigned : PubKeyHash -> Bool
-  checkPayment : PubKeyHash -> Integer -> TxInfo -> Bool
-  after : Integer -> TxInfo -> Bool
+  checkPayment : PubKeyHash -> Value -> TxInfo -> Bool
+  expired : Deadline -> TxInfo -> Bool
   oDat : ScriptContext -> Datum
-  checkToken : ThreadToken -> ScriptContext -> Bool
+  oldValue : ScriptContext -> Value
+--  checkToken : ThreadToken -> ScriptContext -> Bool
 
 record Params : Set where
     field
         authSigs  : List PubKeyHash
-        nr : Nat
+        nr : Integer
 open Params public
+
+
+{-# COMPILE AGDA2HS Params #-}
 
 agdaValidator : Params -> Datum -> Redeemer -> ScriptContext -> Bool
 agdaValidator param dat red ctx = case dat of λ where
-  (Collecting tok v pkh d sigs) -> (checkToken tok ctx) && (case red of λ where
+  (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> case (oDat ctx) of λ where
-      (Holding _) -> False
-      (Collecting tok' v' pkh' d' sigs') -> checkSigned sig && sig ∈ (authSigs param) && ( tok == tok' && v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))))
+    (Add sig) -> checkSigned sig && sig ∈ (authSigs param) && (case (oDat ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
-    Pay -> case (oDat ctx) of λ where
-      (Holding tok') -> tok == tok' && (count sigs) >= (nr param) && checkPayment pkh v (scriptContextTxInfo ctx)
-      (Collecting _ _ _ _ _) -> False
+    Pay -> (count sigs) >= (nr param) && (case (oDat ctx) of λ where
+      Holding -> checkPayment pkh v (scriptContextTxInfo ctx)
+      (Collecting _ _ _ _) -> False )
       
     Cancel -> case (oDat ctx) of λ where
-      (Holding tok') -> tok == tok' && after d (scriptContextTxInfo ctx)
-      (Collecting _ _ _ _ _) -> False )
+      Holding -> expired d (scriptContextTxInfo ctx)
+      (Collecting _ _ _ _) -> False
   
-  (Holding tok) -> checkToken tok ctx && (case red of λ where
+  Holding -> case red of λ where
 
-    (Propose v pkh d) -> case (oDat ctx) of λ where
-      (Holding _) -> False
-      (Collecting tok' v' pkh' d' sigs') -> tok == tok' && (v == v' && (pkh == pkh' && (d == d' && (sigs' == []))))
+    (Propose v pkh d) -> (oldValue ctx >= v) && (case (oDat ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
     (Add _) -> False
     Pay -> False
-    Cancel -> False )
+    Cancel -> False 
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
