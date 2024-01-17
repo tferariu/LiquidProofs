@@ -2,17 +2,17 @@ module MultiSigSC where
 
 type Deadline = Integer
 
-data Datum = Holding
+data Label = Holding
            | Collecting Value PubKeyHash Deadline [PubKeyHash]
 
-data Redeemer = Propose Value PubKeyHash Deadline
-              | Add PubKeyHash
-              | Pay
-              | Cancel
+data Input = Propose Value PubKeyHash Deadline
+           | Add PubKeyHash
+           | Pay
+           | Cancel
 
-(∈) :: PubKeyHash -> [PubKeyHash] -> Bool
-pkh ∈ [] = False
-pkh ∈ (x : l') = x == pkh || (pkh ∈ l')
+query :: PubKeyHash -> [PubKeyHash] -> Bool
+query pkh [] = False
+query pkh (x : l') = x == pkh || query pkh l'
 
 insert :: PubKeyHash -> [PubKeyHash] -> [PubKeyHash]
 insert pkh [] = [pkh]
@@ -25,15 +25,14 @@ count (x : l) = 1 + count l
 
 data Params = Params{authSigs :: [PubKeyHash], nr :: Integer}
 
-agdaValidator ::
-              Params -> Datum -> Redeemer -> ScriptContext -> Bool
-agdaValidator param dat red ctx
-  = case dat of
+agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator param oldLabel red ctx
+  = case oldLabel of
         Collecting v pkh d sigs -> case red of
                                        Propose _ _ _ -> False
-                                       Add sig -> checkSigned sig &&
-                                                    (sig ∈ authSigs param) &&
-                                                      case oDat ctx of
+                                       Add sig -> checkSigned sig ctx &&
+                                                    query sig (authSigs param) &&
+                                                      case newLabel ctx of
                                                           Holding -> False
                                                           Collecting v' pkh' d' sigs' -> v == v' &&
                                                                                            pkh ==
@@ -47,16 +46,17 @@ agdaValidator param dat red ctx
                                                                                                    sig
                                                                                                    sigs
                                        Pay -> count sigs >= nr param &&
-                                                case oDat ctx of
+                                                case newLabel ctx of
                                                     Holding -> checkPayment pkh v
                                                                  (scriptContextTxInfo ctx)
+                                                                 && oldValue ctx == newValue ctx + v
                                                     Collecting _ _ _ _ -> False
-                                       Cancel -> case oDat ctx of
+                                       Cancel -> case newLabel ctx of
                                                      Holding -> expired d (scriptContextTxInfo ctx)
                                                      Collecting _ _ _ _ -> False
         Holding -> case red of
                        Propose v pkh d -> oldValue ctx >= v &&
-                                            case oDat ctx of
+                                            case newLabel ctx of
                                                 Holding -> False
                                                 Collecting v' pkh' d' sigs' -> v == v' &&
                                                                                  pkh == pkh' &&

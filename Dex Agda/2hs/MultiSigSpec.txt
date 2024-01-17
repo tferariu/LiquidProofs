@@ -1,5 +1,5 @@
 Parameters: 
-auth : List Sig
+auth : List PubKeyHash
 n : Integer
 
 State: 
@@ -13,9 +13,9 @@ Collecting val pkh d sigs
 
 Transitions:
 
-propose val pkh deadline
+propose val pkh d
 Pre:
-oldValue >= value ?
+oldValue >= val 
 oldLabel == Holding
 Post:
 newLabel == Collecting val pkh d []
@@ -24,15 +24,16 @@ newValue == oldValue
 add sig
 Pre:
 oldLabel == Collecting val pkh d sigs
-sig \in auth
+query sig auths
 signedBy sig
 Post:
-newLabel == Colecting val pkh d (sigs+sig)
+newLabel == Colecting val pkh d (insert sig sigs)
+newValue == oldValue
 
 pay
 Pre:
 oldLabel == Collecting val pkh d sigs
-|sigs| >=n
+#count sigs >= n
 Post:
 newLabel == Holding
 newValue == oldValue - val
@@ -45,6 +46,10 @@ oldLabel == Collecting pkh val d sigs
 expired d
 Post:
 newLabel == Holding
+newValue == oldValue
+
+replenish?
+close?
 
 
 
