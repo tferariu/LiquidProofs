@@ -31,19 +31,21 @@ PubKeyHash = String
 Value = Integer
 Deadline = Integer
 
-data Datum : Set where
-  Holding : Datum
-  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Datum
+{-# COMPILE AGDA2HS Deadline #-}
 
-{-# COMPILE AGDA2HS Datum #-}
+data Label : Set where
+  Holding : Label
+  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Label
 
-data Redeemer : Set where
-  Propose : Value -> PubKeyHash -> Deadline -> Redeemer
-  Add     : PubKeyHash -> Redeemer
-  Pay     : Redeemer
-  Cancel  : Redeemer
+{-# COMPILE AGDA2HS Label #-}
 
-{-# COMPILE AGDA2HS Redeemer #-}
+data Input : Set where
+  Propose : Value -> PubKeyHash -> Deadline -> Input
+  Add     : PubKeyHash -> Input
+  Pay     : Input
+  Cancel  : Input
+
+{-# COMPILE AGDA2HS Input #-}
 
 _∈_ : PubKeyHash -> List PubKeyHash -> Bool
 _∈_ pkh [] = False
@@ -64,12 +66,13 @@ count (x ∷ l) = 1 + (count l)
 {-# COMPILE AGDA2HS count #-}
 
 postulate
-  txSignedBy : TxInfo -> PubKeyHash -> Bool
+ -- txSignedBy : TxInfo -> PubKeyHash -> Bool
   checkSigned : PubKeyHash -> Bool
   checkPayment : PubKeyHash -> Value -> TxInfo -> Bool
   expired : Deadline -> TxInfo -> Bool
-  oDat : ScriptContext -> Datum
+  oDat : ScriptContext -> Label
   oldValue : ScriptContext -> Value
+  newValue : ScriptContext -> Value
 --  checkToken : ThreadToken -> ScriptContext -> Bool
 
 record Params : Set where
@@ -79,9 +82,10 @@ record Params : Set where
 open Params public
 
 
+
 {-# COMPILE AGDA2HS Params #-}
 
-agdaValidator : Params -> Datum -> Redeemer -> ScriptContext -> Bool
+agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param dat red ctx = case dat of λ where
   (Collecting v pkh d sigs) -> case red of λ where
 
@@ -92,7 +96,7 @@ agdaValidator param dat red ctx = case dat of λ where
       (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
     Pay -> (count sigs) >= (nr param) && (case (oDat ctx) of λ where
-      Holding -> checkPayment pkh v (scriptContextTxInfo ctx)
+      Holding -> checkPayment pkh v (scriptContextTxInfo ctx) && oldValue ctx == ((newValue ctx) + v)
       (Collecting _ _ _ _) -> False )
       
     Cancel -> case (oDat ctx) of λ where

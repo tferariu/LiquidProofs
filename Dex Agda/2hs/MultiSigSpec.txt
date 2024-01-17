@@ -15,7 +15,7 @@ Transitions:
 
 propose val pkh deadline
 Pre:
-oldValue >= value
+oldValue >= value ?
 oldLabel == Holding
 Post:
 newLabel == Collecting val pkh d []
@@ -35,6 +35,7 @@ oldLabel == Collecting val pkh d sigs
 |sigs| >=n
 Post:
 newLabel == Holding
+newValue == oldValue - val
 Effect:
 PayOut: (pkh,val)
 

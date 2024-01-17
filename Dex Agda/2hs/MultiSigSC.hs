@@ -1,5 +1,7 @@
 module MultiSigSC where
 
+type Deadline = Integer
+
 data Datum = Holding
            | Collecting Value PubKeyHash Deadline [PubKeyHash]
 
