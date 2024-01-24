@@ -1,7 +1,7 @@
 module MultiSigSC where
 
 open import Haskell.Prelude
---open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 
 
 Placeholder = String
@@ -93,7 +93,7 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
@@ -101,13 +101,13 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
       Holding -> checkPayment pkh v (scriptContextTxInfo ctx) && oldValue ctx == ((newValue ctx) + v)
       (Collecting _ _ _ _) -> False )
       
-    Cancel -> case (newLabel ctx) of λ where
+    Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
       Holding -> expired d (scriptContextTxInfo ctx)
-      (Collecting _ _ _ _) -> False
+      (Collecting _ _ _ _) -> False )
   
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> geq (oldValue ctx) v && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> newValue ctx == oldValue ctx && geq (oldValue ctx) v && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
     (Add _) -> False
@@ -117,6 +117,44 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 {-# COMPILE AGDA2HS agdaValidator #-}
 
 {-
+data _~>_ : Label -> Label -> Set where
+
+    h~>c : ∀ (val : Value), (pkh : PubKeyHash), (deadline : Deadline) , (sigs : List PubKeyHash) 
+    -------------------
+    -> Holding ~> Collecting val pkh deadline sigs
+
+    c~>c : ∀ val, pkh, deadline, sigs, sig
+    -------------------
+    -> Collecting val pkh deadline sigs ~> Collecting val pkh deadline (insert sig sigs)
+-}
+
+data _~>_ : Label -> Label -> Set where
+  hc : Holding ~> Holding
+
+
+record State : Set where
+  field
+    label : Label
+    value : Value
+    
+open State
+
+transition : Params -> Label -> Input -> ScriptContext -> State
+transition p l i ctx =
+    if agdaValidator p l i ctx
+      then (case i of λ where
+        (Propose v pkh d) -> record {label = newLabel ctx ; value = newValue ctx}
+        (Add _) ->  record {label = newLabel ctx ; value = newValue ctx}
+        Pay ->  record {label = newLabel ctx ; value = newValue ctx}
+        Cancel ->  record {label = newLabel ctx ; value = newValue ctx} )
+      else record {label = l ; value = oldValue ctx}
+
+{-
+liquidity : ∀ (ctx : ScriptContext)
+  -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap2 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
+  -> ∃[ pkh ] ∃[ v ] ∃[ c ] ∃[ r ] ∃[ s' ] ( cancel s pkh v c r ≡ ( just s' ) × (v1 s' Data.Integer.< v1 s ⊎ v2 s' Data.Integer.< v2 s ) )
+
+
 agdaValidator l s i t o s' = case s of λ where
   (Collecting v pkh d sigs) -> case i of λ where
 

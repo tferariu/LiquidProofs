@@ -33,7 +33,7 @@ newValue == oldValue
 pay
 Pre:
 oldLabel == Collecting val pkh d sigs
-#count sigs >= n
+count sigs >= n
 Post:
 newLabel == Holding
 newValue == oldValue - val
