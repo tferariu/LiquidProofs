@@ -9,6 +9,10 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
+PubKeyHash = String
+Value = Integer
+Deadline = Integer
+
 record TxInfo : Set where
   field
     txInfoInputs                : Placeholder --[V2.TxInInfo]
@@ -19,17 +23,21 @@ record TxInfo : Set where
     txInfoRedeemers             : Nat --Map ScriptPurpose V2.Redeemer
     txInfoData                  : Nat --Map V2.DatumHash V2.Datum
     txInfoId                    : Nat --V2.TxId
+    payTo  : PubKeyHash
+    payAmt : Value
+    
 open TxInfo public
 
 record ScriptContext : Set where
     field
         scriptContextTxInfo  : TxInfo
         scriptContextPurpose : ScriptPurpose
+        inputVal    : Nat
+        outputVal   : Nat
+        
 open ScriptContext public
 
-PubKeyHash = String
-Value = Integer
-Deadline = Integer
+
 
 {-# COMPILE AGDA2HS Deadline #-}
 
@@ -128,17 +136,62 @@ data _~>_ : Label -> Label -> Set where
     -> Collecting val pkh deadline sigs ~> Collecting val pkh deadline (insert sig sigs)
 -}
 
-data _~>_ : Label -> Label -> Set where
-  hc : Holding ~> Holding
 
 
 record State : Set where
   field
     label : Label
     value : Value
+    param : Params
     
 open State
 
+
+T : Bool → Set
+T True  = ⊤
+T False = ⊥
+
+
+data _~>_ : State -> State -> Set where
+
+  TPropose : ∀ {val p v pkh d ctx}
+    -> T (agdaValidator p Holding (Propose v pkh d) ctx)
+    -------------------
+    -> record {label = Holding ; value = val ; param = p}
+       ~> record {label = (Collecting v pkh d []) ; value = val ; param = p}
+
+  TAdd : ∀ {val p v pkh d ctx sig sigs}
+    -> T (agdaValidator p (Collecting v pkh d sigs) (Add sig) ctx)
+    -------------------
+    -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
+       ~> record {label = (Collecting v pkh d (insert sig sigs)) ; value = val ; param = p}
+
+  TPay : ∀ {val p v pkh d ctx sigs}
+    -> T (agdaValidator p (Collecting v pkh d sigs) Pay ctx)
+    -------------------
+    -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
+       ~> record {label = Holding ; value = (val - v) ; param = p}
+
+  TCancel : ∀ {val p v pkh d ctx sigs}
+    -> T (agdaValidator p (Collecting v pkh d sigs) Cancel ctx)
+    -------------------
+    -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
+       ~> record {label = Holding ; value = val ; param = p}
+
+{-
+data _↓_ : State -> State -> Set where
+
+  done : ∀ { s }
+    ------------
+    -> s ↓ s
+
+  step : ∀ {s s''} ∃ s'
+    s ~> s'
+    s' ↓ s''
+    ----------------
+    -> (s ↓) s'' 
+-}
+{-
 transition : Params -> Label -> Input -> ScriptContext -> State
 transition p l i ctx =
     if agdaValidator p l i ctx
@@ -148,7 +201,7 @@ transition p l i ctx =
         Pay ->  record {label = newLabel ctx ; value = newValue ctx}
         Cancel ->  record {label = newLabel ctx ; value = newValue ctx} )
       else record {label = l ; value = oldValue ctx}
-
+-}
 {-
 liquidity : ∀ (ctx : ScriptContext)
   -> ∃[ pkh ] ∃[ r ] ∃[ v ] (((query pkh (query r (omap1 s)) ≡ v) ⊎ (query pkh (query r (omap2 s)) ≡ v)) × (0ℤ Data.Integer.< v ) )
