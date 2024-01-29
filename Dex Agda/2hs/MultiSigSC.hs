@@ -28,40 +28,11 @@ data Params = Params{authSigs :: [PubKeyHash], nr :: Integer}
 agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param oldLabel red ctx
   = case oldLabel of
-        Collecting v pkh d sigs -> case red of
-                                       Propose _ _ _ -> False
-                                       Add sig -> checkSigned sig ctx &&
-                                                    query sig (authSigs param) &&
-                                                      case newLabel ctx of
-                                                          Holding -> False
-                                                          Collecting v' pkh' d' sigs' -> v == v' &&
-                                                                                           pkh ==
-                                                                                             pkh'
-                                                                                             &&
-                                                                                             d == d'
-                                                                                               &&
-                                                                                               sigs'
-                                                                                                 ==
-                                                                                                 insert
-                                                                                                   sig
-                                                                                                   sigs
-                                       Pay -> count sigs >= nr param &&
-                                                case newLabel ctx of
-                                                    Holding -> checkPayment pkh v
-                                                                 (scriptContextTxInfo ctx)
-                                                                 && oldValue ctx == newValue ctx + v
-                                                    Collecting _ _ _ _ -> False
-                                       Cancel -> case newLabel ctx of
-                                                     Holding -> expired d (scriptContextTxInfo ctx)
-                                                     Collecting _ _ _ _ -> False
+        Collecting v pkh d sigs -> True
         Holding -> case red of
-                       Propose v pkh d -> oldValue ctx >= v &&
-                                            case newLabel ctx of
-                                                Holding -> False
-                                                Collecting v' pkh' d' sigs' -> v == v' &&
-                                                                                 pkh == pkh' &&
-                                                                                   d == d' &&
-                                                                                     sigs' == []
+                       Propose v pkh d -> case newLabel ctx of
+                                              Holding -> False
+                                              Collecting v' pkh' d' sigs' -> True
                        Add _ -> False
                        Pay -> False
                        Cancel -> False

@@ -85,13 +85,31 @@ postulate
   geq : Value -> Value -> Bool
 --  checkToken : ThreadToken -> ScriptContext -> Bool
 
+data _∉_ : PubKeyHash -> List PubKeyHash -> Set where
+
+  empty : ∀ {pkh : PubKeyHash}
+    ------------
+    -> pkh ∉ []
+
+  cons : ∀ { pkh pkh' l }
+    -> pkh ≠ pkh'
+    -> pkh ∉ l
+    ---------------
+    -> pkh ∉ (pkh' ∷ l)
+  
+
+data Unique : List PubKeyHash → Set where
+  [] : Unique []
+  _∷_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
+
+
 record Params : Set where
     field
         authSigs  : List PubKeyHash
         nr : Integer
+--        pf1 : Unique authSigs
+--        pf2 : IsTrue ((lengthNat authSigs) > nr)
 open Params public
-
-
 
 {-# COMPILE AGDA2HS Params #-}
 
@@ -111,13 +129,13 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
       
     Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
       Holding -> expired d (scriptContextTxInfo ctx)
-      (Collecting _ _ _ _) -> False )
+      (Collecting _ _ _ _) -> False ) 
   
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> newValue ctx == oldValue ctx && geq (oldValue ctx) v && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
+      (Collecting v' pkh' d' sigs') -> True ) --(v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) ) -}
     (Add _) -> False
     Pay -> False
     Cancel -> False 
@@ -125,6 +143,11 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 {-# COMPILE AGDA2HS agdaValidator #-}
 
 {-
+
+case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v'
+
 data _~>_ : Label -> Label -> Set where
 
     h~>c : ∀ (val : Value), (pkh : PubKeyHash), (deadline : Deadline) , (sigs : List PubKeyHash) 
@@ -137,7 +160,6 @@ data _~>_ : Label -> Label -> Set where
 -}
 
 
-
 record State : Set where
   field
     label : Label
@@ -147,50 +169,49 @@ record State : Set where
 open State
 
 
-T : Bool → Set
-T True  = ⊤
-T False = ⊥
-
 
 data _~>_ : State -> State -> Set where
 
   TPropose : ∀ {val p v pkh d ctx}
-    -> T (agdaValidator p Holding (Propose v pkh d) ctx)
+    -> IsTrue (agdaValidator p Holding (Propose v pkh d) ctx)
     -------------------
     -> record {label = Holding ; value = val ; param = p}
        ~> record {label = (Collecting v pkh d []) ; value = val ; param = p}
 
   TAdd : ∀ {val p v pkh d ctx sig sigs}
-    -> T (agdaValidator p (Collecting v pkh d sigs) (Add sig) ctx)
+    -> IsTrue (agdaValidator p (Collecting v pkh d sigs) (Add sig) ctx)
     -------------------
     -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
        ~> record {label = (Collecting v pkh d (insert sig sigs)) ; value = val ; param = p}
 
   TPay : ∀ {val p v pkh d ctx sigs}
-    -> T (agdaValidator p (Collecting v pkh d sigs) Pay ctx)
+    -> IsTrue (agdaValidator p (Collecting v pkh d sigs) Pay ctx)
     -------------------
     -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
        ~> record {label = Holding ; value = (val - v) ; param = p}
 
   TCancel : ∀ {val p v pkh d ctx sigs}
-    -> T (agdaValidator p (Collecting v pkh d sigs) Cancel ctx)
+    -> IsTrue (agdaValidator p (Collecting v pkh d sigs) Cancel ctx)
     -------------------
     -> record {label = (Collecting v pkh d sigs) ; value = val ; param = p}
        ~> record {label = Holding ; value = val ; param = p}
 
-{-
+
+
 data _↓_ : State -> State -> Set where
 
   done : ∀ { s }
     ------------
     -> s ↓ s
 
-  step : ∀ {s s''} ∃ s'
-    s ~> s'
-    s' ↓ s''
+  step : ∀ {s s''} (s' : State)
+    -> s ~> s'
+    -> s' ↓ s''
     ----------------
-    -> (s ↓) s'' 
--}
+    -> s ↓ s'
+
+
+{--}
 {-
 transition : Params -> Label -> Input -> ScriptContext -> State
 transition p l i ctx =
