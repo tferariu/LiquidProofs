@@ -1,6 +1,6 @@
 module MultiSigSC where
 
-open import Haskell.Prelude
+open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 
 
@@ -12,6 +12,10 @@ ThreadToken = Placeholder
 PubKeyHash = String
 Value = Integer
 Deadline = Integer
+
+data Label : Set where
+  Holding : Label
+  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Label
 
 record TxInfo : Set where
   field
@@ -30,10 +34,11 @@ open TxInfo public
 
 record ScriptContext : Set where
     field
-        scriptContextTxInfo  : TxInfo
-        scriptContextPurpose : ScriptPurpose
-        inputVal    : Nat
-        outputVal   : Nat
+ --       scriptContextTxInfo  : TxInfo
+ --       scriptContextPurpose : ScriptPurpose
+        inputVal    : Integer
+        outputVal   : Integer
+        outputLabel : Label
         
 open ScriptContext public
 
@@ -41,12 +46,10 @@ open ScriptContext public
 
 {-# COMPILE AGDA2HS Deadline #-}
 
-data Label : Set where
-  Holding : Label
-  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Label
+
 
 {-# COMPILE AGDA2HS Label #-}
-
+ 
 data Input : Set where
   Propose : Value -> PubKeyHash -> Deadline -> Input
   Add     : PubKeyHash -> Input
@@ -73,6 +76,7 @@ count (x ∷ l) = 1 + (count l)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS count #-}
 
+{-
 postulate
  -- txSignedBy : TxInfo -> PubKeyHash -> Bool
   checkSigned : PubKeyHash -> ScriptContext -> Bool
@@ -83,7 +87,31 @@ postulate
   -- postulate foreign block
   newValue : ScriptContext -> Value
   geq : Value -> Value -> Bool
---  checkToken : ThreadToken -> ScriptContext -> Bool
+--  checkToken : ThreadToken -> ScriptContext -> Bool -}
+
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned _ _ = True
+
+checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
+checkPayment _ _ _ = True
+
+expired : Deadline -> ScriptContext -> Bool
+expired _ _ = True
+
+newLabel : ScriptContext -> Label
+newLabel ctx = outputLabel ctx
+
+
+oldValue : ScriptContext -> Value
+oldValue ctx = inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = outputVal ctx
+
+geq : Value -> Value -> Bool
+geq _ _ = True
+
+
 
 data _∉_ : PubKeyHash -> List PubKeyHash -> Set where
 
@@ -124,40 +152,24 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
       (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
     Pay -> (count sigs) >= (nr param) && (case (newLabel ctx) of λ where
-      Holding -> checkPayment pkh v (scriptContextTxInfo ctx) && oldValue ctx == ((newValue ctx) + v)
+      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v)
       (Collecting _ _ _ _) -> False )
       
     Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
-      Holding -> expired d (scriptContextTxInfo ctx)
+      Holding -> expired d ctx
       (Collecting _ _ _ _) -> False ) 
   
   Holding -> case red of λ where
 
     (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> True ) --(v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) ) -}
+      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
     (Add _) -> False
     Pay -> False
-    Cancel -> False 
+    Cancel -> False
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
-{-
-
-case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v'
-
-data _~>_ : Label -> Label -> Set where
-
-    h~>c : ∀ (val : Value), (pkh : PubKeyHash), (deadline : Deadline) , (sigs : List PubKeyHash) 
-    -------------------
-    -> Holding ~> Collecting val pkh deadline sigs
-
-    c~>c : ∀ val, pkh, deadline, sigs, sig
-    -------------------
-    -> Collecting val pkh deadline sigs ~> Collecting val pkh deadline (insert sig sigs)
--}
 
 
 record State : Set where
@@ -165,15 +177,16 @@ record State : Set where
     label : Label
     value : Value
     param : Params
+--    pf : IsNonNegativeInteger value
     
 open State
 
 
-
-data _~>_ : State -> State -> Set where
+{-
+data _~>_ : State -> ScriptContext -> State -> Set where
 
   TPropose : ∀ {val p v pkh d ctx}
-    -> IsTrue (agdaValidator p Holding (Propose v pkh d) ctx)
+    -> IsTrue (agdaValidator p Holding (Propose v pkh d) (record { inputVal = val ; outputVal = val ; outputLabel = (Collecting v pkh d []) }) )
     -------------------
     -> record {label = Holding ; value = val ; param = p}
        ~> record {label = (Collecting v pkh d []) ; value = val ; param = p}
@@ -208,7 +221,18 @@ data _↓_ : State -> State -> Set where
     -> s ~> s'
     -> s' ↓ s''
     ----------------
-    -> s ↓ s'
+    -> s ↓ s''
+
+
+
+test1 : IsTrue (agdaValidator (record { authSigs = "a" ∷ "b" ∷ "c" ∷ [] ; nr = 2}) Holding (Propose 1 "a" 10) (record { inputVal = 10 ; outputVal = 10 ; outputLabel = Collecting 1 "a" 10 [] })) 
+test1 = IsTrue.itsTrue
+
+liquidity : ∀ (s : State) ->  ∃[ s' ] ((s ↓ s') × (IsTrue (value s <= value s')))
+liquidity record { label = Holding ; value = value ; param = param } = ⟨ record {label = Holding ; value = (value - 1) ; param = param} , ⟨ step ( (record { label = (Collecting 1 "a" 1 []) ; value = value ; param = param })) (TPropose {!!}) {!!} , {!!} ⟩ ⟩
+liquidity record { label = (Collecting x x₁ x₂ x₃) ; value = value ; param = param } = {!!}
+
+-}
 
 
 {--}
@@ -246,3 +270,19 @@ agdaValidator l s i t o s' = case s of λ where
     Pay -> False
     Cancel -> False-}
   
+{-
+
+case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v'
+
+data _~>_ : Label -> Label -> Set where
+
+    h~>c : ∀ (val : Value), (pkh : PubKeyHash), (deadline : Deadline) , (sigs : List PubKeyHash) 
+    -------------------
+    -> Holding ~> Collecting val pkh deadline sigs
+
+    c~>c : ∀ val, pkh, deadline, sigs, sig
+    -------------------
+    -> Collecting val pkh deadline sigs ~> Collecting val pkh deadline (insert sig sigs)
+-}
