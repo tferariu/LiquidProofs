@@ -1,7 +1,8 @@
-module MultiSigTransition where
-
 open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+
+
+module MultiSigTransition where
 
 
 Placeholder = String
@@ -10,7 +11,7 @@ ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
 PubKeyHash = String
-Value = Integer
+Value = Nat
 Deadline = Integer
 
 data Label : Set where
@@ -36,8 +37,8 @@ record ScriptContext : Set where
     field
  --       scriptContextTxInfo  : TxInfo
  --       scriptContextPurpose : ScriptPurpose
-        inputVal    : Integer
-        outputVal   : Integer
+        inputVal    : Nat
+        outputVal   : Nat
         outputLabel : Label
         
 open ScriptContext public
@@ -176,7 +177,7 @@ data _∻_ : Label -> Value -> Set where
     -> Holding ∻ v
 
   Sometimes : ∀ {val v pkh d sigs}
-    -> IsTrue (val >= v)
+    -> IsFalse (val < v) --IsTrue (val >= v)
     --------------------------------
     -> (Collecting v pkh d sigs) ∻ val
 
@@ -184,63 +185,109 @@ record State : Set where
   field
     label : Label
     value : Value
-    param : Params      --remove
-    pfP : IsNonNegativeInteger value
+ --   param : Params      --remove
+ --   pfP : IsNonNegativeInteger value
     pfG : label ∻ value 
     
 open State
 
 
 
-data _~[_]~>_ : State -> Input -> State -> Set where
+module Liquidity (p : Params) where
 
-  TPropose : ∀ {v pkh d s s'}
-    -> label s ≡ Holding
-    -> label s' ≡ (Collecting v pkh d [])
-    -> value s ≡ value s'
-    -> IsTrue (value s >= v)
-    -------------------
-    -> s ~[ (Propose v pkh d) ]~> s'
+  data _~[_]~>_ : State -> Input -> State -> Set where
 
-  TAdd : ∀ {v pkh d sig sigs s s'}
-    -> label s ≡ (Collecting v pkh d sigs)
-    -> label s' ≡ (Collecting v pkh d (insert sig sigs))
-    -> value s ≡ value s'
-    -> IsTrue (query sig (authSigs (param s)) )
-    -------------------
-    -> s ~[ (Add sig) ]~> s'
+    TPropose : ∀ {v pkh d s s'}
+      -> label s ≡ Holding
+      -> label s' ≡ (Collecting v pkh d [])
+      -> value s ≡ value s'
+      -> IsTrue (value s >= v)
+      -------------------
+      -> s ~[ (Propose v pkh d) ]~> s'
 
-  TPay : ∀ {v pkh d sigs s s'}
-    -> label s ≡ (Collecting v pkh d sigs)
-    -> label s' ≡ Holding
-    -> value s ≡ value s' + v
-    -> IsTrue (lengthNat sigs >= (nr (param s)))
-    -------------------
-    -> s ~[ Pay ]~> s'
+    TAdd : ∀ {v pkh d sig sigs s s'}
+      -> label s ≡ (Collecting v pkh d sigs)
+      -> label s' ≡ (Collecting v pkh d (insert sig sigs))
+      -> value s ≡ value s'
+      -> IsTrue (query sig (authSigs p) )
+      -------------------
+      -> s ~[ (Add sig) ]~> s'
 
-  TCancel : ∀ {v pkh d sigs s s'}
-    -> label s ≡ (Collecting v pkh d sigs)
-    -> label s' ≡ Holding
-    -> value s ≡ value s'
-    -------------------
-    -> s ~[ Cancel ]~> s'
+{-
+    TPay : ∀ {v pkh d sigs s s'}
+      -> label s ≡ (Collecting v pkh d sigs)
+      -> label s' ≡ Holding
+      -> value s ≡ value s' + v
+      -> IsTrue (lengthNat sigs >= (nr p))
+      -------------------
+      -> s ~[ Pay ]~> s'
+-}
 
-data _~[_]~*_ : State -> List Input -> State -> Set where
+    TPay : ∀ {v pkh d sigs val val' pfG}
+      -> val ≡ val' + v
+      -> IsTrue (lengthNat sigs >= (nr p))
+      -------------------
+      -> record { label = Collecting v pkh d sigs ; value = val ; pfG = pfG}
+         ~[ Pay ]~>
+         record { label = Holding ; value = val' ; pfG = Always }
 
-  root : ∀ { s }
-    ------------------
-    -> s ~[ [] ]~* s
+    TCancel : ∀ {v pkh d sigs s s'}
+      -> label s ≡ (Collecting v pkh d sigs)
+      -> label s' ≡ Holding
+      -> value s ≡ value s'
+      -------------------
+      -> s ~[ Cancel ]~> s'
 
-  cons : ∀ { s i is s' s'' }
-    -> s ~[ i ]~> s'
-    -> s' ~[ is ]~* s''
-    -----------------------
-    -> s ~[ (i ∷ is) ]~* s''
+  data _~[_]~*_ : State -> List Input -> State -> Set where
 
+    root : ∀ { s }
+      ------------------
+      -> s ~[ [] ]~* s
 
+    cons : ∀ (s' : State) { s i is s'' }
+      -> s ~[ i ]~> s'
+      -> s' ~[ is ]~* s''
+      -----------------------
+      -> s ~[ (i ∷ is) ]~* s''
 
-liquidity : ∀ (s : State) -> value s ≠ 0 -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (IsTrue (value s' < value s)))
-liquidity s pf = {!!}
+  lemmaZero : ∀ (val : Value) -> val ≡ (val + zero)
+  lemmaZero zero = refl
+  lemmaZero (suc val) = cong suc (lemmaZero val)
+
+  lemmaLEFalse : ∀ (a b : Value) -> IsFalse (a < (suc b)) -> IsFalse (a < b)
+  lemmaLEFalse (suc a) zero pf = IsFalse.itsFalse
+  lemmaLEFalse (suc a) (suc b) pf = lemmaLEFalse a b pf
+
+  lemmaSucMinus : ∀ (a b c : Value) -> (pff : IsFalse (a < (suc b))) -> suc ( (a - (suc b)) {{pff}} + c ) ≡ ((a - b) {{lemmaLEFalse a b pff}} + c)
+  lemmaSucMinus (suc a) zero c pff = refl
+  lemmaSucMinus (suc a) (suc b) c pff = lemmaSucMinus a b c pff
+  
+  lemmaSucPlus : ∀ (a b : Value) -> a + (suc b) ≡ ((suc a) + b)
+  lemmaSucPlus zero b = refl
+  lemmaSucPlus (suc a) b = cong suc (lemmaSucPlus a b)
+
+  lemma : ∀ (val v : Value) -> (pff : IsFalse (val < v)) -> val ≡ (((val - v) {{pff}}) + v)
+  lemma val zero pf = lemmaZero val
+  lemma val (suc v) pf rewrite (lemmaSucPlus ((val - (suc v)) {{pf}}) v) | (lemmaSucMinus val v v pf) = lemma val v (lemmaLEFalse val v pf)
+
+-- rewrite lemmaSucPlus ((val - v) {{pf}}) (suc v)
+
+  liquidity : ∀ (s : State) -> value s ≠ 0 -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (IsTrue (value s' < value s)))
+  liquidity record { label = Holding ; value = value ; pfG = pfG } pf = {!!}
+  liquidity record { label = (Collecting v pkh d []) ; value = value ; pfG = pfG } pf = {!!}
+  liquidity record { label = (Collecting v pkh d (sig ∷ sigs)) ; value = value ; pfG = (Sometimes x) } pf with (lengthNat (sig ∷ sigs) >= (nr p) )
+  ... | False = {!!}
+  ... | True = {!!}
+
+-----------NEEDS DEC!!!???
+
+-- record { label = Holding ; value = (value - v) ; pfG = Always }
+
+{-
+ ⟨ record { label = Holding ; value = ( value - v ) {{x}} ; pfG = Always } , ⟨  (Pay) ∷ [] ,
+      ⟨ cons (record { label = Holding ; value = (value - v) {{x}} ; pfG = Always }) (TPay (lemma value v x) {!!}) root , {!!} ⟩ ⟩ ⟩
+
+-}
 
 {-
   TAdd : ∀ {val p v pkh d ctx sig sigs}
@@ -263,10 +310,7 @@ liquidity s pf = {!!}
 -}
 
 {-
-  module Bingus where
 
-  test : Set -> Set
-  test a = a
 
 
 
@@ -291,6 +335,8 @@ test1 = IsTrue.itsTrue
 liquidity : ∀ (s : State) ->  ∃[ s' ] ((s ↓ s') × (IsTrue (value s <= value s')))
 liquidity record { label = Holding ; value = value ; param = param } = ⟨ record {label = Holding ; value = (value - 1) ; param = param} , ⟨ step ( (record { label = (Collecting 1 "a" 1 []) ; value = value ; param = param })) (TPropose {!!}) {!!} , {!!} ⟩ ⟩
 liquidity record { label = (Collecting x x₁ x₂ x₃) ; value = value ; param = param } = {!!}
+
+
 
 -}
 
@@ -345,4 +391,15 @@ data _~>_ : Label -> Label -> Set where
     c~>c : ∀ val, pkh, deadline, sigs, sig
     -------------------
     -> Collecting val pkh deadline sigs ~> Collecting val pkh deadline (insert sig sigs)
+
+
+module Sort (A : Set) where
+  insert' : A → List A → List A
+  insert' x [] = x ∷ []
+  insert' x (y ∷ ys) = y ∷ insert' x ys
+
+  sort' : List A → List A
+  sort' []       = []
+  sort' (x ∷ xs) = insert' x (sort' xs)
+
 -}
