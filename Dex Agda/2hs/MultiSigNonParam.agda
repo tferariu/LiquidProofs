@@ -1,6 +1,6 @@
 open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
-
+open import Agda.Builtin.Char
 
 module MultiSigNonParam where
 
@@ -13,7 +13,7 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-PubKeyHash = String
+PubKeyHash = Integer --Not string because kill me
 Value = Nat
 Deadline = Integer
 
@@ -286,24 +286,27 @@ module Liquidity where
   lemma val zero pf = lemmaZero val
   lemma val (suc v) pf rewrite (lemmaSucPlus ((val - (suc v)) {{pf}}) v) | (lemmaSucMinus val v v pf) = lemma val v (lemmaLEFalse val v pf)
 
-  whyy : ∀ (x : Char) -> IsTrue (x == x)
-  whyy x = {!!}
+  whyy : ∀ (x : Nat) -> IsTrue (x == x)
+  whyy zero = IsTrue.itsTrue
+  whyy (suc x) = whyy x
 
   why : ∀ (x : PubKeyHash) {b : Bool} -> IsTrue (x == x || b)
-  why [] = IsTrue.itsTrue
-  why (x ∷ x₁) = {!!}
+  why (Integer.pos zero) = IsTrue.itsTrue
+  why (Integer.pos (suc n)) = why (Integer.pos n)
+  why (Integer.negsuc zero) = IsTrue.itsTrue
+  why (Integer.negsuc (suc n)) = why (Integer.pos n)
 
   lema : ∀ (s : State) -> ∃[ s' ] ∃[ is ] (s ~[ is ]~* s')
-  lema record { label = Holding ; value = zero ; param = param ; pfG = pfG } = ⟨  record { label = (Collecting 0 "asd" 1234 []) ; value = zero ; param = param ; pfG = Sometimes IsFalse.itsFalse } , ⟨  ( Propose 0 "asd" 1234 ) ∷ [] , cons ( record { label = (Collecting 0 "asd" 1234 []) ; value = zero ; param = param ; pfG = Sometimes IsFalse.itsFalse }) (TPropose refl refl refl IsTrue.itsTrue refl) root ⟩ ⟩
-  lema record { label = Holding ; value = (suc value) ; param = param ; pfG = pfG } = ⟨  record { label = (Collecting 0 "asd" 1234 []) ; value = (suc value ) ; param = param ; pfG = Sometimes IsFalse.itsFalse } , ⟨  ( Propose 0 "asd" 1234 ) ∷ [] , cons ( record { label = (Collecting 0 "asd" 1234 []) ; value = (suc value) ; param = param ; pfG = Sometimes IsFalse.itsFalse }) (TPropose refl refl refl IsTrue.itsTrue refl) root ⟩ ⟩
-  lema record { label = (Collecting v pkh d sigs) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = (Sometimes pff) } = ⟨ record { label = (Collecting v pkh d (insert x sigs)) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = Sometimes pff } , ⟨ ((Add x) ∷ []) , cons (record { label = (Collecting v pkh d (insert x sigs)) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = Sometimes pff }) (TAdd {!!}) {!!} ⟩ ⟩
+  lema record { label = Holding ; value = zero ; param = param ; pfG = pfG } = ⟨  record { label = (Collecting 0 999 1234 []) ; value = zero ; param = param ; pfG = Sometimes IsFalse.itsFalse } , ⟨  ( Propose 0 999 1234 ) ∷ [] , cons ( record { label = (Collecting 0 999 1234 []) ; value = zero ; param = param ; pfG = Sometimes IsFalse.itsFalse }) (TPropose refl refl refl IsTrue.itsTrue refl) root ⟩ ⟩
+  lema record { label = Holding ; value = (suc value) ; param = param ; pfG = pfG } = ⟨  record { label = (Collecting 0 999 1234 []) ; value = (suc value ) ; param = param ; pfG = Sometimes IsFalse.itsFalse } , ⟨  ( Propose 0 999 1234 ) ∷ [] , cons ( record { label = (Collecting 0 999 1234 []) ; value = (suc value) ; param = param ; pfG = Sometimes IsFalse.itsFalse }) (TPropose refl refl refl IsTrue.itsTrue refl) root ⟩ ⟩
+  lema record { label = (Collecting v pkh d sigs) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = (Sometimes pff) } = ⟨ record { label = (Collecting v pkh d (insert x sigs)) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = Sometimes pff } , ⟨ ((Add x) ∷ []) , cons (record { label = (Collecting v pkh d (insert x sigs)) ; value = value ; param = record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = Sometimes pff }) (TAdd (why x)) root ⟩ ⟩
 
-{-
+
   liquidity : ∀ (s : State) -> value s ≠ 0 -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (IsTrue (value s' < value s)))
-  liquidity record { label = Holding ; value = value ; pfG = pfG } pf = {!!}
-  liquidity record { label = (Collecting v pkh d []) ; value = value ; pfG = pfG } pf = {!!}
-  liquidity record { label = (Collecting v pkh d (sig ∷ sigs)) ; value = value ; pfG = (Sometimes x) } pf = {!!}
--}
+  liquidity record { label = Holding ; value = zero ; param = param ; pfG = pfG } pf = magic (pf refl)
+  liquidity record { label = Holding ; value = (suc value) ; param = param ; pfG = pfG } pf = {!!}
+  liquidity record { label = (Collecting v pkh d sigs) ; value = value ; param = record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } ; pfG = pfG } pf = {!!}
+
 {-
 pf with (lengthNat (sig ∷ sigs) >= (nr p) )
   ... | False = {!!}
