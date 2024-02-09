@@ -13,7 +13,7 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-PubKeyHash = Integer --Not string because kill me
+PubKeyHash = Integer --Not string because of memes
 Value = Nat
 Deadline = Integer
 
