@@ -66,6 +66,11 @@ query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
 query pkh (x ∷ l') = (x == pkh) || query pkh l'
 
+check : List Input -> Bool
+check (Pay ∷ is) = False
+check (_ ∷ is) = check is
+check [] = True
+
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
 insert pkh (x ∷ l') = if (x == pkh)
@@ -164,7 +169,7 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
   
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && (v > 0) && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
     (Add _) -> False
@@ -175,11 +180,11 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 
 data _∻_ : Label -> Value -> Set where
 
-  Always : ∀ {v}
+  Hol : ∀ {v}
     ----------------
     -> Holding ∻ v
 
-  Sometimes : ∀ {val v pkh d sigs}
+  Col : ∀ {val v pkh d sigs}
     -> IsTrue (val >= v)
     -> IsTrue (v > 0) --IsFalse (val <= v) --IsTrue (val >= v)
     --------------------------------
@@ -211,7 +216,7 @@ module Liquidity (p : Params) where
          record { label = Collecting v pkh d [] ; value = val}
       
 
-    TAdd : ∀ {v pkh d sig sigs val p}
+    TAdd : ∀ {v pkh d sig sigs val}
       -> IsTrue (query sig (authSigs p) )
       -------------------
       -> record { label = (Collecting v pkh d sigs) ; value = val }
@@ -251,10 +256,10 @@ module Liquidity (p : Params) where
     -> label s ∻ value s
     -> s ~[ i ]~> s'
     -> label s' ∻ value s'
-  validStateTransition iv (TPropose x y) = Sometimes x y
-  validStateTransition (Sometimes x₁ x₂) (TAdd x) = Sometimes x₁ x₂
-  validStateTransition iv (TPay x x₁) = Always
-  validStateTransition iv TCancel = Always
+  validStateTransition iv (TPropose x y) = Col x y
+  validStateTransition (Col x₁ x₂) (TAdd x) = Col x₁ x₂
+  validStateTransition iv (TPay x x₁) = Hol
+  validStateTransition iv TCancel = Hol
 
   validStateMulti : ∀ {s s' : State} {is}
     -> label s ∻ value s
@@ -262,6 +267,62 @@ module Liquidity (p : Params) where
     -> label s' ∻ value s'
   validStateMulti iv root = iv
   validStateMulti iv (cons s' x tr) = validStateMulti (validStateTransition iv x) tr
+
+  invariant2 : ∀ {s s' : State} {i}
+    -> IsTrue (value s > 0)
+    -> s ~[ i ]~> s'
+    -> i ≠ Pay
+    -> IsTrue (value s' > 0)
+  invariant2 iv (TPropose x x₁) pf = iv
+  invariant2 iv (TAdd x) pf = iv
+  invariant2 iv (TPay x x₁) pf = magic (pf refl)
+  invariant2 iv TCancel pf = iv
+
+  invariant2Multi : ∀ {s s' : State} {is}
+    -> IsTrue (value s > 0)
+    -> s ~[ is ]~* s'
+    -> IsTrue (check is)
+    -> IsTrue (value s' > 0)
+  invariant2Multi iv root pf = iv
+  invariant2Multi iv (cons s' {i = Propose x₁ x₂ x₃} x t) pf = invariant2Multi (invariant2 iv x λ ()) t pf
+  invariant2Multi iv (cons s' {i = Add x₁} x t) pf = invariant2Multi (invariant2 iv x λ ()) t pf
+  invariant2Multi iv (cons s' {i = Cancel} x t) pf = invariant2Multi (invariant2 iv x λ ()) t pf
+
+--invariant2Multi (invariant2 iv x {!!}) t {!!}
+
+{-
+  makeIs : Params -> List Input
+  makeIs record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = []
+  makeIs record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = Add x ∷ (makeIs (record
+                                                                                                            { authSigs = authSigs
+                                                                                                            ; nr = nr
+                                                                                                            ; pfU = pfU 
+                                                                                                            ; pfL = pfL
+                                                                                                            }) ) 
+
+
+  prop1 : ∀ { v pkh d sigs val } -> (par : Params) -> ∃[ sigs' ] record { label = (Collecting v pkh d sigs) ; value = val } ~[ makeIs par ]~* record { label = (Collecting v pkh d sigs') ; value = val }
+  prop1 {sigs = sigs} record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = ⟨ sigs , root ⟩
+  prop1 {v} {pkh} {d} {sigs} {val} record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = ⟨ {!!} , (cons ( record { label = (Collecting v pkh d (insert x sigs)) ; value = val }) (TAdd {!!}) {!!}) ⟩ 
+
+  prop1' : ∀ { v pkh d sigs val } -> ∃[ sigs' ] record { label = (Collecting v pkh d sigs) ; value = val } ~[ makeIs p ]~* record { label = (Collecting v pkh d sigs') ; value = val }
+  prop1' = prop1 p
+  -}
+{-
+  lema : ∀ (s : State) -> ∃[ s' ] (s ~[ makeIs p ]~* s')
+  lema record { label = Holding ; value = value } = {!!}
+  lema record { label = (Collecting v pkh d sigs) ; value = value } = ⟨ (record { label = (Collecting v pkh d sigs) ; value = value }) , {!!} ⟩
+-}
+
+  liq : ∀ (s : State) ->  ∃[ s' ] ∃[ is ] (s ~[ (is ++ (Pay ∷ [])) ]~* s')
+  liq s = {!!}
+
+  liquidity : ∀ (s : State) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (s ~[ (is ++ (Pay ∷ [])) ]~* s')
+  liquidity record { label = Holding ; value = (suc value₁) } pf1 pf2 = {!!} --⟨ {!!} , ⟨ {!!} , (cons {!!} (TPropose {!!} {!!}) (cons {!!} (TAdd {!!}) {!!})) ⟩ ⟩
+  liquidity record { label = (Collecting x x₁ x₂ x₃) ; value = value } pf1 pf2 = {!!}
+
+  prop' : ∀ {s i s'} -> s ~[ i ]~*  s'
+  prop' = {!!}
 
 -- authSigs
 
@@ -287,9 +348,28 @@ module Liquidity (p : Params) where
   lemma val (suc v) pf rewrite (lemmaSucPlus ((val - (suc v)) {{pf}}) v) | (lemmaSucMinus val v v pf) = lemma val v (lemmaLEFalse val v pf)
 
 
+open Liquidity
+
+makeIs : Params -> List Input
+makeIs record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = []
+makeIs record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = Add x ∷ (makeIs (record
+                                                                                                            { authSigs = authSigs
+                                                                                                            ; nr = nr
+                                                                                                            ; pfU = pfU 
+                                                                                                            ; pfL = pfL
+                                                                                                            }) ) 
+
+
+prop0 : ∀ {s i s' p} -> ((s ~[ i ]~* s') p)
+prop0 {s} {i} {s'} {p} = {!cons!}
 
 {-
-  liquidity : ∀ (s : State) -> value s ≠ 0 -> ∃[ s' ] ∃[ is ] (s ~[ (is ++ (Pay ∷ [])) ]~* s')
+prop1 : ∀ { v pkh d sigs val } -> (par : Params) -> ∃[ sigs' ] ((record { label = (Collecting v pkh d sigs) ; value = val } ~[ (makeIs par) ]~* record { label = (Collecting v pkh d sigs') ; value = val }) par)
+prop1 {sigs = sigs} record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = ⟨ sigs , root ⟩
+prop1 {v} {pkh} {d} {sigs} {val} record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = ⟨ {!!} , (cons ( record { label = (Collecting v pkh d (insert x sigs)) ; value = val }) (TAdd {!!}) {!!}) ⟩ 
+-}
+{-
+  
 
 -- × (IsTrue (value s' < value s))) make values > 0
 
@@ -428,5 +508,11 @@ module Sort (A : Set) where
   sort' : List A → List A
   sort' []       = []
   sort' (x ∷ xs) = insert' x (sort' xs)
+
+
+
+  lemmaLT : ∀ (a b : Nat) -> IsTrue (a < b) -> IsTrue (a < suc b)
+  lemmaLT zero (suc b) pf = IsTrue.itsTrue
+  lemmaLT (suc a) (suc b) pf = lemmaLT a b pf
 
 -}

@@ -1,6 +1,9 @@
+
+open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
+open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+
 module Test3 where
 
-open import Haskell.Prelude
 
 
 ScriptPurpose = String
@@ -117,5 +120,21 @@ agdaValidator l s i t o s' = case s of λ where
     Cancel -> False
 
 {-# COMPILE AGDA2HS agdaValidator #-}
-  
+
 -}
+
+module asd (ns : List Nat) where
+
+  data foo : Nat -> Set where
+    bar : ∀ {m}
+      -> IsTrue (m > (lengthNat ns))
+      ---------
+      -> foo m
+
+  lemma : ∀ (a b : Nat) -> IsTrue ( a < suc a + b)
+  lemma zero zero = IsTrue.itsTrue
+  lemma zero (suc b) = IsTrue.itsTrue
+  lemma (suc a) b = lemma a b
+
+  lemmaFoo : ∀ (a : Nat) ->  ∃[ b ] (foo (b + a))
+  lemmaFoo a = ⟨ suc (lengthNat ns) , (bar (lemma (lengthNat ns) a)) ⟩
