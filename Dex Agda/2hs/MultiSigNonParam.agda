@@ -294,6 +294,14 @@ why (Integer.pos (suc n)) = why (Integer.pos n)
 why (Integer.negsuc zero) = IsTrue.itsTrue
 why (Integer.negsuc (suc n)) = why (Integer.pos n)
 
+whyy : ∀ (x : PubKeyHash) {b : Bool} -> IsTrue (b || x == x)
+whyy (Integer.pos zero) {False} = IsTrue.itsTrue
+whyy (Integer.pos (suc n)) {False} = whyy (Integer.pos n)
+whyy (Integer.negsuc zero) {False} = IsTrue.itsTrue
+whyy (Integer.negsuc (suc n)) {False} = whyy (Integer.pos n)
+whyy x {True} = IsTrue.itsTrue
+
+
 why' : ∀ (a : Bool) (x : PubKeyHash) (ys z : List PubKeyHash) -> IsTrue (query x (ys ++ x ∷ z)) -> IsTrue (a || query x (ys ++ x ∷ z) )
 why' False x ys z pf = pf
 why' True x ys z pf = IsTrue.itsTrue
@@ -424,6 +432,89 @@ appendEmpty : ∀ (a : List PubKeyHash) -> a ≡ (a ++ [])
 appendEmpty [] = refl
 appendEmpty (a ∷ as) = cong (λ y → a ∷ y) (appendEmpty as) 
 
+
+
+{-
+makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
+                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
+makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
+-}
+
+ifLemma : ∀ (x : PubKeyHash) (ys zs : List PubKeyHash) (b : Bool) -> (0 < lengthNat (if b then x ∷ ys else x ∷ zs)) ≡ True
+ifLemma x ys zs False = refl
+ifLemma x ys zs True = refl
+
+insertLemma : ∀ (x : PubKeyHash) (xs : List PubKeyHash) -> (0 < lengthNat (insert x xs)) ≡ True 
+insertLemma x [] = refl
+insertLemma x (x' ∷ xs) rewrite ifLemma x' xs (insert x xs) (eqInteger x' x) = refl 
+
+--lengthSublemma
+
+postulate
+  helper : ∀ (n : Nat) (x : PubKeyHash) (xs : List PubKeyHash) -> IsTrue (n < lengthNat xs) -> IsTrue (n < lengthNat (insert x xs)) 
+
+uil : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                      -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
+uil (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) (uil s1 s2 n pf1 {!!})
+
+uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                      -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
+uil' (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) {!!}
+
+--helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
+
+uniqueInsertLemma : ∀ (sigs sigs' aux aux' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                    -> (pf3 : sigs ≡ aux ++ aux') -> IsTrue (n < lengthNat (makeSigs' sigs' aux'))
+uniqueInsertLemma .(_ ∷ _) s2 (x ∷ a1) [] n (pf :: pf1) pf2 pf3 = {!!}
+uniqueInsertLemma .(_ ∷ _) s2 a1 (x ∷ a2) n (pf :: pf1) pf2 pf3 = {!!}
+
+
+lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
+      (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = IsTrue.itsTrue } sigs = {!!}
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr₁) ; pfU = pfU ; pfL = pfL } sigs = {!!}
+{-
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = pfL } sigs = insertLemma x (makeSigs' sigs authSigs)
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = {!!} --lengthLemma {!!} {!!}
+-}
+parLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> (
+      ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
+       (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
+parLemma par sigs = {!!}
+
+--!!!
+
+skipLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
+       ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
+       (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
+skipLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
+
+prop2 : ∀ { v val pkh d sigs } (par : Params) -> (x : (Collecting v pkh d sigs) ∻ val)
+          -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ Pay ∷ (makeIs' (authSigs par)) ]~*
+                                                 record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
+prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
+...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (skipLemma par sigs))
+
+lemmaLT : ∀ (n : Nat) -> IsFalse (n < n)
+lemmaLT zero = IsFalse.itsFalse
+lemmaLT (suc n) = lemmaLT n
+
+
+lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
+                   -> par ⊢ s  ~[ is  ]~* s'
+                   -> par ⊢ s' ~[ is' ]~* s''
+                   -> par ⊢ s  ~[ is' ++ is ]~* s''
+lemmaMultiStep par s s' .s' is [] p1 root = p1
+lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
+
+prop3 : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+prop3 par record { label = Holding ; value = val } pkh d pf pf' = ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
+          lemmaMultiStep par (record { label = Holding ; value = val }) (record { label = (Collecting val pkh d []) ; value = val })
+          ( record { label = Holding ; value = (val - val) {{lemmaLT val}} }) (((Propose val pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+          (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
+prop3 par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
+
+{- !!!
 prop2' : ∀ (v val : Value) (pkh : PubKeyHash) (d : Deadline) (sigs : List PubKeyHash)
            (par : Params) (n : Nat) (asigs asigs' asigs'' : List PubKeyHash)
          -> n ≡ (nr par) -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
@@ -431,8 +522,8 @@ prop2' : ∀ (v val : Value) (pkh : PubKeyHash) (d : Deadline) (sigs : List PubK
          ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
          ~[ makeIsP asigs'' ]~*
          record { label = Holding ; value = (val - v) {{lemmaOK x}} })
-prop2' v val pkh d sigs record { authSigs = .(a2 ++ a3) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(a2 ++ a3) a2 a3 refl refl refl (Col p1 p2) pf5 = snoc {!prop1!} {!!}
-
+prop2' v val pkh d sigs record { authSigs = .(a2 ++ a3) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(a2 ++ a3) a2 a3 refl refl refl (Col p1 p2) pf5 = {!!} 
+-}
 
 
 {-
@@ -450,19 +541,6 @@ prop2' (record { authSigs = x ∷ a2 ++ [] ; nr = suc n ; pfU = pfU₁ ; pfL = p
 --cons (TPay {!!} {!!}) {!!}
 prop2' record { authSigs = .(a2 ++ x ∷ a3) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(a2 ++ x ∷ a3) a2 (x ∷ a3) refl refl refl (Col v0 vv) = {!!} -}
 
-makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
-                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
-makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
-
-parLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->  IsTrue
-      ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
-       (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
-parLemma record { authSigs = (x ∷ authSigs) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
-
-prop2 : ∀ { v val pkh d sigs } (par : Params) -> (x : (Collecting v pkh d sigs) ∻ val)
-          -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ (makeIsP (authSigs par)) ]~*
-                                                 record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
-prop2 {v} {val} par (Col p1 p2) = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) {!!})
 
 
 
