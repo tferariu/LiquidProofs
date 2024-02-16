@@ -1,6 +1,7 @@
 open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
 open import Agda.Builtin.Char
+open import Data.Sum
 
 module MultiSigNonParam where
 
@@ -206,6 +207,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
 
   TAdd : ∀ {v pkh d sig sigs val par}
     -> IsTrue (query sig (authSigs par) )
+ --   -> sig ∉ sigs
     -------------------
     -> par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
        ~[ (Add sig) ]~>
@@ -373,9 +375,9 @@ prop1' : ∀ { v pkh d sigs val } (par : Params) (n : Nat) (asigs asigs' asigs''
          ~[ makeIs' asigs'' ]~*
          record { label = (Collecting v pkh d (makeSigs' sigs asigs'')) ; value = val })
 prop1' record { authSigs = .(asigs' ++ []) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(asigs' ++ []) asigs' [] refl refl refl = root
-prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU₁ ; pfL = pfL₁ } .n
+prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL = pfL₁ } .n
               .(asigs' ++ x ∷ asigs'') asigs' (x ∷ asigs'') refl refl refl
-       = snoc (prop1' (record { authSigs = asigs' ++ x ∷ asigs'' ; nr = n ; pfU = pfU₁ ; pfL = pfL₁ })
+       = snoc (prop1' (record { authSigs = asigs' ++ x ∷ asigs'' ; nr = n ; pfU = pfU ; pfL = pfL₁ })
          n ((asigs' ++ x ∷ asigs'')) (asigs' ++ (x ∷ [])) asigs'' refl refl (appendLemma x asigs' asigs''))
          (TAdd (toby x asigs' asigs''))
 
@@ -433,13 +435,6 @@ appendEmpty [] = refl
 appendEmpty (a ∷ as) = cong (λ y → a ∷ y) (appendEmpty as) 
 
 
-
-{-
-makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
-                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
-makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
--}
-
 ifLemma : ∀ (x : PubKeyHash) (ys zs : List PubKeyHash) (b : Bool) -> (0 < lengthNat (if b then x ∷ ys else x ∷ zs)) ≡ True
 ifLemma x ys zs False = refl
 ifLemma x ys zs True = refl
@@ -449,51 +444,74 @@ insertLemma x [] = refl
 insertLemma x (x' ∷ xs) rewrite ifLemma x' xs (insert x xs) (eqInteger x' x) = refl 
 
 --lengthSublemma
-
+{-
 postulate
   helper : ∀ (n : Nat) (x : PubKeyHash) (xs : List PubKeyHash) -> IsTrue (n < lengthNat xs) -> IsTrue (n < lengthNat (insert x xs)) 
 
 uil : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
                       -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
-uil (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) (uil s1 s2 n pf1 {!!})
+uil (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) {!!} --(uil s1 s2 n pf1 {!!})
 
-uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
-                      -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
-uil' (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) {!!}
+{-
+makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
+                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
+makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
+-}
 
---helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = IsTrue.itsTrue } sigs = {!!}
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr₁) ; pfU = pfU ; pfL = pfL } sigs = {!!}
+
 
 uniqueInsertLemma : ∀ (sigs sigs' aux aux' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
                     -> (pf3 : sigs ≡ aux ++ aux') -> IsTrue (n < lengthNat (makeSigs' sigs' aux'))
 uniqueInsertLemma .(_ ∷ _) s2 (x ∷ a1) [] n (pf :: pf1) pf2 pf3 = {!!}
 uniqueInsertLemma .(_ ∷ _) s2 a1 (x ∷ a2) n (pf :: pf1) pf2 pf3 = {!!}
 
+-}
+
+--helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
+
+minLength : ∀ (x : PubKeyHash) (ys : List PubKeyHash) -> (zero < lengthNat (insert x ys)) ≡ True
+minLength x [] = refl
+minLength x (y ∷ ys) rewrite ifLemma y ys (insert x ys) (eqInteger y x) = refl
+
+makeSigsLemma : ∀ (x : PubKeyHash) (ys : List PubKeyHash) (n : Nat) -> Unique ys
+                -> IsTrue (lengthNat ys > n) -> IsTrue (n < lengthNat (makeSigs' [] ys))
+makeSigsLemma x (y ∷ ys) n pf1 pf2 = {!!}
+
+--huhLemma : ∀ 
+
+uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                      -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
+uil' (x ∷ []) s2 zero pf1 pf2 rewrite minLength x s2 = refl
+uil' (x ∷ x' ∷ s1) [] zero (pf :: pf1) pf2 rewrite minLength x ((insert x' (makeSigs' [] s1))) = refl
+uil' (x ∷ x' ∷ s1) [] (suc zero) (pf :: pf1) pf2 = {!!}
+uil' (x ∷ x' ∷ s1) [] (suc (suc n)) (pf :: pf1) pf2 = {!!}
+uil' (x ∷ x' ∷ s1) (x₁ ∷ s2) n (pf :: pf1) pf2 = {!!}
+
+--trustMe
+
 
 lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
       (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = IsTrue.itsTrue } sigs = {!!}
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr₁) ; pfU = pfU ; pfL = pfL } sigs = {!!}
-{-
 lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = pfL } sigs = insertLemma x (makeSigs' sigs authSigs)
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = {!!} --lengthLemma {!!} {!!}
--}
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = uil' (x ∷ authSigs) sigs (suc nr) pfU pfL 
+
 parLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> (
       ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
        (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
-parLemma par sigs = {!!}
+parLemma par sigs rewrite lengthLemma par sigs = refl
 
---!!!
-
-skipLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
+rewriteLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
        ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
        (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
-skipLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
+rewriteLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
 
 prop2 : ∀ { v val pkh d sigs } (par : Params) -> (x : (Collecting v pkh d sigs) ∻ val)
           -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ Pay ∷ (makeIs' (authSigs par)) ]~*
                                                  record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
 prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
-...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (skipLemma par sigs))
+...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (rewriteLemma par sigs))
 
 lemmaLT : ∀ (n : Nat) -> IsFalse (n < n)
 lemmaLT zero = IsFalse.itsFalse
