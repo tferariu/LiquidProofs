@@ -1,7 +1,7 @@
 open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
 open import Agda.Builtin.Char
-open import Data.Sum
+--open import Data.Sum
 
 module MultiSigNonParam where
 
@@ -228,6 +228,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
        record { label = Holding ; value = val}
 
 
+
+
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
   root : ∀ { s par }
@@ -443,54 +445,27 @@ insertLemma : ∀ (x : PubKeyHash) (xs : List PubKeyHash) -> (0 < lengthNat (ins
 insertLemma x [] = refl
 insertLemma x (x' ∷ xs) rewrite ifLemma x' xs (insert x xs) (eqInteger x' x) = refl 
 
---lengthSublemma
-{-
-postulate
-  helper : ∀ (n : Nat) (x : PubKeyHash) (xs : List PubKeyHash) -> IsTrue (n < lengthNat xs) -> IsTrue (n < lengthNat (insert x xs)) 
-
-uil : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
-                      -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
-uil (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) {!!} --(uil s1 s2 n pf1 {!!})
-
-{-
-makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
-                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
-makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
--}
-
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = IsTrue.itsTrue } sigs = {!!}
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr₁) ; pfU = pfU ; pfL = pfL } sigs = {!!}
 
 
-uniqueInsertLemma : ∀ (sigs sigs' aux aux' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
-                    -> (pf3 : sigs ≡ aux ++ aux') -> IsTrue (n < lengthNat (makeSigs' sigs' aux'))
-uniqueInsertLemma .(_ ∷ _) s2 (x ∷ a1) [] n (pf :: pf1) pf2 pf3 = {!!}
-uniqueInsertLemma .(_ ∷ _) s2 a1 (x ∷ a2) n (pf :: pf1) pf2 pf3 = {!!}
 
--}
-
---helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
 
 minLength : ∀ (x : PubKeyHash) (ys : List PubKeyHash) -> (zero < lengthNat (insert x ys)) ≡ True
 minLength x [] = refl
 minLength x (y ∷ ys) rewrite ifLemma y ys (insert x ys) (eqInteger y x) = refl
 
-makeSigsLemma : ∀ (x : PubKeyHash) (ys : List PubKeyHash) (n : Nat) -> Unique ys
-                -> IsTrue (lengthNat ys > n) -> IsTrue (n < lengthNat (makeSigs' [] ys))
-makeSigsLemma x (y ∷ ys) n pf1 pf2 = {!!}
 
---huhLemma : ∀ 
+
 
 uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
                       -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
+uil' s1 s2 n pf1 pf2 = trustMe
+{-
 uil' (x ∷ []) s2 zero pf1 pf2 rewrite minLength x s2 = refl
 uil' (x ∷ x' ∷ s1) [] zero (pf :: pf1) pf2 rewrite minLength x ((insert x' (makeSigs' [] s1))) = refl
 uil' (x ∷ x' ∷ s1) [] (suc zero) (pf :: pf1) pf2 = {!!}
 uil' (x ∷ x' ∷ s1) [] (suc (suc n)) (pf :: pf1) pf2 = {!!}
 uil' (x ∷ x' ∷ s1) (x₁ ∷ s2) n (pf :: pf1) pf2 = {!!}
-
---trustMe
-
+-}
 
 lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
       (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
@@ -525,12 +500,86 @@ lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
 lemmaMultiStep par s s' .s' is [] p1 root = p1
 lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
 
-prop3 : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
-prop3 par record { label = Holding ; value = val } pkh d pf pf' = ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+liquidity par record { label = Holding ; value = val } pkh d pf pf' =
+          ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
           lemmaMultiStep par (record { label = Holding ; value = val }) (record { label = (Collecting val pkh d []) ; value = val })
           ( record { label = Holding ; value = (val - val) {{lemmaLT val}} }) (((Propose val pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
           (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
-prop3 par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
+liquidity par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
+
+
+
+v=v : ∀ (v : Value) -> (v == v) ≡ True
+v=v zero = refl
+v=v (suc v) = v=v v
+
+i=i : ∀ (i : Integer) -> (i == i) ≡ True
+i=i (Integer.pos zero) = refl
+i=i (Integer.pos (suc n)) = i=i (Integer.pos n)
+i=i (Integer.negsuc zero) = refl
+i=i (Integer.negsuc (suc n)) = i=i (Integer.pos n)
+
+l=l : ∀ (l : List PubKeyHash) -> (l == l) ≡ True
+l=l [] = refl
+l=l (x ∷ l) rewrite i=i x = l=l l
+
+refactor : ∀ {b} -> IsTrue b -> b ≡ True
+refactor {True} pf = refl
+
+
+prop= : ∀ (val v : Value) (pkh : PubKeyHash) (d : Deadline) -> ((val == val) && (v == v) &&
+       eqInteger pkh pkh && eqInteger d d && True) ≡ True
+prop= zero zero pkh d rewrite i=i pkh | i=i d = refl
+prop= zero (suc v) pkh d = prop= zero v pkh d
+prop= (suc val) zero pkh d = prop= val zero pkh d
+prop= (suc val) (suc v) pkh d = prop= val v pkh d
+
+
+contradiction : ∀ {b} -> b ≡ True -> b ≡ False -> ⊥
+contradiction {False} () p2
+contradiction {True} p1 ()
+
+&&False : ∀ {b} -> (b && False) ≡ False
+&&False {False} = refl
+&&False {True} = refl
+
+&&&False : ∀ {b1 b2 b3 b4} -> (( b1 ) && (b2) && b3 && b4 && False ) ≡ False
+&&&False {False} {b2} {b3} {b4} = refl
+&&&False {True} {False} {b3} {b4} = refl
+&&&False {True} {True} {False} {b4} = refl
+&&&False {True} {True} {True} {False} = refl
+&&&False {True} {True} {True} {True} = refl
+
+
+validatorImpliesTransition : ∀ (p : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+                             -> (pf : agdaValidator p l i ctx ≡ True)
+                             -> p ⊢ record { label = l ; value = (inputVal ctx) } ~[ i ]~>
+                                record { label = (outputLabel ctx) ; value = (outputVal ctx) }
+validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding } pf = magic (contradiction pf &&False)
+validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' []) } pf = {!!}
+validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' (x ∷ sigs')) } pf = magic (contradiction pf (&&&False {outputVal == inputVal} {v == v'} {pkh == pkh'} {d == d'}))
+validatorImpliesTransition p (Collecting v pkh d sigs) (Add sig) ctx pf = {!!}
+validatorImpliesTransition p (Collecting v pkh d sigs) Pay ctx pf = {!!}
+validatorImpliesTransition p (Collecting v pkh d sigs) Cancel ctx pf = {!!}
+
+
+
+
+
+transitionImpliesValidator : ∀ (p : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+                             -> (pf : p ⊢ record { label = l ; value = (inputVal ctx) } ~[ i ]~>
+                                record { label = (outputLabel ctx) ; value = (outputVal ctx) })
+                             -> agdaValidator p l i ctx ≡ True
+transitionImpliesValidator p .Holding (Propose v pkh d) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d []) } (TPropose x x₁) = prop= inputVal₁ v pkh d
+transitionImpliesValidator p (Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d (insert sig sigs)) } (TAdd x) rewrite l=l (insert sig sigs) | refactor x = prop= inputVal₁ v pkh d
+-- rewrite (refactor x) = {!!}
+transitionImpliesValidator p (Collecting v pkh d sigs) Pay record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputLabel = .Holding } (TPay p1 p2) rewrite p1 | (refactor p2) | v=v (outputVal₁ + v) = refl
+transitionImpliesValidator record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } (Collecting v pkh d sigs) Cancel record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .Holding } TCancel rewrite v=v inputVal₁ = refl
+
+
+--agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+
 
 {- !!!
 prop2' : ∀ (v val : Value) (pkh : PubKeyHash) (d : Deadline) (sigs : List PubKeyHash)
@@ -748,4 +797,34 @@ module Sort (A : Set) where
   sort' []       = []
   sort' (x ∷ xs) = insert' x (sort' xs)
 
+-}
+--lengthSublemma
+{-
+postulate
+  helper : ∀ (n : Nat) (x : PubKeyHash) (xs : List PubKeyHash) -> IsTrue (n < lengthNat xs) -> IsTrue (n < lengthNat (insert x xs)) 
+
+uil : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                      -> IsTrue (n < lengthNat (makeSigs' sigs' sigs))
+uil (x ∷ s1) s2 n (pf :: pf1) pf2 = helper n x (makeSigs' s2 s1) {!!} --(uil s1 s2 n pf1 {!!})
+
+{-
+makeSigsLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
+                IsTrue (nr par < lengthNat (makeSigs' sigs (authSigs par)))
+makeSigsLemma record { authSigs = (x ∷ authSigs₁) ; nr = nr ; pfU = pfU ; pfL = pfL } sigs = {!!}
+-}
+
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = IsTrue.itsTrue } sigs = {!!}
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr₁) ; pfU = pfU ; pfL = pfL } sigs = {!!}
+
+
+uniqueInsertLemma : ∀ (sigs sigs' aux aux' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                    -> (pf3 : sigs ≡ aux ++ aux') -> IsTrue (n < lengthNat (makeSigs' sigs' aux'))
+uniqueInsertLemma .(_ ∷ _) s2 (x ∷ a1) [] n (pf :: pf1) pf2 pf3 = {!!}
+uniqueInsertLemma .(_ ∷ _) s2 a1 (x ∷ a2) n (pf :: pf1) pf2 pf3 = {!!}
+
+makeSigsLemma : ∀ (x : PubKeyHash) (ys : List PubKeyHash) (n : Nat) -> Unique ys
+                -> IsTrue (lengthNat ys > n) -> IsTrue (n < lengthNat (makeSigs' [] ys))
+makeSigsLemma x (y ∷ ys) n pf1 pf2 = {!!}
+
+--helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
 -}
