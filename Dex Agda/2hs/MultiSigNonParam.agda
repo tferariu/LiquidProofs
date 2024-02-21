@@ -1,4 +1,5 @@
 open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
+
 open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
 open import Agda.Builtin.Char
 --open import Data.Sum
@@ -140,9 +141,13 @@ record Params : Set where
     field
         authSigs  : List PubKeyHash
         nr : Nat
-        pfU : Unique authSigs
-        pfL : IsTrue ((lengthNat authSigs) > nr)
+        pfU :  (Unique authSigs)
+        pfL :  IsTrue ((lengthNat authSigs) > nr)
 open Params public
+
+--mark them with @0 for correctness (in front of pfU pfL)
+--extra argument instead of having it in Params
+--model differently to model initial state being valid
 
 {-# COMPILE AGDA2HS Params #-}
 
@@ -152,7 +157,7 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && (query sig (authSigs param)) && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
@@ -175,6 +180,8 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
+
+
 data _∻_ : Label -> Value -> Set where
 
   Hol : ∀ {v}
@@ -183,7 +190,7 @@ data _∻_ : Label -> Value -> Set where
 
   Col : ∀ {val v pkh d sigs}
     -> IsTrue (val >= v)
-    -> IsTrue (v > 0) --IsFalse (val <= v) --IsTrue (val >= v)
+    -> IsTrue (v > 0)
     --------------------------------
     -> (Collecting v pkh d sigs) ∻ val
 
@@ -205,10 +212,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
        ~[ (Propose v pkh d) ]~>
        record { label = Collecting v pkh d [] ; value = val}
 
-
   TAdd : ∀ {v pkh d sig sigs val par}
     -> IsTrue (query sig (authSigs par) )
- --   -> sig ∉ sigs
     -------------------
     -> par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
        ~[ (Add sig) ]~>
@@ -218,7 +223,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> val ≡ val' + v
     -> IsTrue (lengthNat sigs >= (nr par))
     -------------------
-    -> par ⊢ record { label = Collecting v pkh d sigs ; value = val}
+    -> par ⊢ record { label = Collecting v pkh d sigs ; value = val }
        ~[ Pay ]~>
        record { label = Holding ; value = val' }
 
@@ -228,7 +233,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
        ~[ Cancel ]~>
        record { label = Holding ; value = val}
 
-
+--talk to Andre Knispel
 
 
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
@@ -276,7 +281,6 @@ makeIs record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU)
                                                                                                           ; pfL = pfL
                                                                                                           }) ) 
 
---keep parameters same?
 
 makeIs' : List PubKeyHash -> List Input
 makeIs' [] = []
@@ -350,9 +354,9 @@ awful {authSigs = x ∷ authSigs₁} {nr = suc nr₁} {x₁ :: pfU₁} (cons x�
 
 
 
-toby : ∀ (x : PubKeyHash) (y z : List PubKeyHash) -> IsTrue (query x (y ++ x ∷ z))
-toby x [] z = why x
-toby x (y ∷ ys) z = why' (eqInteger y x) x ys z (toby x ys z)
+queryLemma : ∀ (x : PubKeyHash) (y z : List PubKeyHash) -> IsTrue (query x (y ++ x ∷ z))
+queryLemma x [] z = why x
+queryLemma x (y ∷ ys) z = why' (eqInteger y x) x ys z (queryLemma x ys z)
 
 
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
@@ -382,7 +386,7 @@ prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL
               .(asigs' ++ x ∷ asigs'') asigs' (x ∷ asigs'') refl refl refl
        = snoc (prop1' (record { authSigs = asigs' ++ x ∷ asigs'' ; nr = n ; pfU = pfU ; pfL = pfL₁ })
          n ((asigs' ++ x ∷ asigs'')) (asigs' ++ (x ∷ [])) asigs'' refl refl (appendLemma x asigs' asigs''))
-         (TAdd (toby x asigs' asigs''))
+         (TAdd (queryLemma x asigs' asigs''))
 
 -- {!prop1'!} (TAdd (toby x asigs' asigs''))
 
@@ -457,6 +461,8 @@ minLength x (y ∷ ys) rewrite ifLemma y ys (insert x ys) (eqInteger y x) = refl
 
 
 
+
+
 uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
                       -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
 uil' s1 s2 n pf1 pf2 = trustMe
@@ -503,6 +509,9 @@ lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
 lemmaMultiStep par s s' .s' is [] p1 root = p1
 lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
 
+
+
+
 liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
 liquidity par record { label = Holding ; value = val } pkh d pf pf' =
           ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
@@ -511,6 +520,8 @@ liquidity par record { label = Holding ; value = val } pkh d pf pf' =
           (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
 liquidity par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
 
+
+--liquidity' : ∀ (..) ->  ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0))
 
 
 v=v : ∀ (v : Value) -> (v == v) ≡ True
@@ -623,39 +634,103 @@ p2 (suc x) zero zero pf = magic (contradiction pf &&False)
 p2 (suc x) zero (suc z) pf = cong suc (p2 x zero z pf)
 p2 (suc x) (suc y) zero pf = cong suc (p2 x y zero pf)
 p2 (suc x) (suc y) (suc z) pf = cong suc (p2 x y (suc z) pf)
- 
+
+
 {-
 ((oVal Agda.Builtin.Nat.== iVal) &&
-        ((v Agda.Builtin.Nat.< iVal) || (iVal Agda.Builtin.Nat.== v)) &&
-        ((0 Agda.Builtin.Nat.< v) || (v Agda.Builtin.Nat.== 0)) &&
-        (v Agda.Builtin.Nat.== v') &&
-        eqInteger pkh pkh' && eqInteger d d' && True)
-       ≡ True
+         query sig (authSigs p) &&
+         (v Agda.Builtin.Nat.== v') &&
+         eqInteger pkh pkh' &&
+         eqInteger d d' && Haskell.Prim.Eq.eqList sigs' (insert sig sigs))
+        ≡ True
 -}
+
+a1 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((v == v') && b1 && b2 && b3 && b4 && b5) ≡ True -> v ≡ v'
+a1 zero zero b1 b2 b3 b4 b5 pf = refl
+a1 (suc v) (suc v') b1 b2 b3 b4 b5 pf = cong suc (a1 v v' b1 b2 b3 b4 b5 pf)
+
+a2 : ∀ (b b1 b2 b3 b4 b5 : Bool) -> ((b1) && ( b ) && b2 && b3 && b4 && b5) ≡ True -> IsTrue ( b )
+a2 True True b2 b3 b4 b5 pf = IsTrue.itsTrue
+
+a3 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && b2 && (v == v') && b3 && b4 && b5) ≡ True -> v ≡ v'
+a3 zero zero True True b3 b4 b5 pf = refl
+a3 (suc v) (suc v') True True b3 b4 b5 pf = cong suc (a3 v v' True True b3 b4 b5 pf)
+
+aux4 : ∀ (n m : Nat) (b b' : Bool) -> ((n == m) && b && b') ≡ True -> n ≡ m
+aux4 zero zero b b' pf = refl
+aux4 (suc n) (suc m) b b' pf = cong suc (aux4 n m b b' pf)
+
+a4 : ∀ (i i' : PubKeyHash) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && (b2)  && b3 && (i == i') && b4 && b5) ≡ True -> i ≡ i'
+a4 (Integer.pos zero) (Integer.pos zero) True True True b4 b5 pf = refl
+a4 (Integer.pos (suc n)) (Integer.pos (suc m)) True True True b4 b5 pf = cong Integer.pos (cong suc (aux4 n m b4 b5 pf) ) 
+a4 (Integer.negsuc zero) (Integer.negsuc zero) True True True b4 b5 pf = refl
+a4 (Integer.negsuc (suc n)) (Integer.negsuc (suc m)) True True True b4 b5 pf = cong Integer.negsuc (cong suc (aux4 n m b4 b5 pf) )
+
+aux' : ∀ (n m : Nat) {b} -> (((n == m) && b)) ≡ True -> n ≡ m
+aux' zero zero pf = refl
+aux' (suc n) (suc m) pf = cong suc (aux' n m pf)
+
+a5 : ∀ (i i' : PubKeyHash) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && (b2)  && b3 && b4 && (i == i') && b5) ≡ True -> i ≡ i'
+a5 (Integer.pos zero) (Integer.pos zero) True True True True b5 pf = refl
+a5 (Integer.pos (suc n)) (Integer.pos (suc m)) True True True True b5 pf = cong Integer.pos (cong suc (aux' n m pf) )
+a5 (Integer.negsuc zero) (Integer.negsuc zero) True True True True b5 pf = refl
+a5 (Integer.negsuc (suc n)) (Integer.negsuc (suc m)) True True True True b5 pf = cong Integer.negsuc (cong suc (aux' n m pf))
+
+
+
+a' : ∀ (i i' : PubKeyHash) {b} -> ((i == i' && b)) ≡ True -> i ≡ i'
+a' (Integer.pos zero) (Integer.pos zero) pf = refl
+a' (Integer.pos (suc n)) (Integer.pos (suc m)) pf = cong Integer.pos (cong suc (aux' n m pf) )
+a' (Integer.negsuc zero) (Integer.negsuc zero) pf = refl
+a' (Integer.negsuc (suc n)) (Integer.negsuc (suc m)) pf = cong Integer.negsuc (cong suc (aux' n m pf) )
+
+a'' : ∀ (i i' : PubKeyHash) {b} -> ((i == i' && b)) ≡ True -> (b) ≡ True
+a'' (Integer.pos zero) (Integer.pos zero) pf = pf
+a'' (Integer.pos (suc n)) (Integer.pos (suc m)) pf = a'' (Integer.pos n) (Integer.pos m) pf
+a'' (Integer.negsuc zero) (Integer.negsuc zero) {b} pf = pf
+a'' (Integer.negsuc (suc n)) (Integer.negsuc (suc m)) pf = a'' (Integer.pos n) (Integer.pos m) pf
+
+a6 : ∀ (l l' : List PubKeyHash) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && (b2) && b3 && b4 && b5 && (l == l')) ≡ True -> l ≡ l'
+a6 [] [] True True True True True pf = refl
+a6 (x ∷ l) (x' ∷ l') True True True True True pf rewrite a' x x' pf = cong (λ y → x' ∷ y) (a6 l l' True True True True True (a'' x x' pf))
+
 
 validatorImpliesTransition : ∀ (p : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                              -> (pf : agdaValidator p l i ctx ≡ True)
                              -> p ⊢ record { label = l ; value = (inputVal ctx) } ~[ i ]~>
                                 record { label = (outputLabel ctx) ; value = (outputVal ctx) }
+
+
 validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = iVal ; outputVal = oVal ; outputLabel = Holding } pf
                            = magic (contradiction pf (3&&False {oVal == iVal} {((v < iVal) || (iVal == v))} {(0 < v)}))
-validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' []) } pf 
+validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = iVal ; outputVal = oVal ; outputLabel
+                           = (Collecting v' pkh' d' []) } pf 
                            rewrite g1 oVal iVal ((v < iVal) || (iVal == v)) (0 < v) (v == v') (pkh == pkh') (d == d') pf |
                            sym (g4 v v' (oVal == iVal) ((v < iVal) || (iVal == v)) (0 < v) (pkh == pkh') (d == d') pf) |
                            g5 pkh pkh' (oVal == iVal) ((v < iVal) || (iVal == v)) (0 < v) (v == v') (d == d') pf |
                            g6 d d' (oVal == iVal) ((v < iVal) || (iVal == v)) (0 < v) (v == v') (pkh == pkh') pf
                            = TPropose (g2 v iVal (oVal == iVal) (0 < v) (v == v') (pkh == pkh') (d == d') pf)
                              (g3 zero v (oVal == iVal) ((v < iVal) || (iVal == v)) (v == v') (pkh == pkh') (d == d') pf)
-validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' (x ∷ sigs')) } pf
+validatorImpliesTransition p Holding (Propose v pkh d) record { inputVal = iVal ; outputVal = oVal ; outputLabel
+                           = (Collecting v' pkh' d' (x ∷ sigs')) } pf
                            = magic (contradiction pf (6&&False {oVal == iVal} {((v < iVal) || (iVal == v))} {(0 < v)} {v == v'} {pkh == pkh'} {d == d'}))
 validatorImpliesTransition p (Collecting v pkh d sigs) (Add sig) record { inputVal = iVal ; outputVal = oVal ; outputLabel = Holding } pf
                            = magic (contradiction pf (2&&False (oVal == iVal) (query sig (authSigs p))))
-validatorImpliesTransition p (Collecting v pkh d sigs) (Add sig) record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' sigs') } pf = {!!}
-validatorImpliesTransition p (Collecting v pkh d sigs) Pay record { inputVal = iVal ; outputVal = oVal ; outputLabel = Holding } pf = TPay (p2 iVal oVal v pf) (p1 (nr p) (lengthNat sigs) pf)
-validatorImpliesTransition p (Collecting v pkh d sigs) Pay record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' sigs') } pf = magic (contradiction pf &&False )
+validatorImpliesTransition p (Collecting v pkh d sigs) (Add sig) record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' sigs') } pf
+                           rewrite a1 oVal iVal (query sig (authSigs p)) (v == v') (pkh == pkh') (d == d') (sigs' == (insert sig sigs)) pf |
+                           a3 v v' (oVal == iVal) (query sig (authSigs p)) (pkh == pkh') (d == d') (sigs' == (insert sig sigs)) pf |
+                           a4 pkh pkh' (oVal == iVal) (query sig (authSigs p)) (v == v') (d == d') (sigs' == (insert sig sigs)) pf |
+                           a5 d d' (oVal == iVal) (query sig (authSigs p)) (v == v') (pkh == pkh') (sigs' == (insert sig sigs)) pf |
+                           a6 sigs' (insert sig sigs) (oVal == iVal) (query sig (authSigs p)) (v == v') (pkh == pkh') (d == d') pf
+                           = TAdd (a2 (query sig (authSigs p)) (oVal == iVal)  (v == v') (pkh == pkh') (d == d') (sigs' == (insert sig sigs)) pf)
+validatorImpliesTransition p (Collecting v pkh d sigs) Pay record { inputVal = iVal ; outputVal = oVal ; outputLabel = Holding } pf
+                           = TPay (p2 iVal oVal v pf) (p1 (nr p) (lengthNat sigs) pf)
+validatorImpliesTransition p (Collecting v pkh d sigs) Pay record { inputVal = iVal ; outputVal = oVal ; outputLabel = (Collecting v' pkh' d' sigs') } pf
+                           = magic (contradiction pf &&False )
 validatorImpliesTransition p (Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding } pf
                            rewrite c1 outputVal inputVal pf = TCancel
-validatorImpliesTransition p (Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x x₁ x₂ x₃) } pf = magic (contradiction pf &&False)
+validatorImpliesTransition p (Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x x₁ x₂ x₃) } pf
+                           = magic (contradiction pf &&False)
 
 
 
@@ -665,6 +740,7 @@ transitionImpliesValidator : ∀ (p : Params) (l : Label) (i : Input) (ctx : Scr
                              -> (pf : p ⊢ record { label = l ; value = (inputVal ctx) } ~[ i ]~>
                                 record { label = (outputLabel ctx) ; value = (outputVal ctx) })
                              -> agdaValidator p l i ctx ≡ True
+                             
 transitionImpliesValidator p .Holding (Propose v pkh d) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d []) }
                            (TPropose p1 p2) rewrite refactor p1 | refactor p2 = prop= inputVal₁ v pkh d
 transitionImpliesValidator p (Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d (insert sig sigs)) } (TAdd x) rewrite l=l (insert sig sigs) | refactor x = prop= inputVal₁ v pkh d
