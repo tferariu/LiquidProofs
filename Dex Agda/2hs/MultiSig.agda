@@ -1,67 +1,61 @@
 module MultiSig where
 
 open import Haskell.Prelude
---open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 
 
-ScriptPurpose = String
+Placeholder = String
+POSIXTimeRange = Placeholder
+ScriptPurpose = Placeholder
+ThreadToken = Placeholder
 
-Interval = Bool
+PubKeyHash = Integer --no longer string because of equality issues
+Value = Nat
+Deadline = Integer
 
-before : Integer -> Interval -> Bool
-before a b = b
+{-# COMPILE AGDA2HS Deadline #-}
+
+data Label : Set where
+  Holding : Label
+  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Label
+
+{-# COMPILE AGDA2HS Label #-}
 
 record TxInfo : Set where
   field
-    txInfoInputs                : Nat --[V2.TxInInfo]
+    txInfoInputs                : Placeholder --[V2.TxInInfo]
     txInfoReferenceInputs       : Nat --[V2.TxInInfo]
-    txInfoOutputs               : Nat --[V2.TxOut]
-    txInfoFee                   : Nat --V2.Lovelace
-    txInfoMint                  : Nat --V2.Value
-    txInfoTxCerts               : Nat --[TxCert]
-    txInfoWdrl                  : Nat --Map V2.Credential V2.Lovelace
-    txInfoValidRange            : Nat --V2.POSIXTimeRange
-    txInfoSignatories           : Nat --[V2.PubKeyHash]
+    txInfoOutputs               : Placeholder --[V2.TxOut]
+    txInfoValidRange            : POSIXTimeRange
+    txInfoSignatories           : Placeholder --[V2.PubKeyHash]
     txInfoRedeemers             : Nat --Map ScriptPurpose V2.Redeemer
     txInfoData                  : Nat --Map V2.DatumHash V2.Datum
     txInfoId                    : Nat --V2.TxId
+    payTo  : PubKeyHash
+    payAmt : Value
+open TxInfo public
 
 record ScriptContext : Set where
     field
         scriptContextTxInfo  : TxInfo
         scriptContextPurpose : ScriptPurpose
+        inputVal    : Nat
+        outputVal   : Nat
+        outputLabel : Label
 open ScriptContext public
 
-PubKeyHash = String
 
-{-# COMPILE AGDA2HS PubKeyHash #-}
-
-data State : Set where
-  Holding : State
-  Collecting : Integer -> PubKeyHash -> Integer -> List PubKeyHash -> State
-
-{-# COMPILE AGDA2HS State #-}
 
 data Input : Set where
-  Propose : Integer -> PubKeyHash -> Integer -> Input
+  Propose : Value -> PubKeyHash -> Deadline -> Input
   Add     : PubKeyHash -> Input
   Pay     : Input
   Cancel  : Input
 
 {-# COMPILE AGDA2HS Input #-}
 
-Outputs = List (Nat × String)
-
-{-# COMPILE AGDA2HS Outputs #-}
-
-_∈_ : PubKeyHash -> List PubKeyHash -> Bool
-_∈_ pkh [] = False
-_∈_ pkh (x ∷ l') = (x == pkh) || (pkh ∈ l')
-
-{-_∈_ pkh l = case l of λ where
-  [] -> False
-  (x ∷ l') → (x == pkh) || (pkh ∈ l')
--}
+query : PubKeyHash -> List PubKeyHash -> Bool
+query pkh [] = False
+query pkh (x ∷ l') = (x == pkh) || query pkh l'
 
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
@@ -69,40 +63,86 @@ insert pkh (x ∷ l') = if (x == pkh)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
-{-# COMPILE AGDA2HS _∈_ #-}
+count : List PubKeyHash -> Integer
+count [] = 0
+count (x ∷ l) = 1 + (count l)
+
+{-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
+{-# COMPILE AGDA2HS count #-}
 
+{-
 postulate
+ -- txSignedBy : TxInfo -> PubKeyHash -> Bool
   checkSigned : PubKeyHash -> Bool
-  checkPayment : PubKeyHash -> Integer -> Outputs -> Bool
+  checkPayment : PubKeyHash -> Value -> TxInfo -> Bool
+  expired : Deadline -> TxInfo -> Bool
+  oDat : ScriptContext -> Label
+  oldValue : ScriptContext -> Value
+  newValue : ScriptContext -> Value
+--  checkToken : ThreadToken -> ScriptContext -> Bool
+-}
+
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned _ _ = True
+
+checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
+checkPayment _ _ _ = True
+
+expired : Deadline -> ScriptContext -> Bool
+expired _ _ = True
+
+newLabel : ScriptContext -> Label
+newLabel ctx = outputLabel ctx
+
+oldValue : ScriptContext -> Value
+oldValue ctx = inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = outputVal ctx
+
+geq : Value -> Value -> Bool
+geq val v = val >= v 
+
+gt : Value -> Value -> Bool
+gt val v = val > v
+
+record Params : Set where
+    field
+        authSigs  : List PubKeyHash
+        nr : Integer
+open Params public
 
 
-agdaValidator : List PubKeyHash -> State -> Input -> Interval -> Outputs -> State -> Bool
-agdaValidator l s i t o s' = case s of λ where
-  (Collecting v pkh d sigs) -> case i of λ where
+
+{-# COMPILE AGDA2HS Params #-}
+
+agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator param dat red ctx = case dat of λ where
+  (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> case s' of λ where
+    (Add sig) -> checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> checkSigned sig && sig ∈ l && (v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))))
+      (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
 
-    Pay -> case s' of λ where
-      Holding -> checkPayment pkh v o
-      (Collecting _ _ _ _) -> False
+    Pay -> (count sigs) >= (nr param) && (case (newLabel ctx) of λ where
+      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v)
+      (Collecting _ _ _ _) -> False )
       
-    Cancel -> case s' of λ where
-      Holding -> before d t
+    Cancel -> case (newLabel ctx) of λ where
+      Holding -> expired d ctx
       (Collecting _ _ _ _) -> False
   
-  Holding -> case i of λ where
+  Holding -> case red of λ where
 
-    (Propose v pkh d) -> case s' of λ where
+    (Propose v pkh d) -> (oldValue ctx >= v) && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == []))))
+      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
     (Add _) -> False
     Pay -> False
-    Cancel -> False
+    Cancel -> False 
 
 {-# COMPILE AGDA2HS agdaValidator #-}
-  
+

@@ -1,41 +1,40 @@
 module MultiSig where
 
-import Numeric.Natural (Natural)
+type Deadline = Integer
 
-type PubKeyHash = String
+data Label = Holding
+           | Collecting Value PubKeyHash Deadline [PubKeyHash]
 
-data State = Holding
-           | Collecting Integer PubKeyHash Integer [PubKeyHash]
-
-data Input = Propose Integer PubKeyHash Integer
+data Input = Propose Value PubKeyHash Deadline
            | Add PubKeyHash
            | Pay
            | Cancel
 
-type Outputs = [(Natural, String)]
-
-(¸) :: PubKeyHash -> [PubKeyHash] -> Bool
-pkh ¸ [] = False
-pkh ¸ (x : l') = x == pkh || (pkh ¸ l')
+query :: PubKeyHash -> [PubKeyHash] -> Bool
+query pkh [] = False
+query pkh (x : l') = x == pkh || query pkh l'
 
 insert :: PubKeyHash -> [PubKeyHash] -> [PubKeyHash]
 insert pkh [] = [pkh]
 insert pkh (x : l')
   = if x == pkh then x : l' else x : insert pkh l'
 
-agdaValidator ::
-              [PubKeyHash] ->
-                State -> Input -> Interval -> Outputs -> State -> Bool
-agdaValidator l s i t o s'
-  = case s of
-        Collecting v pkh d sigs -> case i of
+count :: [PubKeyHash] -> Integer
+count [] = 0
+count (x : l) = 1 + count l
+
+data Params = Params{authSigs :: [PubKeyHash], nr :: Integer}
+
+agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator param dat red ctx
+  = case dat of
+        Collecting v pkh d sigs -> case red of
                                        Propose _ _ _ -> False
-                                       Add sig -> case s' of
-                                                      Holding -> False
-                                                      Collecting v' pkh' d' sigs' -> checkSigned sig
-                                                                                       &&
-                                                                                       (sig ¸ l) &&
-                                                                                         v == v' &&
+                                       Add sig -> checkSigned sig ctx &&
+                                                    query sig (authSigs param) &&
+                                                      case newLabel ctx of
+                                                          Holding -> False
+                                                          Collecting v' pkh' d' sigs' -> v == v' &&
                                                                                            pkh ==
                                                                                              pkh'
                                                                                              &&
@@ -46,19 +45,22 @@ agdaValidator l s i t o s'
                                                                                                  insert
                                                                                                    sig
                                                                                                    sigs
-                                       Pay -> case s' of
-                                                  Holding -> checkPayment pkh v o
-                                                  Collecting _ _ _ _ -> False
-                                       Cancel -> case s' of
-                                                     Holding -> before d t
+                                       Pay -> count sigs >= nr param &&
+                                                case newLabel ctx of
+                                                    Holding -> checkPayment pkh v ctx &&
+                                                                 oldValue ctx == newValue ctx + v
+                                                    Collecting _ _ _ _ -> False
+                                       Cancel -> case newLabel ctx of
+                                                     Holding -> expired d ctx
                                                      Collecting _ _ _ _ -> False
-        Holding -> case i of
-                       Propose v pkh d -> case s' of
-                                              Holding -> False
-                                              Collecting v' pkh' d' sigs' -> v == v' &&
-                                                                               pkh == pkh' &&
-                                                                                 d == d' &&
-                                                                                   sigs' == []
+        Holding -> case red of
+                       Propose v pkh d -> oldValue ctx >= v &&
+                                            case newLabel ctx of
+                                                Holding -> False
+                                                Collecting v' pkh' d' sigs' -> v == v' &&
+                                                                                 pkh == pkh' &&
+                                                                                   d == d' &&
+                                                                                     sigs' == []
                        Add _ -> False
                        Pay -> False
                        Cancel -> False
