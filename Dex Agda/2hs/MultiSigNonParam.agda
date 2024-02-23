@@ -6,16 +6,21 @@ open import Agda.Builtin.Char
 
 module MultiSigNonParam where
 
+-- TO DO:
+-- complete spec
+-- rewrite spec ∧ proofs in Agda only + add lemmas relating Haskell to Agda
 
 magic : {A : Set} → ⊥ → A
 magic ()
+
+--⊥-elim
 
 Placeholder = String
 POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-PubKeyHash = Integer --Not string because of memes
+PubKeyHash = Integer --Not string because of issues
 Value = Nat
 Deadline = Integer
 
@@ -33,8 +38,7 @@ record TxInfo : Set where
     txInfoRedeemers             : Nat --Map ScriptPurpose V2.Redeemer
     txInfoData                  : Nat --Map V2.DatumHash V2.Datum
     txInfoId                    : Nat --V2.TxId
-    payTo  : PubKeyHash
-    payAmt : Value
+    
     
 open TxInfo public
 
@@ -45,6 +49,9 @@ record ScriptContext : Set where
         inputVal    : Nat
         outputVal   : Nat
         outputLabel : Label
+ --       payTo     : PubKeyHash
+ --       payAmt    : Value
+ --       signature : PubKeyHash
         
 open ScriptContext public
 
@@ -153,14 +160,28 @@ open Params public
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param oldLabel red ctx = case oldLabel of λ where
+
+  Holding -> case red of λ where
+
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && gt v 0 && (case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] ) --add checkSigned?
+      {-
+      (Collecting v pkh d []) -> True -- will not work --try .v instead
+      _ -> False
+      -}
+    (Add _) -> False
+    Pay -> False
+    Cancel -> False
+
   (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
     (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && (query sig (authSigs param)) && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
-
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
+      
     Pay -> (lengthNat sigs) >= (nr param) && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v)
       (Collecting _ _ _ _) -> False )
@@ -169,19 +190,11 @@ agdaValidator param oldLabel red ctx = case oldLabel of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False ) 
   
-  Holding -> case red of λ where
-
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && gt v 0 && (case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
-    (Add _) -> False
-    Pay -> False
-    Cancel -> False
-
+  
 {-# COMPILE AGDA2HS agdaValidator #-}
 
 
-
+--should be a property of state directly
 data _∻_ : Label -> Value -> Set where
 
   Hol : ∀ {v}
@@ -199,6 +212,8 @@ record State : Set where
   field
     label : Label
     value : Value
+    -- payment : (Value × Pkh)
+    -- time : Time
 open State
 
 
@@ -214,33 +229,53 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
 
   TAdd : ∀ {v pkh d sig sigs val par}
     -> IsTrue (query sig (authSigs par) )
+    --signature
     -------------------
     -> par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
        ~[ (Add sig) ]~>
        record { label = (Collecting v pkh d (insert sig sigs)) ; value = val }
+--mem in haskell, but is is in Plutus?
+--agda sets for proofs, lists for implementation
 
   TPay : ∀ {v pkh d sigs val val' par}
     -> val ≡ val' + v
     -> IsTrue (lengthNat sigs >= (nr par))
+    -- -> IsTrue (checkPayment v payment) --payment
     -------------------
     -> par ⊢ record { label = Collecting v pkh d sigs ; value = val }
        ~[ Pay ]~>
        record { label = Holding ; value = val' }
 
   TCancel : ∀ {v pkh d sigs val par}
+    -- -> IsTrue (expired d time) --deadline
     -------------------
     -> par ⊢ record { label = Collecting v pkh d sigs ; value = val }
        ~[ Cancel ]~>
        record { label = Holding ; value = val}
 
+-- UNPLEASANT TO READ, MAKE BETTER
+-- proof only side, so use Agda symbols to write nicely
+-- elegance, easy to read while also minimizing lemma amounts
+
 --talk to Andre Knispel
 
+
+--"fidelity" actual value ≡ what you think is the value
+--fidelity doubly important
+--Sophia Drossoupoulou imperial paper
 
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
   root : ∀ { s par }
     ------------------
     -> par ⊢ s ~[ [] ]~* s
+
+  snoc : ∀ { par s s' s'' i is }
+    -> par ⊢ s ~[ is ]~* s'
+    -> par ⊢ s' ~[ i ]~> s''
+    -------------------------
+    -> par ⊢ s ~[ (i ∷ is) ]~* s''
+
 {-
   cons : ∀ { s s' i is s'' par }
     -> par ⊢ s ~[ i ]~> s'
@@ -248,12 +283,6 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
     -----------------------
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 -}
-  snoc : ∀ { par s s' s'' i is }
-    -> par ⊢ s ~[ is ]~* s'
-    -> par ⊢ s' ~[ i ]~> s''
-    -------------------------
-    -> par ⊢ s ~[ (i ∷ is) ]~* s''
-
 
 validStateTransition : ∀ {s s' : State} {i par}
   -> label s ∻ value s
@@ -269,17 +298,10 @@ validStateMulti : ∀ {s s' : State} {is par}
   -> par ⊢ s ~[ is ]~* s'
   -> label s' ∻ value s'
 validStateMulti iv root = iv
---validStateMulti iv (cons x tr) = validStateMulti (validStateTransition iv x) tr
 validStateMulti iv (snoc tr x) = validStateTransition (validStateMulti iv tr) x
+--validStateMulti iv (cons x tr) = validStateMulti (validStateTransition iv x) tr
 
-makeIs : Params -> List Input
-makeIs record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = []
-makeIs record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = Add x ∷ (makeIs (record
-                                                                                                          { authSigs = authSigs
-                                                                                                          ; nr = nr
-                                                                                                          ; pfU = pfU 
-                                                                                                          ; pfL = pfL
-                                                                                                          }) ) 
+
 
 
 makeIs' : List PubKeyHash -> List Input
@@ -290,12 +312,7 @@ makeSigs' : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
 makeSigs' sigs [] = sigs
 makeSigs' sigs (x ∷ asigs) = insert x (makeSigs' sigs asigs)
 
-makeSigs : List PubKeyHash -> List Input -> List PubKeyHash
-makeSigs sigs [] = sigs
-makeSigs sigs (Propose x x₁ x₂ ∷ is) = makeSigs sigs is
-makeSigs sigs (Add x ∷ is) = makeSigs (insert x sigs) is
-makeSigs sigs (Pay ∷ is) = makeSigs sigs is
-makeSigs sigs (Cancel ∷ is) = makeSigs sigs is
+
 
 why : ∀ (x : PubKeyHash) {b : Bool} -> IsTrue (x == x || b)
 why (Integer.pos zero) = IsTrue.itsTrue
@@ -310,47 +327,16 @@ whyy (Integer.negsuc zero) {False} = IsTrue.itsTrue
 whyy (Integer.negsuc (suc n)) {False} = whyy (Integer.pos n)
 whyy x {True} = IsTrue.itsTrue
 
-
 why' : ∀ (a : Bool) (x : PubKeyHash) (ys z : List PubKeyHash) -> IsTrue (query x (ys ++ x ∷ z)) -> IsTrue (a || query x (ys ++ x ∷ z) )
 why' False x ys z pf = pf
 why' True x ys z pf = IsTrue.itsTrue
 
 why2 : ∀ (x : PubKeyHash) {b c : Bool} -> IsTrue (c || x == x || b)
 why2 (Integer.pos zero) {c = False} = IsTrue.itsTrue
-why2 (Integer.pos zero) {c = True} = IsTrue.itsTrue
-why2 (Integer.pos (suc n)) {c = False} = why (Integer.pos n) --why2 (Integer.pos n)
-why2 (Integer.pos (suc n)) {c = True} = IsTrue.itsTrue
+why2 (Integer.pos (suc n)) {c = False} = why (Integer.pos n)
 why2 (Integer.negsuc zero) {c = False} = IsTrue.itsTrue
-why2 (Integer.negsuc zero) {c = True} = IsTrue.itsTrue
 why2 (Integer.negsuc (suc n)) {c = False} = why (Integer.pos n)
-why2 (Integer.negsuc (suc n)) {c = True} = IsTrue.itsTrue
-
-{-
-expand : ∀ {authSigs x nr pfU pff pfL s i is s'} -> i ≠ (Pay) -> record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } ⊢ s ~[ i ∷ is ]~* s' -> record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } ⊢ s ~[ i ∷ is ]~* s'
-expand neq (cons (TPropose x x₁) root) = cons (TPropose x x₁) root
-expand neq (cons (TPropose x x₁) (cons (TAdd x₂) pf)) = cons (TPropose x x₁) (expand (λ ()) (cons (TAdd x₂) pf))
-expand neq (cons (TPropose x x₁) (cons (TPay x₂ x₃) pf)) = cons (TPropose x x₁) {!!}
-expand neq (cons (TPropose x x₁) (cons TCancel pf)) = {!!}
-expand neq (cons (TAdd x) pf) = {!!}
-expand neq (cons (TPay x x₁) pf) = magic (neq refl)
-expand neq (cons TCancel pf) = cons {!!} {!!} --(expand pf)
--}
---cons {!!} (expand pf)
-{-
-awful : ∀ {v pkh d sigs val x authSigs nr pfU pff pfL}
-        -> record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } ⊢
-           record { label = Collecting v pkh d (insert x sigs) ; value = val }
-           ~[ makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }) ]~*
-           record { label = Collecting v pkh d (makeSigs (insert x sigs) (makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }))) ; value = val }
-        -> record { authSigs = x ∷ authSigs ; nr = suc nr ; pfU = pff :: pfU ; pfL = pfL } ⊢
-           record { label = Collecting v pkh d (insert x sigs) ; value = val }
-           ~[ makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }) ]~*
-           record { label = Collecting v pkh d (makeSigs (insert x sigs) (makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }))) ; value = val }
-awful {nr = zero} root = root
-awful {authSigs = x ∷ authSigs₁} {nr = suc nr₁} {x₁ :: pfU₁} (cons x₂ pf) = cons (TAdd {!!}) {!awful!}
--}
---awful1 : ∀ { v pkh d sigs val x authSigs nr pfU pff pfL } -> ( record { authSigs = x ∷ authSigs ; nr = suc nr ; pfU = pff :: pfU ; pfL = pfL } ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ makeIs par ]~* record { label = (Collecting v pkh d (makeSigs sigs (makeIs par))) ; value = val })
-
+why2 x {c = True} = IsTrue.itsTrue
 
 
 
@@ -358,29 +344,17 @@ queryLemma : ∀ (x : PubKeyHash) (y z : List PubKeyHash) -> IsTrue (query x (y 
 queryLemma x [] z = why x
 queryLemma x (y ∷ ys) z = why' (eqInteger y x) x ys z (queryLemma x ys z)
 
-
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
 appendLemma x [] b = refl
 appendLemma x (a ∷ as) b = cong (λ y → a ∷ y) (appendLemma x as b) 
 
-{-
-insertLemma : ∀ (x y : PubKeyHash) (zs : List PubKeyHash) -> insert x (insert y zs) ≡ insert y (insert x zs)
-insertLemma (Integer.pos n) (Integer.pos n₁) [] = {!!}
-insertLemma (Integer.pos n) (Integer.negsuc n₁) [] = {!!}
-insertLemma (Integer.negsuc n) y [] = {!!}
-insertLemma x y (z ∷ zs) = {!!}
-
-makeSigsLemma : ∀ (x : PubKeyHash) (sigs sigs' : List PubKeyHash)
-                -> (makeSigs' (insert x sigs) sigs') ≡ insert x (makeSigs' sigs sigs')
-makeSigsLemma x s1 [] = refl
-makeSigsLemma x s1 (x₁ ∷ s2) = {!!} --makeSigsLemma x₁ (insert x s1) s2
--}
 
 prop1' : ∀ { v pkh d sigs val } (par : Params) (n : Nat) (asigs asigs' asigs'' : List PubKeyHash)
          -> n ≡ (nr par) -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'') ->
          ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
          ~[ makeIs' asigs'' ]~*
          record { label = (Collecting v pkh d (makeSigs' sigs asigs'')) ; value = val })
+         
 prop1' record { authSigs = .(asigs' ++ []) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(asigs' ++ []) asigs' [] refl refl refl = root
 prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL = pfL₁ } .n
               .(asigs' ++ x ∷ asigs'') asigs' (x ∷ asigs'') refl refl refl
@@ -388,25 +362,17 @@ prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL
          n ((asigs' ++ x ∷ asigs'')) (asigs' ++ (x ∷ [])) asigs'' refl refl (appendLemma x asigs' asigs''))
          (TAdd (queryLemma x asigs' asigs''))
 
--- {!prop1'!} (TAdd (toby x asigs' asigs''))
 
-{-cons (TAdd (toby x asigs' asigs'')) (prop1' (record { authSigs = (asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU₁ ; pfL = pfL₁ })
-         n ((asigs' ++ x ∷ asigs'')) (asigs' ++ (x ∷ [])) asigs'' refl refl (appendLemma x asigs' asigs''))
--}
 
-prop1 : ∀ { v pkh d sigs val } (par : Params) -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ (makeIs' (authSigs par)) ]~*
-                                                 record { label = (Collecting v pkh d (makeSigs' sigs (authSigs par))) ; value = val })
+prop1 : ∀ { v pkh d sigs val } (par : Params) ->
+        ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
+        ~[ (makeIs' (authSigs par)) ]~*
+        record { label = (Collecting v pkh d (makeSigs' sigs (authSigs par))) ; value = val })
+        
 prop1 par = prop1' par (nr par) (authSigs par) [] (authSigs par) refl refl refl
 
 
-makeIsP : List PubKeyHash -> List Input
-makeIsP pkhs = Pay ∷ (makeIs' pkhs)
 
-{-
-makeSigs' : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
-makeSigs' sigs [] = sigs
-makeSigs' sigs (x ∷ asigs) = makeSigs' (insert x sigs) asigs
--}
 
 lemmaLE : ∀ (v val : Value) -> IsTrue ((v < val) || (val == v)) -> IsFalse (val < v)
 lemmaLE zero val = λ _ → IsFalse.itsFalse
@@ -450,10 +416,6 @@ insertLemma : ∀ (x : PubKeyHash) (xs : List PubKeyHash) -> (0 < lengthNat (ins
 insertLemma x [] = refl
 insertLemma x (x' ∷ xs) rewrite ifLemma x' xs (insert x xs) (eqInteger x' x) = refl 
 
-
-
-
-
 minLength : ∀ (x : PubKeyHash) (ys : List PubKeyHash) -> (zero < lengthNat (insert x ys)) ≡ True
 minLength x [] = refl
 minLength x (y ∷ ys) rewrite ifLemma y ys (insert x ys) (eqInteger y x) = refl
@@ -468,22 +430,17 @@ uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : I
 uil' s1 s2 n pf1 pf2 = trustMe
 --- assumed
 
-{-
-uil' (x ∷ []) s2 zero pf1 pf2 rewrite minLength x s2 = refl
-uil' (x ∷ x' ∷ s1) [] zero (pf :: pf1) pf2 rewrite minLength x ((insert x' (makeSigs' [] s1))) = refl
-uil' (x ∷ x' ∷ s1) [] (suc zero) (pf :: pf1) pf2 = {!!}
-uil' (x ∷ x' ∷ s1) [] (suc (suc n)) (pf :: pf1) pf2 = {!!}
-uil' (x ∷ x' ∷ s1) (x₁ ∷ s2) n (pf :: pf1) pf2 = {!!}
--}
+
 
 lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
       (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
 lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = pfL } sigs = insertLemma x (makeSigs' sigs authSigs)
 lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = uil' (x ∷ authSigs) sigs (suc nr) pfU pfL 
 
-parLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> (
-      ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
-       (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
+
+parLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
+         ( ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
+         (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
 parLemma par sigs rewrite lengthLemma par sigs = refl
 
 rewriteLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
@@ -491,11 +448,16 @@ rewriteLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
        (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
 rewriteLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
 
+
+
 prop2 : ∀ { v val pkh d sigs } (par : Params) -> (x : (Collecting v pkh d sigs) ∻ val)
-          -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ Pay ∷ (makeIs' (authSigs par)) ]~*
-                                                 record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
+          -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
+          ~[ Pay ∷ (makeIs' (authSigs par)) ]~*
+          record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
 prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
 ...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (rewriteLemma par sigs))
+
+
 
 lemmaLT : ∀ (n : Nat) -> IsFalse (n < n)
 lemmaLT zero = IsFalse.itsFalse
@@ -512,16 +474,36 @@ lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (l
 
 
 
-liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline) -> label s ∻ value s -> IsTrue (value s > 0) -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> label s ∻ value s
+          -> IsTrue (value s > 0)
+          -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+
 liquidity par record { label = Holding ; value = val } pkh d pf pf' =
           ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
-          lemmaMultiStep par (record { label = Holding ; value = val }) (record { label = (Collecting val pkh d []) ; value = val })
-          ( record { label = Holding ; value = (val - val) {{lemmaLT val}} }) (((Propose val pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+          lemmaMultiStep par (record { label = Holding ; value = val })
+          (record { label = (Collecting val pkh d []) ; value = val })
+          (record { label = Holding ; value = (val - val) {{lemmaLT val}} })
+          (((Propose val pkh d) ∷ []))
+          ( Pay ∷ makeIs' (authSigs par))
           (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
 liquidity par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
 
 
---liquidity' : ∀ (..) ->  ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0))
+{-
+liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> label s ∻ value s
+          -> ∃[ is ] ∃[ v' ] ((par ⊢ s ~[ is ]~* record { label = Holding ; value = v' }) × v' ≡ 0)
+liquidity' = {!!}
+
+liquidity' par record { label = Holding ; value = zero } pkh d pf = ⟨ [] , root ⟩
+liquidity' par record { label = Holding ; value = (suc val) } pkh d pf =  ⟨ (Pay ∷ makeIs' (authSigs par) ++ ((Propose (suc val) pkh d) ∷ [])) ,
+           lemmaMultiStep par ( (record { label = Holding ; value = suc val }))
+           ( (record { label = (Collecting (suc val) pkh d []) ; value = suc val })) ( (record { label = Holding ; value = (suc val - suc val) {{lemmaLT val}} }))
+           ( (((Propose (suc val) pkh d) ∷ []))) (( Pay ∷ makeIs' (authSigs par))) (snoc root ( (TPropose (whyy (Integer.pos val)) IsTrue.itsTrue)))
+           {!prop2!} ⟩
+liquidity' par record { label = (Collecting v pkh d sigs) ; value = val } pkh' d' pf = {!!}
+-}
 
 
 v=v : ∀ (v : Value) -> (v == v) ≡ True
@@ -541,14 +523,13 @@ l=l (x ∷ l) rewrite i=i x = l=l l
 refactor : ∀ {b} -> IsTrue b -> b ≡ True
 refactor {True} pf = refl
 
-
-prop= : ∀ (val v : Value) (pkh : PubKeyHash) (d : Deadline) -> ((val == val) && (v == v) &&
-       eqInteger pkh pkh && eqInteger d d && True) ≡ True
+prop= : ∀ (val v : Value) (pkh : PubKeyHash) (d : Deadline) ->
+        ((val == val) && (v == v) &&
+        eqInteger pkh pkh && eqInteger d d && True) ≡ True
 prop= zero zero pkh d rewrite i=i pkh | i=i d = refl
 prop= zero (suc v) pkh d = prop= zero v pkh d
 prop= (suc val) zero pkh d = prop= val zero pkh d
 prop= (suc val) (suc v) pkh d = prop= val v pkh d
-
 
 contradiction : ∀ {b} -> b ≡ True -> b ≡ False -> ⊥
 contradiction {False} () p2
@@ -578,12 +559,12 @@ contradiction {True} p1 ()
 6&&False {True} {True} {True} {True} {True} {False} = refl
 6&&False {True} {True} {True} {True} {True} {True} = refl
 
-
 g1 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((v == v') && (b1) && b2 && b3 && b4 && b5 && True) ≡ True -> v ≡ v'
 g1 zero zero b1 b2 b3 b4 b5 pf = refl
 g1 (suc v) (suc v') b1 b2 b3 b4 b5 pf = cong suc (g1 v v' b1 b2 b3 b4 b5 pf)
 
-g2 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && ( (v < v') || (v' == v) ) && b2 && b3 && b4 && b5 && True) ≡ True -> IsTrue ( (v < v') || (v' == v) )
+g2 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && ( (v < v') || (v' == v) ) && b2 && b3 && b4 && b5 && True) ≡ True ->
+     IsTrue ( (v < v') || (v' == v) )
 g2 zero zero True b2 b3 b4 b5 pf = IsTrue.itsTrue
 g2 zero (suc v') True b2 b3 b4 b5 pf = IsTrue.itsTrue
 g2 (suc v) (suc v') True b2 b3 b4 b5 pf = g2 v v' True b2 b3 b4 b5 pf
@@ -591,7 +572,6 @@ g2 (suc v) (suc v') True b2 b3 b4 b5 pf = g2 v v' True b2 b3 b4 b5 pf
 g3 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && b2 && (v < v') && b3 && b4 && b5 && True) ≡ True -> IsTrue (v < v')
 g3 zero (suc v') True True b3 b4 b5 pf = IsTrue.itsTrue
 g3 (suc v) (suc v') True True b3 b4 b5 pf = g3 v v' True True b3 b4 b5 pf
-
 
 g4 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((b1) && b2 && b3 && (v == v') && b4 && b5 && True) ≡ True -> v ≡ v'
 g4 zero zero True True True b4 b5 pf = refl
@@ -635,16 +615,6 @@ p2 (suc x) zero (suc z) pf = cong suc (p2 x zero z pf)
 p2 (suc x) (suc y) zero pf = cong suc (p2 x y zero pf)
 p2 (suc x) (suc y) (suc z) pf = cong suc (p2 x y (suc z) pf)
 
-
-{-
-((oVal Agda.Builtin.Nat.== iVal) &&
-         query sig (authSigs p) &&
-         (v Agda.Builtin.Nat.== v') &&
-         eqInteger pkh pkh' &&
-         eqInteger d d' && Haskell.Prim.Eq.eqList sigs' (insert sig sigs))
-        ≡ True
--}
-
 a1 : ∀ (v  v' : Value) (b1 b2 b3 b4 b5 : Bool) -> ((v == v') && b1 && b2 && b3 && b4 && b5) ≡ True -> v ≡ v'
 a1 zero zero b1 b2 b3 b4 b5 pf = refl
 a1 (suc v) (suc v') b1 b2 b3 b4 b5 pf = cong suc (a1 v v' b1 b2 b3 b4 b5 pf)
@@ -675,7 +645,6 @@ a5 (Integer.pos zero) (Integer.pos zero) True True True True b5 pf = refl
 a5 (Integer.pos (suc n)) (Integer.pos (suc m)) True True True True b5 pf = cong Integer.pos (cong suc (aux' n m pf) )
 a5 (Integer.negsuc zero) (Integer.negsuc zero) True True True True b5 pf = refl
 a5 (Integer.negsuc (suc n)) (Integer.negsuc (suc m)) True True True True b5 pf = cong Integer.negsuc (cong suc (aux' n m pf))
-
 
 
 a' : ∀ (i i' : PubKeyHash) {b} -> ((i == i' && b)) ≡ True -> i ≡ i'
@@ -734,19 +703,34 @@ validatorImpliesTransition p (Collecting v pkh d sigs) Cancel record { inputVal 
 
 
 
-
+-- don't expand ScirptContext, abstact and use functions to extract information from it
+-- consistnecy p ≡ par
 
 transitionImpliesValidator : ∀ (p : Params) (l : Label) (i : Input) (ctx : ScriptContext)
-                             -> (pf : p ⊢ record { label = l ; value = (inputVal ctx) } ~[ i ]~>
+                             -> (pf :
+                                p ⊢ record { label = l ; value = (inputVal ctx) }
+                                ~[ i ]~>
                                 record { label = (outputLabel ctx) ; value = (outputVal ctx) })
-                             -> agdaValidator p l i ctx ≡ True
+                             -> agdaValidator p l i ctx ≡ True -- IsTrue instead of ≡ !! be consistent and use only 1
                              
-transitionImpliesValidator p .Holding (Propose v pkh d) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d []) }
-                           (TPropose p1 p2) rewrite refactor p1 | refactor p2 = prop= inputVal₁ v pkh d
-transitionImpliesValidator p (Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .(Collecting v pkh d (insert sig sigs)) } (TAdd x) rewrite l=l (insert sig sigs) | refactor x = prop= inputVal₁ v pkh d
--- rewrite (refactor x) = {!!}
-transitionImpliesValidator p (Collecting v pkh d sigs) Pay record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputLabel = .Holding } (TPay p1 p2) rewrite p1 | (refactor p2) | v=v (outputVal₁ + v) = refl
-transitionImpliesValidator record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } (Collecting v pkh d sigs) Cancel record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .Holding } TCancel rewrite v=v inputVal₁ = refl
+transitionImpliesValidator p Holding (Propose v pkh d)
+                           record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ;
+                           outputLabel = .(Collecting v pkh d []) } (TPropose p1 p2)
+                           rewrite refactor p1 | refactor p2
+                           = prop= inputVal₁ v pkh d
+transitionImpliesValidator p (Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ;
+                           outputLabel = .(Collecting v pkh d (insert sig sigs)) } (TAdd x)
+                           rewrite l=l (insert sig sigs) | refactor x
+                           = prop= inputVal₁ v pkh d
+transitionImpliesValidator p (Collecting v pkh d sigs) Pay record { inputVal = inputVal₁ ; outputVal = outputVal₁ ;
+                           outputLabel = .Holding } (TPay p1 p2)
+                           rewrite p1 | (refactor p2) | v=v (outputVal₁ + v)
+                           = refl
+transitionImpliesValidator p (Collecting v pkh d sigs) Cancel
+                           record { inputVal = inputVal₁ ; outputVal = .inputVal₁ ; outputLabel = .Holding } TCancel
+                           rewrite v=v inputVal₁
+                           = refl
+
 
 
 --agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
@@ -998,4 +982,58 @@ makeSigsLemma : ∀ (x : PubKeyHash) (ys : List PubKeyHash) (n : Nat) -> Unique 
 makeSigsLemma x (y ∷ ys) n pf1 pf2 = {!!}
 
 --helper n x (makeSigs' s2 s1) (uil' s1 s2 n pf1 {!!})
+
+makeIs : Params -> List Input
+makeIs record { authSigs = authSigs ; nr = zero ; pfU = pfU ; pfL = pfL } = []
+makeIs record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } = Add x ∷ (makeIs (record
+                                                                                                          { authSigs = authSigs
+                                                                                                          ; nr = nr
+                                                                                                          ; pfU = pfU 
+                                                                                                          ; pfL = pfL
+                                                                                                          }) ) 
+
+makeSigs : List PubKeyHash -> List Input -> List PubKeyHash
+makeSigs sigs [] = sigs
+makeSigs sigs (Propose x x₁ x₂ ∷ is) = makeSigs sigs is
+makeSigs sigs (Add x ∷ is) = makeSigs (insert x sigs) is
+makeSigs sigs (Pay ∷ is) = makeSigs sigs is
+makeSigs sigs (Cancel ∷ is) = makeSigs sigs is
+-}
+{-
+expand : ∀ {authSigs x nr pfU pff pfL s i is s'} -> i ≠ (Pay) -> record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } ⊢ s ~[ i ∷ is ]~* s' -> record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = (pff :: pfU) ; pfL = pfL } ⊢ s ~[ i ∷ is ]~* s'
+expand neq (cons (TPropose x x₁) root) = cons (TPropose x x₁) root
+expand neq (cons (TPropose x x₁) (cons (TAdd x₂) pf)) = cons (TPropose x x₁) (expand (λ ()) (cons (TAdd x₂) pf))
+expand neq (cons (TPropose x x₁) (cons (TPay x₂ x₃) pf)) = cons (TPropose x x₁) {!!}
+expand neq (cons (TPropose x x₁) (cons TCancel pf)) = {!!}
+expand neq (cons (TAdd x) pf) = {!!}
+expand neq (cons (TPay x x₁) pf) = magic (neq refl)
+expand neq (cons TCancel pf) = cons {!!} {!!} --(expand pf)
+-}
+--cons {!!} (expand pf)
+{-
+awful : ∀ {v pkh d sigs val x authSigs nr pfU pff pfL}
+        -> record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL } ⊢
+           record { label = Collecting v pkh d (insert x sigs) ; value = val }
+           ~[ makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }) ]~*
+           record { label = Collecting v pkh d (makeSigs (insert x sigs) (makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }))) ; value = val }
+        -> record { authSigs = x ∷ authSigs ; nr = suc nr ; pfU = pff :: pfU ; pfL = pfL } ⊢
+           record { label = Collecting v pkh d (insert x sigs) ; value = val }
+           ~[ makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }) ]~*
+           record { label = Collecting v pkh d (makeSigs (insert x sigs) (makeIs (record { authSigs = authSigs ; nr = nr ; pfU = pfU ; pfL = pfL }))) ; value = val }
+awful {nr = zero} root = root
+awful {authSigs = x ∷ authSigs₁} {nr = suc nr₁} {x₁ :: pfU₁} (cons x₂ pf) = cons (TAdd {!!}) {!awful!}
+-}
+--awful1 : ∀ { v pkh d sigs val x authSigs nr pfU pff pfL } -> ( record { authSigs = x ∷ authSigs ; nr = suc nr ; pfU = pff :: pfU ; pfL = pfL } ⊢ record { label = (Collecting v pkh d sigs) ; value = val } ~[ makeIs par ]~* record { label = (Collecting v pkh d (makeSigs sigs (makeIs par))) ; value = val })
+
+{-
+insertLemma : ∀ (x y : PubKeyHash) (zs : List PubKeyHash) -> insert x (insert y zs) ≡ insert y (insert x zs)
+insertLemma (Integer.pos n) (Integer.pos n₁) [] = {!!}
+insertLemma (Integer.pos n) (Integer.negsuc n₁) [] = {!!}
+insertLemma (Integer.negsuc n) y [] = {!!}
+insertLemma x y (z ∷ zs) = {!!}
+
+makeSigsLemma : ∀ (x : PubKeyHash) (sigs sigs' : List PubKeyHash)
+                -> (makeSigs' (insert x sigs) sigs') ≡ insert x (makeSigs' sigs sigs')
+makeSigsLemma x s1 [] = refl
+makeSigsLemma x s1 (x₁ ∷ s2) = {!!} --makeSigsLemma x₁ (insert x s1) s2
 -}
