@@ -36,11 +36,15 @@ open TxInfo public
 
 record ScriptContext : Set where
     field
-        scriptContextTxInfo  : TxInfo
-        scriptContextPurpose : ScriptPurpose
+  --      scriptContextTxInfo  : TxInfo
+  --      scriptContextPurpose : ScriptPurpose
         inputVal    : Nat
         outputVal   : Nat
         outputLabel : Label
+        time        : Deadline
+        payTo       : PubKeyHash
+        payAmt      : Value
+        signature   : PubKeyHash
 open ScriptContext public
 
 
@@ -63,34 +67,17 @@ insert pkh (x ∷ l') = if (x == pkh)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
-count : List PubKeyHash -> Integer
-count [] = 0
-count (x ∷ l) = 1 + (count l)
-
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
-{-# COMPILE AGDA2HS count #-}
-
-{-
-postulate
- -- txSignedBy : TxInfo -> PubKeyHash -> Bool
-  checkSigned : PubKeyHash -> Bool
-  checkPayment : PubKeyHash -> Value -> TxInfo -> Bool
-  expired : Deadline -> TxInfo -> Bool
-  oDat : ScriptContext -> Label
-  oldValue : ScriptContext -> Value
-  newValue : ScriptContext -> Value
---  checkToken : ThreadToken -> ScriptContext -> Bool
--}
 
 checkSigned : PubKeyHash -> ScriptContext -> Bool
-checkSigned _ _ = True
+checkSigned sig ctx = sig == signature ctx
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment _ _ _ = True
+checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 
 expired : Deadline -> ScriptContext -> Bool
-expired _ _ = True
+expired d ctx = (time ctx) > d
 
 newLabel : ScriptContext -> Label
 newLabel ctx = outputLabel ctx
@@ -107,42 +94,46 @@ geq val v = val >= v
 gt : Value -> Value -> Bool
 gt val v = val > v
 
+emptyValue : Value
+emptyValue = 0
+
 record Params : Set where
     field
         authSigs  : List PubKeyHash
-        nr : Integer
+        nr : Nat
 open Params public
-
 
 
 {-# COMPILE AGDA2HS Params #-}
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param dat red ctx = case dat of λ where
+
+  Holding -> case red of λ where
+
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && gt v emptyValue && (case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
+    (Add _) -> False
+    Pay -> False
+    Cancel -> False 
+
   (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
       Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v' && (pkh == pkh' && (d == d' && (sigs' == insert sig sigs ))) )
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
 
-    Pay -> (count sigs) >= (nr param) && (case (newLabel ctx) of λ where
+    Pay -> (lengthNat sigs) >= (nr param) && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v)
       (Collecting _ _ _ _) -> False )
       
-    Cancel -> case (newLabel ctx) of λ where
+    Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
-      (Collecting _ _ _ _) -> False
+      (Collecting _ _ _ _) -> False)
   
-  Holding -> case red of λ where
-
-    (Propose v pkh d) -> (oldValue ctx >= v) && (case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> (v == v' && (pkh == pkh' && (d == d' && (sigs' == [])))) )
-    (Add _) -> False
-    Pay -> False
-    Cancel -> False 
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 

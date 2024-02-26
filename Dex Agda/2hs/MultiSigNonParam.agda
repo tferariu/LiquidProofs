@@ -13,6 +13,8 @@ module MultiSigNonParam where
 magic : {A : Set} → ⊥ → A
 magic ()
 
+
+
 --⊥-elim
 
 Placeholder = String
@@ -58,7 +60,6 @@ open ScriptContext public
 
 
 {-# COMPILE AGDA2HS Deadline #-}
-
 
 
 {-# COMPILE AGDA2HS Label #-}
