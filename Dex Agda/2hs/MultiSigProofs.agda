@@ -184,20 +184,36 @@ appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (
 appendLemma x [] b = refl
 appendLemma x (a ∷ as) b = cong (λ y → a ∷ y) (appendLemma x as b) 
 
+∈lemma : ∀ (xs ys : List PubKeyHash) (z : PubKeyHash) -> z ∈ (xs ++ z ∷ ys)
+∈lemma [] ys z = here refl
+∈lemma (x ∷ xs) ys z = there (∈lemma xs ys z)
 
+nextSig : ∀ (s : State) -> (ls : List Input) -> PubKeyHash
+nextSig s [] = tsig s
+nextSig s (Propose x x₁ x₂ ∷ ls) = tsig s
+nextSig s (Add sig ∷ ls) = sig
+nextSig s (Pay ∷ ls) = tsig s
+nextSig s (Cancel ∷ ls) = tsig s
 
-prop1' : ∀ {v pkh d sigs s s'} (par : Params) (n : Value) (asigs asigs' asigs'' : List PubKeyHash)
+prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (n : Value) (asigs asigs' asigs'' : List PubKeyHash)
          -> n ≡ (nr par) -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
          -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs' sigs asigs'')
-         -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s ≡ tsig s'
+         -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs' asigs'')
          -> value s ≡ value s' -> par ⊢ s ~[ makeIs' asigs'' ]~* s'
  {-        
          ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
          ~[ makeIs' asigs'' ]~*
          record { label = (Collecting v pkh d (makeSigs' sigs asigs'')) ; value = val }) -}
-prop1' {v} {s = record { label = .(Collecting v _ _ _) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }} {record { label = .(Collecting v _ _ (makeSigs' _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = .tsig₁ }} record { authSigs = .(sigs' ++ []) ; nr = nr₁ } .nr₁ .(sigs' ++ []) sigs' [] refl refl refl refl refl refl refl refl refl refl = root
-prop1' {v} {s = record { label = .(Collecting v _ _ _) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }} {record { label = .(Collecting v _ _ (makeSigs' _ (x ∷ sigs''))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = .tsig₁ }} record { authSigs = .(sigs' ++ x ∷ sigs'') ; nr = nr₁ } .nr₁ .(sigs' ++ x ∷ sigs'') sigs' (x ∷ sigs'') refl refl refl refl refl refl refl refl refl refl = snoc {!!} (TAdd {!!} {!!} {!!} {!!} {!!})
+prop1' {v} {pkh} {d} {sigs} record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ } record { label = .(Collecting _ _ _ (makeSigs' _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ; tsig = .(nextSig (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' [])) } record { authSigs = .(s1 ++ []) ; nr = nr₁ } .nr₁ .(s1 ++ []) s1 [] refl refl refl refl refl refl refl refl refl refl = root
 
+prop1' {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
+  record { label = .(Collecting _ _ _ (makeSigs' _ (x ∷ s2))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
+  tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' (x ∷ s2))) }
+  record { authSigs = .(s1 ++ x ∷ s2) ; nr = nr₁ } .nr₁ .(s1 ++ x ∷ s2) s1 (x ∷ s2)
+  refl refl refl refl refl refl refl refl refl refl =
+  snoc (prop1' (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  {!record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }!} (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}) (TAdd (∈lemma s1 s2 x) refl {!!} {!!} {!!})
 {-
 prop1' record { authSigs = .(asigs' ++ []) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(asigs' ++ []) asigs' [] refl refl refl = root
 prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL = pfL₁ } .n
