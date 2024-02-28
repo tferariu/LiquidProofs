@@ -22,7 +22,7 @@ open import Relation.Binary.PropositionalEquality.Core
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
 
-module MultiSigProofs where
+module MultiSigProofs2 where
 
 
 asdf : ∀ (v : Value) -> geq v v ≡ true
@@ -66,67 +66,48 @@ asdg sig (x ∷ xs) (there p) with asdg sig xs p
 
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
 
+--perhaps use decidable ones
   
-  TPropose : ∀ {v pkh d s s' par} --val par outV outA time sig outV' outA' time' sig'}
-    -> value s ≥ v
+  TPropose : ∀ {v pkh d val par outV outA time sig outV' outA' time' sig'}
+    -> val ≥ v
     -> v > emptyValue
-    -> label s ≡ Holding
-    -> label s' ≡ Collecting v pkh d []
-    -> value s ≡ value s'
     -------------------
-    -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
-
-{-
-    -> par ⊢ record { label = Holding ; value = val ; outVal = outV ; outAdr = outA ; now = time ; tsig = sig }
+    -> par ⊢
+       record { label = Holding ; value = val ; outVal = outV ; outAdr = outA ; now = time ; tsig = sig }
        ~[ (Propose v pkh d) ]~>
        record { label = Collecting v pkh d [] ; value = val ; outVal = outV' ; outAdr = outA' ; now = time' ; tsig = sig' }
--}
 
-  TAdd : ∀ {sig par s s' v pkh d sigs} --{v pkh d sig sigs val par outV outD time sig' outV' outD' time' sig''}
+
+  TAdd : ∀ {v pkh d sig sigs val par outV outA time sig' outV' outA' time'}
     -> sig ∈ (authSigs par)
-    -> tsig s' ≡ sig
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value s ≡ value s'
     -------------------
-    -> par ⊢ s ~[ (Add sig) ]~> s'
-
-
-{-
-    -> par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
+    -> par ⊢ record { label = (Collecting v pkh d sigs) ; value = val ; outVal = outV ; outAdr = outA ; now = time ; tsig = sig' }
        ~[ (Add sig) ]~>
-       record { label = (Collecting v pkh d (insert sig sigs)) ; value = val }
- -}      
+       record { label = (Collecting v pkh d (insert sig sigs)) ; value = val ; outVal = outV' ; outAdr = outA' ; now = time' ; tsig = sig }
+
 --mem in haskell, but is is in Plutus?
 --agda sets for proofs, lists for implementation
 
-  TPay : ∀ {v pkh d sigs s s' par} -- {v pkh d sigs val val' par outV outD now tsig}
-    -> value s ≡ value s' + v
+  TPay : ∀ {v pkh d sigs val val' par outV outA time time' sig sig'}
+    -> val ≡ val' + v
     -> length sigs ≥ nr par
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding
-    -> outVal s' ≡ v
-    -> outAdr s' ≡ pkh
     -------------------
-    -> par ⊢ s ~[ Pay ]~> s'
-{-
-    -> par ⊢ record { label = Collecting v pkh d sigs ; value = val }
+    -> par ⊢
+       record { label = (Collecting v pkh d sigs) ; value = val ; outVal = outV ; outAdr = outA ; now = time ; tsig = sig }
        ~[ Pay ]~>
-       record { label = Holding ; value = val' }
-       -}
+       record { label = Holding ; value = val' ; outVal = v ; outAdr = pkh ; now = time' ; tsig = sig' }
 
-  TCancel : ∀ {s s' par v pkh d sigs} -- {v pkh d sigs val par outV outD now tsig}
-    -> now s' ≥ d
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding
+
+  TCancel : ∀ {v pkh d sigs val par outV outA time sig sig' outV' outA' time'}
+    -> time' ≥ d
     -------------------
-    -> par ⊢ s ~[ Cancel ]~> s'
-
-{-
-    -> par ⊢ record { label = Collecting v pkh d sigs ; value = val }
+    -> par ⊢
+       record { label = (Collecting v pkh d sigs) ; value = val ; outVal = outV ; outAdr = outA ; now = time ; tsig = sig }
        ~[ Cancel ]~>
-       record { label = Holding ; value = val}
--}
+       record { label = Holding ; value = val ; outVal = outV' ; outAdr = outA' ; now = time' ; tsig = sig' }
+
+
+
 -- UNPLEASANT TO READ, MAKE BETTER
 -- proof only side, so use Agda symbols to write nicely
 -- elegance, easy to read while also minimizing lemma amounts
@@ -195,8 +176,10 @@ nextSig s (Add sig ∷ ls) = sig
 nextSig s (Pay ∷ ls) = tsig s
 nextSig s (Cancel ∷ ls) = tsig s
 
-prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
-         -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
+{-
+
+prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (n : Value) (asigs asigs' asigs'' : List PubKeyHash)
+         -> n ≡ (nr par) -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
          -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs' sigs asigs'')
          -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs' asigs'')
          -> value s ≡ value s' -> par ⊢ s ~[ makeIs' asigs'' ]~* s'
@@ -204,71 +187,35 @@ prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' 
          ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
          ~[ makeIs' asigs'' ]~*
          record { label = (Collecting v pkh d (makeSigs' sigs asigs'')) ; value = val }) -}
-prop1' {v} {pkh} {d} {sigs} record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ } record { label = .(Collecting _ _ _ (makeSigs' _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ; tsig = .(nextSig (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' [])) } record { authSigs = .(s1 ++ []) ; nr = nr₁ } .(s1 ++ []) s1 [] refl refl refl refl refl refl refl refl refl = root
+prop1' {v} {pkh} {d} {sigs} record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ } record { label = .(Collecting _ _ _ (makeSigs' _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ; tsig = .(nextSig (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' [])) } record { authSigs = .(s1 ++ []) ; nr = nr₁ } .nr₁ .(s1 ++ []) s1 [] refl refl refl refl refl refl refl refl refl refl = root
 
 prop1' {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
   record { label = .(Collecting _ _ _ (makeSigs' _ (x ∷ s2))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
   tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' (x ∷ s2))) }
-  record { authSigs = .(s1 ++ x ∷ s2) ; nr = nr₁ } .(s1 ++ x ∷ s2) s1 (x ∷ s2)
-  refl refl refl refl refl refl refl refl refl =
+  record { authSigs = .(s1 ++ x ∷ s2) ; nr = nr₁ } .nr₁ .(s1 ++ x ∷ s2) s1 (x ∷ s2)
+  refl refl refl refl refl refl refl refl refl refl =
   snoc (prop1' (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (record { label = (Collecting v pkh d (makeSigs' sigs s2)) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
-  tsig = (nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs' (s2)))})
-  (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) (s1 ++ x ∷ s2) (s1 ++ [ x ]) s2 refl (appendLemma x s1 s2) refl refl refl refl refl refl refl)
-  (TAdd (∈lemma s1 s2 x) refl refl refl refl)
-
-
-
-prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs' sigs (authSigs par))
-        -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs' (authSigs par))
-        -> value s ≡ value s' -> par ⊢ s ~[ (makeIs' (authSigs par)) ]~* s'
-prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop1' s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7
-
-
-  
-
-data Unique : List PubKeyHash → Set where
-  [] : Unique []
-  _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
-
-{-
-uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
-                      -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
-uil' s1 s2 n pf1 pf2 = trustMe
---- assumed
-
-
-
-lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
-      (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = pfL } sigs = insertLemma x (makeSigs' sigs authSigs)
-lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = uil' (x ∷ authSigs) sigs (suc nr) pfU pfL 
-
-
-parLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
-         ( ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
-         (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
-parLemma par sigs rewrite lengthLemma par sigs = refl
-
-rewriteLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
-       ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
-       (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
-rewriteLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
+  {!record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }!} (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}) (TAdd (∈lemma s1 s2 x) refl {!!} {!!} {!!})
 -}
 
-
-prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params) -> Valid s
-          -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Holding
-          -> outVal s' ≡ v -> outAdr s' ≡ pkh -> value s ≡ value s' + v 
-          -> par ⊢ s ~[ (Pay ∷ (makeIs' (authSigs par))) ]~* s'
-prop2 = {!!}
---prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
---...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (rewriteLemma par sigs))
 {-
- ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
- record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
+prop1' record { authSigs = .(asigs' ++ []) ; nr = nr₁ ; pfU = pfU₁ ; pfL = pfL₁ } .nr₁ .(asigs' ++ []) asigs' [] refl refl refl = root
+prop1' record { authSigs = .(asigs' ++ x ∷ asigs'') ; nr = n ; pfU = pfU ; pfL = pfL₁ } .n
+              .(asigs' ++ x ∷ asigs'') asigs' (x ∷ asigs'') refl refl refl
+       = snoc (prop1' (record { authSigs = asigs' ++ x ∷ asigs'' ; nr = n ; pfU = pfU ; pfL = pfL₁ })
+         n ((asigs' ++ x ∷ asigs'')) (asigs' ++ (x ∷ [])) asigs'' refl refl (appendLemma x asigs' asigs''))
+         (?)--(TAdd (queryLemma x asigs' asigs''))
+-}
+
+{-
+prop1 : ∀ { v pkh d sigs val } (par : Params) ->
+        ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
+        ~[ (makeIs' (authSigs par)) ]~*
+        record { label = (Collecting v pkh d (makeSigs' sigs (authSigs par))) ; value = val })
+        
+prop1 par = prop1' par (nr par) (authSigs par) [] (authSigs par) refl refl refl
+
 
 why : ∀ (x : PubKeyHash) {b : Bool} -> IsTrue (x == x || b)
 why (Integer.pos zero) = IsTrue.itsTrue
@@ -298,7 +245,29 @@ why2 x {c = True} = IsTrue.itsTrue
 
 
 
+
+
+
 {-
+
+    
+data _∉_ : PubKeyHash -> List PubKeyHash -> Set where
+
+  empty : ∀ {pkh : PubKeyHash}
+    ------------
+    -> pkh ∉ []
+
+  cons : ∀ { pkh pkh' l }
+    -> pkh ≠ pkh'
+    -> pkh ∉ l
+    ---------------
+    -> pkh ∉ (pkh' ∷ l)
+  
+
+data Unique : List PubKeyHash → Set where
+  [] : Unique []
+  _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
+
 
 record Params : Set where
     field
@@ -403,6 +372,38 @@ minLength x (y ∷ ys) rewrite ifLemma y ys (insert x ys) (eqInteger y x) = refl
 
 
 
+
+uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+                      -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
+uil' s1 s2 n pf1 pf2 = trustMe
+--- assumed
+
+
+
+lengthLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> 
+      (nr par < lengthNat (makeSigs' sigs (authSigs par))) ≡ True
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = zero ; pfU = pfU ; pfL = pfL } sigs = insertLemma x (makeSigs' sigs authSigs)
+lengthLemma record { authSigs = (x ∷ authSigs) ; nr = (suc nr) ; pfU = pfU ; pfL = pfL } sigs = uil' (x ∷ authSigs) sigs (suc nr) pfU pfL 
+
+
+parLemma : ∀ (par : Params) (sigs : List PubKeyHash) ->
+         ( ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
+         (lengthNat (makeSigs' sigs (authSigs par)) == nr par)) )  ≡  ( (True))
+parLemma par sigs rewrite lengthLemma par sigs = refl
+
+rewriteLemma : ∀ (par : Params) (sigs : List PubKeyHash) -> IsTrue
+       ((nr par < lengthNat (makeSigs' sigs (authSigs par))) ||
+       (lengthNat (makeSigs' sigs (authSigs par)) == nr par))
+rewriteLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
+
+
+
+prop2 : ∀ { v val pkh d sigs } (par : Params) -> (x : (Collecting v pkh d sigs) ∻ val)
+          -> ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
+          ~[ Pay ∷ (makeIs' (authSigs par)) ]~*
+          record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
+prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
+...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (rewriteLemma par sigs))
 
 
 

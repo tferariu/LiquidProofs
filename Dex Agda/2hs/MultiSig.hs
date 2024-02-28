@@ -2,7 +2,7 @@ module MultiSig where
 
 import Numeric.Natural (Natural)
 
-type Deadline = Integer
+type Deadline = Natural
 
 data Label = Holding
            | Collecting Value PubKeyHash Deadline [PubKeyHash]
