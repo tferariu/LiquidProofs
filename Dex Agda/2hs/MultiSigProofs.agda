@@ -7,6 +7,7 @@ open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 open import Data.Nat
+--open import Agda.Builtin.Nat using (_-_)
 open import Agda.Builtin.Int
 --open import Data.Integer.Base
 open import Data.List
@@ -174,7 +175,9 @@ makeSigs' : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
 makeSigs' sigs [] = sigs
 makeSigs' sigs (x ∷ asigs) = insert x (makeSigs' sigs asigs)
 
-
+makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
+makeSigs sigs [] = sigs
+makeSigs sigs (x ∷ asigs) = (makeSigs (insert x sigs) asigs)
 
 --queryLemma : ∀ (x : PubKeyHash) (y z : List PubKeyHash) -> IsTrue (query x (y ++ x ∷ z))
 --queryLemma x [] z = why x
@@ -234,7 +237,46 @@ data Unique : List PubKeyHash → Set where
   _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
 
 {-
-uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs) (pf2 : IsTrue (lengthNat sigs > n))
+insertLemma : ∀ (sig : PubKeyHash) (sigs : List PubKeyHash) -> sig ∉ sigs -> insert sig sigs ≡ sigs ++ [ sig ]
+insertLemma sig [] pf = refl
+insertLemma sig (x ∷ sigs) pf = {!!}
+
+
+insertLemma : ∀ (sig : PubKeyHash) (sigs : List PubKeyHash) -> sig ∉ sigs ->
+            insert sig (foldl (λ y x → x ∷ y) [] sigs) ≡ foldl (λ y x → x ∷ y) (sig ∷ []) sigs
+insertLemma sig [] pf = refl
+insertLemma sig (x ∷ sigs) pf rewrite (sym (insertLemma x sigs {!!}))= {!!}
+
+msLemma : ∀ (sigs : List PubKeyHash) -> Unique sigs -> makeSigs' [] sigs ≡ reverse sigs
+msLemma [] pf = refl
+msLemma (x ∷ sigs) (p :: pf) = {!!} --rewrite msLemma sigs pf = {!!}
+
+msLemma' : ∀ (sigs : List PubKeyHash) -> Unique sigs -> makeSigs [] sigs ≡ sigs
+msLemma' [] pf = refl
+msLemma' (x ∷ sigs) (p :: pf) = {!!}
+
+appendEmpty : ∀ (a : List PubKeyHash) -> a ++ [] ≡ a
+appendEmpty [] = refl
+appendEmpty (x ∷ a) = cong (λ y -> x ∷ y) (appendEmpty a)
+
+reverseDistrib : ∀ (a b : List PubKeyHash) -> reverse (a ++ b) ≡ reverse b ++ reverse a
+reverseDistrib a [] rewrite appendEmpty a = refl
+reverseDistrib a (x ∷ b) = {!!}
+
+reverseLemma : ∀ (sig : PubKeyHash) (sigs : List PubKeyHash) -> reverse (sig ∷ sigs) ≡ (reverse sigs) ++ [ sig ]
+reverseLemma sig [] = refl
+reverseLemma sig (x ∷ sigs) = {!!}
+-}
+postulate
+  uil : ∀ (sigs : List PubKeyHash) (n : ℕ) (pf1 : Unique sigs) (pf2 : length sigs > n)
+                      -> (n < length (makeSigs' [] sigs))
+
+  uil' : ∀ (sigs sigs' : List PubKeyHash) (n : ℕ) (pf1 : Unique sigs) (pf2 : (length sigs ≥ n))
+                      -> (length (makeSigs' sigs' sigs) ≥ n)
+--uil (x ∷ sigs) n (x₁ :: pf1) (s≤s pf2) = {!!}
+
+{-
+uil' : ∀ (sigs sigs' : List PubKeyHash) (n : Nat) (pf1 : Unique sigs ) (pf2 : IsTrue (lengthNat sigs > n))
                       -> (n < lengthNat (makeSigs' sigs' sigs)) ≡ True
 uil' s1 s2 n pf1 pf2 = trustMe
 --- assumed
@@ -261,11 +303,80 @@ rewriteLemma par sigs rewrite parLemma par sigs = IsTrue.itsTrue
 
 prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params) -> Valid s
           -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Holding
-          -> outVal s' ≡ v -> outAdr s' ≡ pkh -> value s ≡ value s' + v 
+          -> outVal s' ≡ v -> outAdr s' ≡ pkh -> value s ≡ value s' + v
+          -> Unique (authSigs par) -> length (authSigs par) ≥ nr par 
           -> par ⊢ s ~[ (Pay ∷ (makeIs' (authSigs par))) ]~* s'
-prop2 = {!!}
+prop2 {d = d} {sigs = sigs} (record { label = .(Collecting outVal₂ outAdr₂ d sigs) ; value = .(value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  record { label = .Holding ; value = value₁ ; outVal = outVal₂ ; outAdr = outAdr₂ ; now = now₂ ; tsig = tsig₂ } par (Col refl p2 p3) refl refl refl refl refl p4 p5
+  = snoc (prop1 (record { label = (Collecting outVal₂ outAdr₂ d sigs) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (record { label = (Collecting outVal₂ outAdr₂ d (makeSigs' sigs (authSigs par))) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+  tsig = nextSig (record { label = (Collecting outVal₂ outAdr₂ d sigs) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (makeIs' (authSigs par)) }) par refl refl refl refl refl refl refl) (TPay refl (uil' (authSigs par) sigs (nr par) p4 p5) refl refl refl refl)
+
+--snoc (prop1 {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}) (TPay {!!} {!!} {!!} {!!} {!!} {!!})
+
+
 --prop2 {v} {val} {sigs = sigs} par (Col p1 p2) with ((parLemma par sigs))
 --...| x rewrite x = snoc (prop1 par) (TPay ((lemma+- val v (lemmaLE v val p1))) (rewriteLemma par sigs))
+
+lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
+                   -> par ⊢ s  ~[ is  ]~* s'
+                   -> par ⊢ s' ~[ is' ]~* s''
+                   -> par ⊢ s  ~[ is' ++ is ]~* s''
+lemmaMultiStep par s s' .s' is [] p1 root = p1
+lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
+
++0 : ∀ (v : Value) -> v ≡ v + zero
++0 zero = refl
++0 (suc v) = cong suc (+0 v)
+
++suc : ∀ (a b : Value) -> a + suc b ≡ suc (a + b)
++suc zero b = refl
++suc (suc a) b = cong suc (+suc a b)
+
+monusLemma : ∀ (a b : Value) -> a ≥ b -> a ≡ a ∸ b + b
+monusLemma zero zero z≤n = refl
+monusLemma zero (suc b) ()
+monusLemma (suc a) zero z≤n = cong suc (+0 a)
+monusLemma (suc a) (suc b) (s≤s pf) rewrite +suc (a ∸ b) b = cong suc (monusLemma a b pf)
+
+v≤v : ∀ (v : Value) -> v ≤ v
+v≤v zero = z≤n
+v≤v (suc v) = s≤s (v≤v v)
+
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
+          -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+liquidity par record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } pkh d (Hol x) p1 p2 p3
+  = ⟨ (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig }) , ⟨ (makeIs' (authSigs par) ++ ((Propose value pkh d) ∷ [])) ,
+  lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+  (snoc root (TPropose (v≤v value) p1 refl refl refl))
+  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  par (Col refl (v≤v value) p1) refl refl refl refl refl p2 p3) ⟩ ⟩
+liquidity par record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } _ _ (Col refl p2 p3) p4 p5 p6
+  = ⟨ record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig } , ⟨ makeIs' (authSigs par) ,
+  prop2 (record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig }) par (Col refl p2 p3)
+  refl refl refl refl (monusLemma value v p2) p5 p6 ⟩ ⟩ 
+
+{-
+liquidity par record { label = Holding ; value = val } pkh d pf pf' =
+          ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
+          lemmaMultiStep par (record { label = Holding ; value = val })
+          (record { label = (Collecting val pkh d []) ; value = val })
+          (record { label = Holding ; value = (val - val) {{lemmaLT val}} })
+          (((Propose val pkh d) ∷ []))
+          ( Pay ∷ makeIs' (authSigs par))
+          (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
+liquidity par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
+-}
+
+
+
 {-
  ( par ⊢ record { label = (Collecting v pkh d sigs) ; value = val }
  record { label = Holding ; value = (val - v) {{lemmaOK x}}  })
@@ -411,30 +522,6 @@ lemmaLT zero = IsFalse.itsFalse
 lemmaLT (suc n) = lemmaLT n
 
 
-lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
-                   -> par ⊢ s  ~[ is  ]~* s'
-                   -> par ⊢ s' ~[ is' ]~* s''
-                   -> par ⊢ s  ~[ is' ++ is ]~* s''
-lemmaMultiStep par s s' .s' is [] p1 root = p1
-lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
-
-
-
-
-liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
-          -> label s ∻ value s
-          -> IsTrue (value s > 0)
-          -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
-
-liquidity par record { label = Holding ; value = val } pkh d pf pf' =
-          ⟨ record { label = Holding ; value = (val - val) {{lemmaLT val}} } , ⟨ makeIs' (authSigs par) ++ ((Propose val pkh d) ∷ []) ,
-          lemmaMultiStep par (record { label = Holding ; value = val })
-          (record { label = (Collecting val pkh d []) ; value = val })
-          (record { label = Holding ; value = (val - val) {{lemmaLT val}} })
-          (((Propose val pkh d) ∷ []))
-          ( Pay ∷ makeIs' (authSigs par))
-          (snoc root (TPropose (whyy (Integer.pos val)) pf')) (prop2 par (Col (whyy (Integer.pos val)) pf')) ⟩ ⟩
-liquidity par record { label = (Collecting v pkh d sigs) ; value = val } _ _ pf _ = ⟨ record { label = Holding ; value = (val - v) {{lemmaOK pf}}  } , ⟨ makeIs' (authSigs par) , prop2 par pf ⟩ ⟩
 
 
 {-
