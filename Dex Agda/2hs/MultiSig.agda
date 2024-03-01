@@ -41,7 +41,7 @@ record ScriptContext : Set where
         inputVal    : Nat
         outputVal   : Nat
         outputLabel : Label
-        now         : Deadline
+        time        : Deadline
         payTo       : PubKeyHash
         payAmt      : Value
         signature   : PubKeyHash
@@ -77,7 +77,7 @@ checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 
 expired : Deadline -> ScriptContext -> Bool
-expired d ctx = (now ctx) > d
+expired d ctx = (time ctx) > d
 
 newLabel : ScriptContext -> Label
 newLabel ctx = outputLabel ctx
@@ -136,4 +136,5 @@ agdaValidator param dat red ctx = case dat of λ where
   
 
 {-# COMPILE AGDA2HS agdaValidator #-}
+
 
