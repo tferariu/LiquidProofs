@@ -134,7 +134,9 @@ data Valid : State -> Set where
     -> v > 0
     --------------------------------
     -> Valid s
-    
+
+--prop of all Valid State -> Valid States
+
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
   root : ∀ { s par }
@@ -332,6 +334,7 @@ monusLemma (suc a) (suc b) (s≤s pf) rewrite +suc (a ∸ b) b = cong suc (monus
 v≤v : ∀ (v : Value) -> v ≤ v
 v≤v zero = z≤n
 v≤v (suc v) = s≤s (v≤v v)
+
 
 liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
           -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
@@ -576,7 +579,7 @@ transitionImpliesValidator : ∀ {oV oA t s} (par : Params) (l : Label) (i : Inp
                            -> agdaValidator par l i ctx ≡ true -- IsTrue instead of ≡ !! be consistent and use only 1
                              
 transitionImpliesValidator par Holding (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = .(Collecting _ _ _ []) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } (TPropose p1 p2 p3 refl p5) 
-  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl
+  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl 
 transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal ; outputVal = inputVal ; outputLabel = .(Collecting v pkh d (insert sig sigs)) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = .sig } (TAdd p1 refl refl refl refl)
   rewrite v=v inputVal | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
 transitionImpliesValidator par (Collecting v pkh d sigs) .Pay record { inputVal = .(outputVal + v) ; outputVal = outputVal ; outputLabel = .Holding ; time = time ; payTo = .pkh ; payAmt = .v ; signature = signature } (TPay refl p2 refl refl refl refl)
