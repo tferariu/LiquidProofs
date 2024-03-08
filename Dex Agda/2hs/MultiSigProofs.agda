@@ -135,7 +135,16 @@ data Valid : State -> Set where
     --------------------------------
     -> Valid s
 
---prop of all Valid State -> Valid States
+
+diffLabels : ∀ {v pkh d sigs} (l : Label) -> l ≡ Holding
+           -> l ≡ Collecting v pkh d sigs -> ⊥ 
+diffLabels Holding p1 ()
+diffLabels (Collecting v pkh d sigs) () p2
+
+sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
+  -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> v ≡ v'
+sameValue refl = refl
+
 
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
@@ -157,6 +166,24 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 -}
 
+validStateTransition : ∀ {s s' : State} {i par}
+  -> Valid s
+  -> par ⊢ s ~[ i ]~> s'
+  -> Valid s'
+validStateTransition iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2
+validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
+validStateTransition (Col pf1 pf2 pf3) (TAdd p1 p2 p3 p4 p5) rewrite pf1 | sameValue p3 | p5 = Col p4 pf2 pf3
+validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
+validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3
+
+validStateMulti : ∀ {s s' : State} {i par}
+  -> Valid s
+  -> par ⊢ s ~[ i ]~* s'
+  -> Valid s'
+validStateMulti iv root = iv
+validStateMulti iv (snoc pf x) = validStateTransition (validStateMulti iv pf) x
+
+--prop of all Valid State -> Valid States
 
 makeIs' : List PubKeyHash -> List Input
 makeIs' [] = []
@@ -535,7 +562,7 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel record { inputVa
 ≤to≤ᵇ {b = zero} z≤n = refl
 ≤to≤ᵇ {b = suc b} z≤n = refl
 ≤to≤ᵇ (s≤s pf) = ≤to≤ᵇ pf
---report this to Oresitis and James
+--report this to Orestis and James
 
 <to<ᵇ : ∀ {a b} -> a < b -> (a <ᵇ b) ≡ true
 <to<ᵇ {zero} (s≤s pf) = refl
