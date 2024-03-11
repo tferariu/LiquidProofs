@@ -20,18 +20,29 @@ Deadline = Nat
 
 Map = Placeholder
 
+
+record State : Set where
+  field
+    c1    : CurrencyScript × TokenName
+    c2    : CurrencyScript × TokenName
+    cmap1 : Map
+    cmap2 : Map
+
 record ScriptContext : Set where
     field
   --      scriptContextTxInfo  : TxInfo
   --      scriptContextPurpose : ScriptPurpose
         inputVal    : Nat
         outputVal   : Nat
-  --      outputLabel : Label
+        outputState : State
         time        : Deadline
         payTo       : PubKeyHash
         payAmt      : Value
         signature   : PubKeyHash
 open ScriptContext public
+
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned sig ctx = sig == signature ctx
 
 record Rational : Set where
     field
@@ -41,12 +52,14 @@ record Rational : Set where
         den    : Integer
 open Rational public
 
-record State : Set where
-  field
-    c1   : CurrencyScript × TokenName
-    c2   : CurrencyScript × TokenName
-    v    : Value
-    omap : Map
+numerator : Rational -> Integer
+numerator r = num r
+
+denominator : Rational -> Integer
+denominator r = den r
+
+
+
 
 data Input : Set where
   Offer   : PubKeyHash -> Value -> CurrencyScript -> TokenName -> Rational -> Input
@@ -55,9 +68,24 @@ data Input : Set where
 
 {-# COMPILE AGDA2HS Input #-}
 
+newState : ScriptContext -> State
+newState ctx = outputState ctx
+
+oldValue : ScriptContext -> Value
+oldValue ctx = inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = outputVal ctx
+
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> True
+  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 --&& oldValue?? 
+
+{-
+(Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs ) -}
+
   (Request pkh cs tn map) -> True
   (Cancel pkh v cs tn r) -> True
 {-
@@ -74,8 +102,7 @@ insert pkh (x ∷ l') = if (x == pkh)
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
 
-checkSigned : PubKeyHash -> ScriptContext -> Bool
-checkSigned sig ctx = sig == signature ctx
+
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
@@ -83,14 +110,7 @@ checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 expired : Deadline -> ScriptContext -> Bool
 expired d ctx = (time ctx) > d
 
-newLabel : ScriptContext -> Label
-newLabel ctx = outputLabel ctx
 
-oldValue : ScriptContext -> Value
-oldValue ctx = inputVal ctx
-
-newValue : ScriptContext -> Value
-newValue ctx = outputVal ctx
 
 geq : Value -> Value -> Bool
 geq val v = val >= v 
