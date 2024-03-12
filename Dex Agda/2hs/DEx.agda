@@ -8,46 +8,20 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-CurrencyScript = Placeholder
-TokenName = Placeholder
-
+CurrencySymbol = Integer
+TokenName = Integer
 
 PubKeyHash = Integer --no longer string because of equality issues
-Value = Nat
-Deadline = Nat
-
-{-# COMPILE AGDA2HS Deadline #-}
-
-Map = Placeholder
+Value = List (CurrencySymbol × (List TokenName × Integer)) 
 
 
-record State : Set where
-  field
-    c1    : CurrencyScript × TokenName
-    c2    : CurrencyScript × TokenName
-    cmap1 : Map
-    cmap2 : Map
+AssetClass = CurrencySymbol × TokenName
 
-record ScriptContext : Set where
-    field
-  --      scriptContextTxInfo  : TxInfo
-  --      scriptContextPurpose : ScriptPurpose
-        inputVal    : Nat
-        outputVal   : Nat
-        outputState : State
-        time        : Deadline
-        payTo       : PubKeyHash
-        payAmt      : Value
-        signature   : PubKeyHash
-open ScriptContext public
-
-checkSigned : PubKeyHash -> ScriptContext -> Bool
-checkSigned sig ctx = sig == signature ctx
+assetClass : CurrencySymbol -> TokenName -> AssetClass
+assetClass cs tn = cs , tn
 
 record Rational : Set where
     field
-  --      scriptContextTxInfo  : TxInfo
-  --      scriptContextPurpose : ScriptPurpose
         num    : Integer
         den    : Integer
 open Rational public
@@ -59,12 +33,59 @@ denominator : Rational -> Integer
 denominator r = den r
 
 
+record State : Set where
+  field
+    c1    : AssetClass
+    c2    : AssetClass
+    cmap1 : List ((Rational × PubKeyHash) × Integer)
+    cmap2 : List ((Rational × PubKeyHash) × Integer)
+open State public
+
+
+eqRational : Rational -> Rational -> Bool
+eqRational b c = (num b == num c) &&
+                 (den b == den c) 
+
+instance
+  iEqRational : Eq Rational
+  iEqRational ._==_ = eqRational
+
+eqState : State -> State -> Bool
+eqState b c = (c1 b     == c1 c) &&
+              (c2 b     == c2 c) &&
+              (cmap1 b  == cmap1 c)  &&
+              (cmap2 b  == cmap2 c)
+
+instance
+  iEqState : Eq State
+  iEqState ._==_ = eqState
+
+
+{-# COMPILE AGDA2HS State #-}
+
+record ScriptContext : Set where
+    field
+  --      scriptContextTxInfo  : TxInfo
+  --      scriptContextPurpose : ScriptPurpose
+        inputVal    : Value
+        outputVal   : Value
+        outputState : State
+        payTo       : PubKeyHash
+        payAmt      : Value
+        signature   : PubKeyHash
+open ScriptContext public
+
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned sig ctx = sig == signature ctx
+
+
+
 
 
 data Input : Set where
-  Offer   : PubKeyHash -> Value -> CurrencyScript -> TokenName -> Rational -> Input
-  Request : PubKeyHash -> CurrencyScript -> TokenName -> Map -> Input
-  Cancel  : PubKeyHash -> Value -> CurrencyScript -> TokenName -> Rational -> Input
+  Offer   : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> Input
+  Request : PubKeyHash -> CurrencySymbol -> TokenName -> List ((Rational × PubKeyHash) × Integer) -> Input
+  Cancel  : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> Input
 
 {-# COMPILE AGDA2HS Input #-}
 
@@ -79,7 +100,7 @@ newValue ctx = outputVal ctx
 
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 --&& oldValue?? 
+  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 && dat == newState ctx --WRONG NEEDS FIXING 
 
 {-
 (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
