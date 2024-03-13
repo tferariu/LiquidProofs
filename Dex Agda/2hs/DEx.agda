@@ -65,8 +65,6 @@ instance
 
 record ScriptContext : Set where
     field
-  --      scriptContextTxInfo  : TxInfo
-  --      scriptContextPurpose : ScriptPurpose
         inputVal    : Value
         outputVal   : Value
         outputState : State
@@ -77,8 +75,6 @@ open ScriptContext public
 
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned sig ctx = sig == signature ctx
-
-
 
 
 
@@ -98,9 +94,12 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
+checkOffer : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> State -> Bool
+checkOffer a b c d e f = True
+
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 && dat == newState ctx --WRONG NEEDS FIXING 
+  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 && checkOffer pkh v cs tn r dat --WRONG NEEDS FIXING 
 
 {-
 (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
