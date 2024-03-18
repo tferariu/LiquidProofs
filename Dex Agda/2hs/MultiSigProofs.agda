@@ -10,12 +10,15 @@ open import Data.Nat
 open import Agda.Builtin.Int
 open import Data.List
 open import Data.List.Relation.Unary.Any
+open import Data.List.Relation.Unary.All as All
 open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
 open import Data.Product
+--open import Data.Maybe
 
+open import Haskell.Prim hiding (⊥ ; All)
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
@@ -24,19 +27,20 @@ open import Haskell.Prim using (lengthNat)
 
 module MultiSigProofs where
 
-{-
-record State' : Set wjhere
-  dateum : Datum
-  context : SciptContxt'
--}
-record State : Set where
+
+record Context : Set where
   field
-    label         : Label --maybe just call it Datum 
     value         : Value  
     outVal        : Value
     outAdr        : PubKeyHash
     now           : Deadline
     tsig          : PubKeyHash
+open Context
+
+record State : Set where
+  field
+    label         : Label --maybe just call it Datum 
+    context       : Context
 open State
 
 _∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
@@ -48,38 +52,38 @@ x ∉ xs = ¬ (x ∈ xs)
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TPropose : ∀ {v pkh d s s' par} 
-    -> value s ≥ v
+    -> value (context s) ≥ v
     -> v > emptyValue
     -> label s ≡ Holding
     -> label s' ≡ Collecting v pkh d []
-    -> value s ≡ value s'
+    -> value (context s) ≡ value (context s') 
     -------------------
     -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
 
   TAdd : ∀ {sig par s s' v pkh d sigs} 
     -> sig ∈ (authSigs par)
-    -> tsig s' ≡ sig
+    -> tsig (context s') ≡ sig
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value s ≡ value s' -- outValue s.Context ≡ outValue s'.Context
+    -> value (context s) ≡ value (context s') --value s ≡ value s' -- outValue s.Context ≡ outValue s'.Context
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
 
   TPay : ∀ {v pkh d sigs s s' par} 
-    -> value s ≡ value s' + v
+    -> value (context s) ≡ value (context s') + v
     -> length sigs ≥ nr par
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Holding
-    -> outVal s' ≡ v
-    -> outAdr s' ≡ pkh
+    -> outVal (context s') ≡ v
+    -> outAdr (context s') ≡ pkh 
     -------------------
     -> par ⊢ s ~[ Pay ]~> s'
 
   TCancel : ∀ {s s' par v pkh d sigs} 
-    -> now s' > d
+    -> now (context s') > d
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Holding  
-    -> value s ≡ value s'
+    -> value (context s) ≡ value (context s') --value s ≡ value s' 
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
@@ -92,7 +96,7 @@ data Valid : State -> Set where
 
   Col : ∀ {s v pkh d sigs}
     -> label s ≡ Collecting v pkh d sigs
-    -> value s ≥ v
+    -> value (context s) ≥ v
     -> v > 0
     --------------------------------
     -> Valid s
@@ -140,21 +144,12 @@ validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 --do it with normal lists, or define snocLists !!!!
 
 
-makeIs' : List PubKeyHash -> List Input
-makeIs' [] = []
-makeIs' (x ∷ pkhs) = Add x ∷ makeIs' pkhs
-
-
-makeSigs' : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
-makeSigs' sigs [] = sigs
-makeSigs' sigs (x ∷ asigs) = insert x (makeSigs' sigs asigs)
-
 
 
 
 makeIs : List PubKeyHash -> List Input
 makeIs [] = []
-makeIs (x ∷ pkhs) = Add x ∷ makeIs' pkhs
+makeIs (x ∷ pkhs) = Add x ∷ makeIs pkhs
 
 
 makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
@@ -170,51 +165,184 @@ appendLemma x (a ∷ as) b = cong (λ y → a ∷ y) (appendLemma x as b)
 ∈lemma [] ys z = here refl
 ∈lemma (x ∷ xs) ys z = there (∈lemma xs ys z)
 
-nextSig : ∀ (s : State) -> (ls : List Input) -> PubKeyHash
-nextSig s [] = tsig s
-nextSig s (Propose x x₁ x₂ ∷ ls) = tsig s
-nextSig s (Add sig ∷ ls) = sig
-nextSig s (Pay ∷ ls) = tsig s
-nextSig s (Cancel ∷ ls) = tsig s
 
-prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
+
+finalSig : ∀ (s : State) -> (ls : List Input) -> PubKeyHash
+finalSig s [] = tsig (context s)
+finalSig s (Propose x x₁ x₂ ∷ [])  = tsig (context s)
+finalSig s (Add sig ∷ []) = sig
+finalSig s (Pay ∷ []) = tsig (context s)
+finalSig s (Cancel ∷ []) = tsig (context s)
+finalSig s (i ∷ ls) = finalSig s ls
+
+finalSigLemma : ∀ (s s' : State) (x : PubKeyHash) (xs : List PubKeyHash)
+  -> tsig (context s') ≡ x -> finalSig s (makeIs (x ∷ xs)) ≡ finalSig s' (makeIs xs)
+finalSigLemma s1 s2 x [] pf = sym pf
+finalSigLemma s1 s2 x (y ∷ []) pf = refl
+finalSigLemma s1 s2 x (y ∷ z ∷ xs) pf = finalSigLemma s1 s2 x (z ∷ xs) pf
+
+prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
          -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
          -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs sigs asigs'')
-         -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs asigs'')
-         -> value s ≡ value s' -> par ⊢ s ~[ makeIs asigs'' ]~* s'
+         -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
+         -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs asigs'')
+         -> par ⊢ s ~[ makeIs asigs'' ]~* s'
+prop {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ;
+  context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
+  record { label = .(Collecting v pkh d (makeSigs sigs [])) ;
+  context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+  tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
+  context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs [])) } }
+  record { authSigs = .(s2 ++ []) ; nr = nr₁ } .(s2 ++ []) s2 [] refl refl refl refl refl refl refl refl refl
+  = root
+  
+prop {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ;
+  context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
+  record { label = .(Collecting v pkh d (makeSigs sigs (x ∷ s3))) ;
+  context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+  tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
+  context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (x ∷ s3))) } }
+  record { authSigs = .(s2 ++ x ∷ s3) ; nr = nr₁ } .(s2 ++ x ∷ s3) s2 (x ∷ s3) refl refl refl refl refl refl refl refl refl
+  = cons ((TAdd (∈lemma s2 s3 x) refl refl refl refl))
+    (prop (record { label = Collecting v pkh d (insert x sigs) ;
+    context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }})
+    (record { label = (Collecting v pkh d (makeSigs sigs (x ∷ s3))) ;
+    context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+    tsig = (finalSig (record { label = Collecting v pkh d sigs ;
+    context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } })
+    (makeIs (x ∷ s3))) } })
+    (record { authSigs = (s2 ++ x ∷ s3) ; nr = nr₁ })
+    (s2 ++ x ∷ s3) (s2 ++ [ x ]) s3 refl (appendLemma x s2 s3) refl refl refl refl refl refl
+    (finalSigLemma (record { label = Collecting v pkh d sigs ;
+    context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }})
+    (record { label = Collecting v pkh d (insert x sigs) ;
+    context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }}) x s3 refl ))
 
-prop1' {v} {pkh} {d} {sigs}
-  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
-  record { label = .(Collecting _ _ _ (makeSigs _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
-  tsig = .(nextSig (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (makeIs [])) }
-  record { authSigs = .(s1 ++ []) ; nr = nr₁ } .(s1 ++ []) s1 [] refl refl refl refl refl refl refl refl refl = root
 
-prop1' {v} {pkh} {d} {sigs}
-  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
-  record { label = .(Collecting _ _ _ (makeSigs sigs (x ∷ s2))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
-  tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (makeIs' (x ∷ s2))) }
-  record { authSigs = .(s1 ++ x ∷ s2) ; nr = nr₁ } .(s1 ++ x ∷ s2) s1 (x ∷ s2)
-  refl refl refl refl refl refl refl refl refl = {!!}
-  {-
-  snoc (prop1' (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (record { label = (Collecting v pkh d (makeSigs' sigs s2)) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
-  tsig = (nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (makeIs' (s2)))})
-  (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) (s1 ++ x ∷ s2) (s1 ++ [ x ]) s2 refl (appendLemma x s1 s2) refl refl refl refl refl refl refl)
-  (TAdd (∈lemma s1 s2 x) refl refl refl refl) -}
+
+prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
+        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs sigs (authSigs par))
+        -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
+        -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs (authSigs par))
+        -> par ⊢ s ~[ (makeIs (authSigs par)) ]~* s'
+prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7
+
+
+{- ??
+axiom : ∀ (t : Set) (x y : t) {{ eqT : Eq t }} -> (x == y) ≡ true -> x ≡ y
+axiom t x y = {!!}
+
+axiom2 : {{eqA : Eq a}} -> ∀ (x y : a) -> (x == y) ≡ false -> ¬ x ≡ y
+axiom2 = {!!}
+
+-}
+
+
+data Unique : List PubKeyHash → Set where
+  root : Unique []
+  _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
+
+_⊆_ : List a → List a → Set
+l₁ ⊆ l₂ = All (_∈ l₂) l₁
+
+⊆-cons : (x : a){l₁ l₂ : List a} → l₁ ⊆  l₂ → l₁ ⊆ (x ∷ l₂)
+⊆-cons x [] = []
+⊆-cons x (px ∷ p) = there px ∷ ⊆-cons x p
+
+⊆-refl : (l : List a) → l ⊆ l
+⊆-refl [] = []
+⊆-refl (x ∷ l) = here refl ∷  ⊆-cons x (⊆-refl l)
+
+⊆-trans : {l₁ l₂ l₃ : List a} → l₁ ⊆ l₂ → l₂ ⊆ l₃ → l₁ ⊆ l₃
+⊆-trans [] p₂ = []
+⊆-trans (px ∷ p₁) p₂ = All.lookup p₂ px ∷ ⊆-trans  p₁ p₂
+
+≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
+≡ᵇto≡ {zero} {zero} pf = refl
+≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
+
+≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
+≤ᵇto≤ {zero} {zero} pf = z≤n
+≤ᵇto≤ {zero} {suc b} pf = z≤n
+≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
+--report this to Oresitis and James
+
+<ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
+<ᵇto< {zero} {suc b} pf = s≤s z≤n
+<ᵇto< {suc a} {suc b} pf = s≤s (<ᵇto< pf)
+
+==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
+==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
+
+insert-lem₁ : (x : PubKeyHash)(l : List PubKeyHash) → l ⊆ insert x l
+insert-lem₁ x [] = []
+insert-lem₁ x (y ∷ l) with x == y in eq
+... | false = (here refl) ∷ ⊆-cons y (insert-lem₁ x l) 
+... | true rewrite (==ito≡ x y eq) = (here refl) ∷ (⊆-cons y (⊆-refl l))
+
+
+insert-lem₂ : (x : PubKeyHash)(l : List PubKeyHash) → x ∈ insert x l
+insert-lem₂ x [] = here refl
+insert-lem₂ x (y ∷ l) with x == y in eq
+... | false = there (insert-lem₂ x l) 
+... | true = here refl
+
+
+makeSigs-lem₁ : (l₁ l₂ : List PubKeyHash) → l₁ ⊆ makeSigs l₁ l₂
+makeSigs-lem₁ l₁ [] = ⊆-refl l₁
+makeSigs-lem₁ l₁ (x₁ ∷ l₂) 
+  = {!!} --⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
+
+{-
+insertList : {{eqA : Eq a}} -> List a -> List a -> List a
+insertList l1 [] = l1
+insertList l1 (x ∷ l2) = insert x (insertList l1 l2)
+
+makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
+makeSigs sigs [] = sigs
+makeSigs sigs (x ∷ asigs) = (makeSigs (insert x sigs) asigs)
+
+insertList-lem₁ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₁ ⊆ insertList l₁ l₂
+insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ [] = ⊆-refl l₁
+insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
+  = ⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
+
+insertList-lem₂ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₂ ⊆ insertList l₁ l₂
+insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ [] = []
+insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
+  = insert-lem₂ x₁ (insertList l₁ l₂) ∷ ⊆-trans (insertList-lem₂ l₁ l₂) (insert-lem₁  x₁ (insertList l₁ l₂))
+
+del : ∀{x} (l : List a) → x ∈ l → List a
+del (_ ∷ xs) (here px) = xs
+del (x ∷ xs) (there p) = x ∷ del xs p
+
+length-del : ∀{x}{l : List a} (p : x ∈ l) → suc (length (del l p)) ≡ length l
+length-del (here px) = refl
+length-del (there p) = cong suc (length-del p) 
+
+∈-del : ∀{x y}{l₂ : List a} (p : x ∈ l₂) → x ≢ y →  y ∈  l₂ → y ∈ del l₂ p
+∈-del (here refl) e (here refl) = ⊥-elim (e refl)
+∈-del (there p)   e (here refl) = here refl
+∈-del (here refl) e (there w) = w
+∈-del (there p)   e (there w) = there (∈-del p e w) 
+
+subset-del : ∀{x}{l₁ l₂ : List a} (p : x ∈ l₂) → (x ∉ l₁) → l₁ ⊆ l₂ → l₁ ⊆ del l₂ p
+subset-del p n [] = []
+subset-del p n (px ∷ su) = ∈-del p (λ e → n (here e)) px ∷ subset-del p (λ p → n (there p)) su
+
+unique-lem : {{eqA : Eq a}}{l₁ l₂ : List a} → l₁ ⊆ l₂ → Unique l₁ → length l₂ ≥ length l₁
+unique-lem [] root = z≤n
+unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
+
+uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
+uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
+-}
 
 {-
 
-prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs' sigs (authSigs par))
-        -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs' (authSigs par))
-        -> value s ≡ value s' -> par ⊢ s ~[ (makeIs' (authSigs par)) ]~* s'
-prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop1' s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7
-
-
-  
 
 data Unique : List PubKeyHash → Set where
   [] : Unique []
@@ -613,7 +741,45 @@ reverseLemma sig [] = refl
 reverseLemma sig (x ∷ sigs) = {!!}
 -}
 
+{-
+prop1' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
+         -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
+         -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs sigs asigs'')
+         -> outVal s ≡ outVal s' -> outAdr s ≡ outAdr s' -> now s ≡ now s' -> tsig s' ≡ nextSig s (makeIs asigs'')
+         -> value s ≡ value s' -> par ⊢ s ~[ makeIs asigs'' ]~* s'
+
+prop1' {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }
+  record { label = .(Collecting v pkh d (makeSigs sigs [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ;
+  tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs [])) }
+  record { authSigs = .(sigs2 ++ []) ; nr = nr₁ } .(sigs2 ++ []) sigs2 [] refl refl refl refl refl refl refl refl refl = root
+prop1' {v} {pkh} {d} {sigs} record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } record { label = .(Collecting v pkh d (makeSigs sigs (x ∷ sigs3))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs (x ∷ sigs3))) } record { authSigs = .(sigs2 ++ x ∷ sigs3) ; nr = nr₁ } .(sigs2 ++ x ∷ sigs3) sigs2 (x ∷ sigs3) refl refl refl refl refl refl refl refl refl = cons (TAdd {s' = (record { label = Collecting v pkh d (insert x sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x })} (∈lemma sigs2 sigs3 x) refl refl refl refl) (prop1' (record { label = Collecting v pkh d (insert x sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }) (record { label = (Collecting v pkh d (makeSigs sigs (x ∷ sigs3))) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = (nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ }) (makeIs (x ∷ sigs3))) }) (record { authSigs = (sigs2 ++ x ∷ sigs3) ; nr = nr₁ }) (sigs2 ++ x ∷ sigs3) (sigs2 ++ [ x ]) sigs3 refl (appendLemma x sigs2 sigs3) refl refl refl refl refl {!!} refl)
+
 -}
+{-{v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
+  record { label = .(Collecting _ _ _ (makeSigs _ [])) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
+  tsig = .(nextSig (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (makeIs [])) }
+  record { authSigs = .(s1 ++ []) ; nr = nr₁ } .(s1 ++ []) s1 [] refl refl refl refl refl refl refl refl refl = root
+
+prop1' {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = .outAdr₁ ; now = now₁ ; tsig = tsig₁ }
+  record { label = .(Collecting _ _ _ (makeSigs sigs (x ∷ s2))) ; value = .value₁ ; outVal = .outVal₁ ; outAdr = outAdr₁ ; now = .now₁ ;
+  tsig = .(nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (makeIs' (x ∷ s2))) }
+  record { authSigs = .(s1 ++ x ∷ s2) ; nr = nr₁ } .(s1 ++ x ∷ s2) s1 (x ∷ s2)
+  refl refl refl refl refl refl refl refl refl = {!!} -}
+  {-
+  snoc (prop1' (record { label = (Collecting v pkh d sigs) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (record { label = (Collecting v pkh d (makeSigs' sigs s2)) ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+  tsig = (nextSig (record { label = Collecting v pkh d sigs ; value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
+  (makeIs' (s2)))})
+  (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) (s1 ++ x ∷ s2) (s1 ++ [ x ]) s2 refl (appendLemma x s1 s2) refl refl refl refl refl refl refl)
+  (TAdd (∈lemma s1 s2 x) refl refl refl refl) -}
+
+-}
+
 
 
 

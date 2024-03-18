@@ -63,10 +63,11 @@ query pkh (x ∷ l') = (x == pkh) || query pkh l'
 
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
-insert pkh (x ∷ l') = if (x == pkh)
-  then (x ∷ l')
+insert pkh (x ∷ l') = if (pkh == x)
+  then (pkh ∷ l')
   else (x ∷ (insert pkh l'))
 
+--WHYYYYYYY??? x == pkh -> x :: l'
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
 
