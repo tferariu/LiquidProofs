@@ -7,6 +7,7 @@ open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 open import Data.Nat
+open import Data.Nat.Properties
 open import Agda.Builtin.Int
 open import Data.List
 open import Data.List.Relation.Unary.Any
@@ -87,19 +88,20 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
-data Valid : State -> Set where
+data ValidS : State -> Set where
 
   Hol : ∀ {s}
     -> label s ≡ Holding
     ----------------
-    -> Valid s
+    -> ValidS s
 
   Col : ∀ {s v pkh d sigs}
     -> label s ≡ Collecting v pkh d sigs
     -> value (context s) ≥ v
     -> v > 0
     --------------------------------
-    -> Valid s
+    -> ValidS s
+
 
 
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
@@ -125,9 +127,9 @@ sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
 sameValue refl = refl
 
 validStateTransition : ∀ {s s' : State} {i par}
-  -> Valid s
+  -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
-  -> Valid s'
+  -> ValidS s'
 validStateTransition iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2
 validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
 validStateTransition (Col pf1 pf2 pf3) (TAdd p1 p2 p3 p4 p5) rewrite pf1 | sameValue p3 | p5 = Col p4 pf2 pf3
@@ -135,9 +137,9 @@ validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
 validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3
 
 validStateMulti : ∀ {s s' : State} {is par}
-  -> Valid s
+  -> ValidS s
   -> par ⊢ s ~[ is ]~* s'
-  -> Valid s'
+  -> ValidS s'
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x 
 
@@ -152,9 +154,9 @@ makeIs [] = []
 makeIs (x ∷ pkhs) = Add x ∷ makeIs pkhs
 
 
-makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
-makeSigs sigs [] = sigs
-makeSigs sigs (x ∷ asigs) = (makeSigs (insert x sigs) asigs)
+insertList : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
+insertList sigs [] = sigs
+insertList sigs (x ∷ asigs) = insertList (insert x sigs) asigs
 
 
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
@@ -183,14 +185,14 @@ finalSigLemma s1 s2 x (y ∷ z ∷ xs) pf = finalSigLemma s1 s2 x (z ∷ xs) pf
 
 prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
          -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
-         -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs sigs asigs'')
+         -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (insertList sigs asigs'')
          -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
          -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs asigs'')
          -> par ⊢ s ~[ makeIs asigs'' ]~* s'
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
   context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
-  record { label = .(Collecting v pkh d (makeSigs sigs [])) ;
+  record { label = .(Collecting v pkh d (insertList sigs [])) ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
   tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs [])) } }
@@ -200,7 +202,7 @@ prop {v} {pkh} {d} {sigs}
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
   context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
-  record { label = .(Collecting v pkh d (makeSigs sigs (x ∷ s3))) ;
+  record { label = .(Collecting v pkh d (insertList sigs (x ∷ s3))) ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
   tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (x ∷ s3))) } }
@@ -208,7 +210,7 @@ prop {v} {pkh} {d} {sigs}
   = cons ((TAdd (∈lemma s2 s3 x) refl refl refl refl))
     (prop (record { label = Collecting v pkh d (insert x sigs) ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }})
-    (record { label = (Collecting v pkh d (makeSigs sigs (x ∷ s3))) ;
+    (record { label = (Collecting v pkh d (insertList sigs (x ∷ s3))) ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
     tsig = (finalSig (record { label = Collecting v pkh d sigs ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } })
@@ -223,7 +225,7 @@ prop {v} {pkh} {d} {sigs}
 
 
 prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (makeSigs sigs (authSigs par))
+        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (insertList sigs (authSigs par))
         -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
         -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs (authSigs par))
         -> par ⊢ s ~[ (makeIs (authSigs par)) ]~* s'
@@ -242,22 +244,22 @@ axiom2 = {!!}
 
 data Unique : List PubKeyHash → Set where
   root : Unique []
-  _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
+  _::_ : {x : PubKeyHash} {l : List PubKeyHash} -> x ∉ l -> Unique l -> Unique (x ∷ l)
 
-_⊆_ : List a → List a → Set
-l₁ ⊆ l₂ = All (_∈ l₂) l₁
+_⊆_ : List a -> List a -> Set
+l1 ⊆ l2 = All (_∈ l2) l1
 
-⊆-cons : (x : a){l₁ l₂ : List a} → l₁ ⊆  l₂ → l₁ ⊆ (x ∷ l₂)
+⊆-cons : (x : a){l1 l2 : List a} -> l1 ⊆ l2 -> l1 ⊆ (x ∷ l2)
 ⊆-cons x [] = []
 ⊆-cons x (px ∷ p) = there px ∷ ⊆-cons x p
 
-⊆-refl : (l : List a) → l ⊆ l
+⊆-refl : (l : List a) -> l ⊆ l
 ⊆-refl [] = []
 ⊆-refl (x ∷ l) = here refl ∷  ⊆-cons x (⊆-refl l)
 
-⊆-trans : {l₁ l₂ l₃ : List a} → l₁ ⊆ l₂ → l₂ ⊆ l₃ → l₁ ⊆ l₃
-⊆-trans [] p₂ = []
-⊆-trans (px ∷ p₁) p₂ = All.lookup p₂ px ∷ ⊆-trans  p₁ p₂
+⊆-trans : {l1 l2 l3 : List a} -> l1 ⊆ l2 -> l2 ⊆ l3 -> l1 ⊆ l3
+⊆-trans [] p2 = []
+⊆-trans (px ∷ p1) p2 = All.lookup p2 px ∷ ⊆-trans  p1 p2
 
 ≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
 ≡ᵇto≡ {zero} {zero} pf = refl
@@ -277,117 +279,132 @@ l₁ ⊆ l₂ = All (_∈ l₂) l₁
 ==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
 ==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
 
-insert-lem₁ : (x : PubKeyHash)(l : List PubKeyHash) → l ⊆ insert x l
-insert-lem₁ x [] = []
-insert-lem₁ x (y ∷ l) with x == y in eq
-... | false = (here refl) ∷ ⊆-cons y (insert-lem₁ x l) 
-... | true rewrite (==ito≡ x y eq) = (here refl) ∷ (⊆-cons y (⊆-refl l))
 
-
-insert-lem₂ : (x : PubKeyHash)(l : List PubKeyHash) → x ∈ insert x l
-insert-lem₂ x [] = here refl
-insert-lem₂ x (y ∷ l) with x == y in eq
-... | false = there (insert-lem₂ x l) 
+insert-lem1 : (x : PubKeyHash)(l : List PubKeyHash) -> x ∈ insert x l
+insert-lem1 x [] = here refl
+insert-lem1 x (y ∷ l) with x == y in eq
+... | false = there (insert-lem1 x l) 
 ... | true = here refl
 
+insert-lem2 : (x y : PubKeyHash)(l : List PubKeyHash) -> x ∈ l -> x ∈ insert y l
+insert-lem2 x y [] pf = there pf
+insert-lem2 x y (z ∷ l) (here px) with y == z in eq
+...| false rewrite px = here refl
+...| true rewrite ==ito≡ y z eq | px = here refl
+insert-lem2 x y (z ∷ l) (there pf) with y == z in eq
+...| false = there (insert-lem2 x y l pf) 
+...| true rewrite ==ito≡ y z eq = there pf
 
-makeSigs-lem₁ : (l₁ l₂ : List PubKeyHash) → l₁ ⊆ makeSigs l₁ l₂
-makeSigs-lem₁ l₁ [] = ⊆-refl l₁
-makeSigs-lem₁ l₁ (x₁ ∷ l₂) 
-  = {!!} --⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
 
-{-
-insertList : {{eqA : Eq a}} -> List a -> List a -> List a
-insertList l1 [] = l1
-insertList l1 (x ∷ l2) = insert x (insertList l1 l2)
-
-makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
-makeSigs sigs [] = sigs
-makeSigs sigs (x ∷ asigs) = (makeSigs (insert x sigs) asigs)
-
-insertList-lem₁ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₁ ⊆ insertList l₁ l₂
-insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ [] = ⊆-refl l₁
-insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
-  = ⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
-
-insertList-lem₂ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₂ ⊆ insertList l₁ l₂
-insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ [] = []
-insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
-  = insert-lem₂ x₁ (insertList l₁ l₂) ∷ ⊆-trans (insertList-lem₂ l₁ l₂) (insert-lem₁  x₁ (insertList l₁ l₂))
-
-del : ∀{x} (l : List a) → x ∈ l → List a
+del : ∀{x} (l : List a) -> x ∈ l -> List a
 del (_ ∷ xs) (here px) = xs
 del (x ∷ xs) (there p) = x ∷ del xs p
 
-length-del : ∀{x}{l : List a} (p : x ∈ l) → suc (length (del l p)) ≡ length l
+length-del : ∀{x}{l : List a} (p : x ∈ l) -> suc (length (del l p)) ≡ length l
 length-del (here px) = refl
 length-del (there p) = cong suc (length-del p) 
 
-∈-del : ∀{x y}{l₂ : List a} (p : x ∈ l₂) → x ≢ y →  y ∈  l₂ → y ∈ del l₂ p
+∈-del : ∀{x y}{l : List a} (p : x ∈ l) -> x ≢ y -> y ∈ l -> y ∈ del l p
 ∈-del (here refl) e (here refl) = ⊥-elim (e refl)
 ∈-del (there p)   e (here refl) = here refl
 ∈-del (here refl) e (there w) = w
 ∈-del (there p)   e (there w) = there (∈-del p e w) 
 
-subset-del : ∀{x}{l₁ l₂ : List a} (p : x ∈ l₂) → (x ∉ l₁) → l₁ ⊆ l₂ → l₁ ⊆ del l₂ p
+subset-del : ∀{x}{l1 l2 : List a} (p : x ∈ l2) -> (x ∉ l1) -> l1 ⊆ l2 -> l1 ⊆ del l2 p
 subset-del p n [] = []
-subset-del p n (px ∷ su) = ∈-del p (λ e → n (here e)) px ∷ subset-del p (λ p → n (there p)) su
+subset-del p n (px ∷ su) = ∈-del p (λ e -> n (here e)) px ∷ subset-del p (λ p → n (there p)) su
 
-unique-lem : {{eqA : Eq a}}{l₁ l₂ : List a} → l₁ ⊆ l₂ → Unique l₁ → length l₂ ≥ length l₁
+unique-lem : {l1 l2 : List PubKeyHash} -> l1 ⊆ l2 -> Unique l1 -> length l2 ≥ length l1
 unique-lem [] root = z≤n
 unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
 
-uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
-uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
--}
+insertList-sublem : (l1 l2 : List PubKeyHash) (x : PubKeyHash) -> x ∈ l1 -> x ∈ insertList l1 l2
+insertList-sublem l1 [] x pf = pf
+insertList-sublem l1 (y ∷ l2) x pf = insertList-sublem (insert y l1) l2 x (insert-lem2 x y l1 pf)
 
-{-
+insertList-lem : (l1 l2 : List PubKeyHash) -> l2 ⊆ insertList l1 l2
+insertList-lem l1 [] = []
+insertList-lem l1 (x ∷ l2) = insertList-sublem (insert x l1) l2 x (insert-lem1 x l1) ∷ (insertList-lem (insert x l1) l2)
 
-
-data Unique : List PubKeyHash → Set where
-  [] : Unique []
-  _::_ : {x : PubKeyHash} {l : List PubKeyHash} → x ∉ l → Unique l → Unique (x ∷ l)
-
-
-
-postulate
-  uil' : ∀ (sigs sigs' : List PubKeyHash) (n : ℕ) (pf1 : Unique sigs) (pf2 : (length sigs ≥ n))
-                      -> (length (makeSigs' sigs' sigs) ≥ n)
-
-
---lists of EQ Stuff, not PubKeyHash (type variable with eq)
-
---prove it
---look at Fresh lists
---obvious property, if it doens't exists, it should be added to the Library
+uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
+uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
 
 
 
-prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-          -> Valid s
-          -> label s ≡ Collecting v pkh d sigs
-          -> label s' ≡ Holding
-          -> outVal s' ≡ v
-          -> outAdr s' ≡ pkh
-          -> value s ≡ value s' + v
-          -> Unique (authSigs par)
-          -> length (authSigs par) ≥ nr par
-          --collapse into Valid par
-          -> par ⊢ s ~[ (Pay ∷ (makeIs' (authSigs par))) ]~* s'
-prop2 {d = d} {sigs = sigs} (record { label = .(Collecting outVal₂ outAdr₂ d sigs) ; value = .(value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  record { label = .Holding ; value = value₁ ; outVal = outVal₂ ; outAdr = outAdr₂ ; now = now₂ ; tsig = tsig₂ } par (Col refl p2 p3) refl refl refl refl refl p4 p5
-  = snoc (prop1 (record { label = (Collecting outVal₂ outAdr₂ d sigs) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (record { label = (Collecting outVal₂ outAdr₂ d (makeSigs' sigs (authSigs par))) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
-  tsig = nextSig (record { label = (Collecting outVal₂ outAdr₂ d sigs) ; value = (value₁ + outVal₂) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ })
-  (makeIs' (authSigs par)) }) par refl refl refl refl refl refl refl) (TPay refl (uil' (authSigs par) sigs (nr par) p4 p5) refl refl refl refl)
+data ValidP : Params -> Set where
+
+  Always : ∀ {par}
+    -> Unique (authSigs par)
+    -> length (authSigs par) ≥ nr par
+    ------------------
+    -> ValidP par
 
 
 lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is  ]~* s'
                    -> par ⊢ s' ~[ is' ]~* s''
-                   -> par ⊢ s  ~[ is' ++ is ]~* s''
-lemmaMultiStep par s s' .s' is [] p1 root = p1
-lemmaMultiStep par s s' s'' is (x ∷ is') p1 (snoc {s' = s'''} p2 p3) = snoc (lemmaMultiStep par s s' s''' is is' p1 p2) p3
+                   -> par ⊢ s  ~[ is ++ is' ]~* s''
+lemmaMultiStep par s .s s'' [] is' root p2 = p2
+lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
+
+prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
+          -> ValidS s
+          -> label s ≡ Collecting v pkh d sigs
+          -> label s' ≡ Holding
+          -> outVal (context s') ≡ v
+          -> outAdr (context s') ≡ pkh
+          -> value (context s) ≡ value (context s') + v
+          -> ValidP par
+          -> par ⊢ s ~[ ((makeIs (authSigs par)) ++ [ Pay ]) ]~* s'
+prop2 {d = d} {sigs = sigs}
+  record { label = .(Collecting (outVal context₁) (outAdr context₁) d sigs) ;
+  context = record { value = .(addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }
+  record { label = .Holding ; context = context₁ } par (Col p1 p2 p3) refl refl refl refl refl (Always p4 p5)
+  = lemmaMultiStep par (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
+    context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } })
+    (record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList sigs (authSigs par)) ;
+    context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
+    tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
+    context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (authSigs par)) } })
+    record { label = Holding ; context = context₁ } (makeIs (authSigs par)) [ Pay ]
+    (prop1 (record
+             { label = Collecting (outVal context₁) (outAdr context₁) d sigs
+             ; context =
+                 record
+                 { value = addNat (value context₁) (outVal context₁)
+                 ; outVal = outVal₁
+                 ; outAdr = outAdr₁
+                 ; now = now₁
+                 ; tsig = tsig₁
+                 }
+             }) (record
+                  { label =
+                      Collecting (outVal context₁) (outAdr context₁) d
+                      (insertList sigs (authSigs par))
+                  ; context =
+                      record
+                      { value = addNat (value context₁) (outVal context₁)
+                      ; outVal = outVal₁
+                      ; outAdr = outAdr₁
+                      ; now = now₁
+                      ; tsig =
+                          finalSig
+                          (record
+                           { label = Collecting (outVal context₁) (outAdr context₁) d sigs
+                           ; context =
+                               record
+                               { value = addNat (value context₁) (outVal context₁)
+                               ; outVal = outVal₁
+                               ; outAdr = outAdr₁
+                               ; now = now₁
+                               ; tsig = tsig₁
+                               }
+                           })
+                          (makeIs (authSigs par))
+                      }
+                  }) par refl refl refl refl refl refl refl)
+    (cons (TPay refl (≤-trans p5 (uil sigs (authSigs par) p4)) refl refl refl refl) root)
+
 
 +0 : ∀ (v : Value) -> v ≡ v + zero
 +0 zero = refl
@@ -408,76 +425,44 @@ v≤v zero = z≤n
 v≤v (suc v) = s≤s (v≤v v)
 
 
-liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
-          -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
-          -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
-liquidity par record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } pkh d (Hol x) p1 p2 p3
-  = ⟨ (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig }) , ⟨ (makeIs' (authSigs par) ++ ((Propose value pkh d) ∷ [])) ,
-  lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
-  (snoc root (TPropose (v≤v value) p1 refl refl refl))
-  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  par (Col refl (v≤v value) p1) refl refl refl refl refl p2 p3) ⟩ ⟩
-liquidity par record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } _ _ (Col refl p2 p3) p4 p5 p6
-  = ⟨ record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig } , ⟨ makeIs' (authSigs par) ,
-  prop2 (record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig }) par (Col refl p2 p3)
-  refl refl refl refl (monusLemma value v p2) p5 p6 ⟩ ⟩ 
-
 liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
-          -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
-          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0) )
+          -> ValidS s -> ValidP par
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )
           
-liquidity' par record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } pkh d (Hol x) p1 p2 p3
-  = ⟨ (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig }) ,
-  ⟨ (Pay ∷ makeIs' (authSigs par)) ++ ((Propose value pkh d) ∷ []) ,
-  ⟨ lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
-  (snoc root (TPropose (v≤v value) p1 refl refl refl))
-  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  par (Col refl (v≤v value) p1) refl refl refl refl refl p2 p3) , refl ⟩ ⟩ ⟩
-  
-liquidity' par record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } _ _ (Col refl p2 p3) p4 p5 p6
-  = ⟨ ((record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })) ,
-  ⟨ ((Pay ∷ makeIs' (authSigs par)) ++ [ Propose value pkh d ]) ++ [ Cancel ] ,
-  ⟨ lemmaMultiStep par (record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = suc d ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  [ Cancel ] ((Pay ∷ makeIs' (authSigs par)) ++ [ Propose value pkh d ] ) (snoc root (TCancel (s≤s (v≤v d)) refl refl refl))
-  (lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = suc d ; tsig = tsig })
-  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
-  (snoc root (TPropose (v≤v value) p4 refl refl refl))
-  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
-  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
-  par (Col refl (v≤v value) p4) refl refl refl refl refl p5 p6)) , refl ⟩ ⟩ ⟩
+liquidity' record { authSigs = authSigs ; nr = nr }
+  record { label = label ; context = record { value = zero ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
+  pkh d (Hol p1) (Always p2 p3)
+  = ⟨ record { label = label ; context = record { value = zero ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig }}
+    , ⟨ [] , ⟨ root , refl ⟩ ⟩ ⟩
+liquidity' par
+  record { label = .Holding ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
+  pkh d (Hol refl) (Always p2 p3)
+  = ⟨ (record { label = Holding ; context = record { value = zero ; outVal = (suc value) ; outAdr = pkh ; now = now ; tsig = tsig } }) ,
+    ⟨ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
+    ⟨ cons (TPropose (s≤s (v≤v value)) (s≤s z≤n) refl refl refl)
+    (prop2 (record { label = Collecting (suc value) pkh d [] ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } })
+    (record { label = Holding ; context = record { value = zero ; outVal = suc value ; outAdr = pkh ; now = now ; tsig = tsig } })
+    par (Col refl (s≤s (v≤v value)) (s≤s z≤n)) refl refl refl refl refl (Always p2 p3)) , refl ⟩ ⟩ ⟩ 
+liquidity' record { authSigs = authSigs ; nr = nr }
+  record { label = label ; context = record { value = zero ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
+  pkh d (Col p1 p2 p3) (Always p4 p5)
+  = ⟨ record { label = label ; context = record { value = zero ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig }}
+    , ⟨ [] , ⟨ root , refl ⟩ ⟩ ⟩
+liquidity' par
+  record { label = (Collecting v' pkh' d' sigs') ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
+  pkh d (Col refl p2 p3) (Always p4 p5)
+  = ⟨ (record { label = Holding ; context = record { value = zero ; outVal = (suc value) ; outAdr = pkh ; now = now ; tsig = tsig } }) ,
+    ⟨ Cancel ∷ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
+    ⟨ cons (TCancel {s' =
+    record { label = Holding ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = suc d' ; tsig = tsig } }}
+    (s≤s (v≤v d')) refl refl refl)
+    (cons (TPropose (s≤s (v≤v value)) (s≤s z≤n) refl refl refl)
+    (prop2 (record { label = Collecting (suc value) pkh d [] ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = d + 1 ; tsig = tsig } })
+    (record { label = Holding ; context = record { value = zero ; outVal = suc value ; outAdr = pkh ; now = now ; tsig = tsig } })
+    par (Col refl (s≤s (v≤v value)) (s≤s z≤n)) refl refl refl refl refl (Always p4 p5))) , refl ⟩ ⟩ ⟩
 
 
 
-≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
-≡ᵇto≡ {zero} {zero} pf = refl
-≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
-
-≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
-≤ᵇto≤ {zero} {zero} pf = z≤n
-≤ᵇto≤ {zero} {suc b} pf = z≤n
-≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
---report this to Oresitis and James
-
-<ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
-<ᵇto< {zero} {suc b} pf = s≤s z≤n
-<ᵇto< {suc a} {suc b} pf = s≤s (<ᵇto< pf)
-
-==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
-==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
 
 
 3&&false : ∀ (a b c : Bool) -> (a && b && c && false) ≡ true -> ⊥
@@ -555,38 +540,38 @@ c1 a x y pf = ≡ᵇto≡ (get (x ≡ᵇ y) pf)
 c2 : ∀ (a : Bool) (x y : Deadline) -> (a && (x <ᵇ y)) ≡ true -> x < y
 c2 a x y pf = <ᵇto< (go a pf)
 
---get rid of state? Datum and ScriptContext
 
---s -i-> s'
-
---ctx ⊢ dat -i-> (dat' ≡ outpuDatum ctx)
-
---prove that label = outputLabel ctx ?
 --can we get a better solution where state = label (under our control) and stuff controlled by blockchain?
 validatorImpliesTransition : ∀ {oV oA t s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator par l i ctx ≡ true)
                            -> par ⊢
-                           record { label = l ; value = (inputVal ctx) ; outVal = oV ; outAdr = oA ; now = t ; tsig = s }
+                           record { label = l ; context = record { value = (inputVal ctx) ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } }
                            ~[ i ]~>
-                           record { label = (outputLabel ctx) ; value = (outputVal ctx) ; outVal = payAmt ctx
-                           ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx }
+                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } }
 
 validatorImpliesTransition par Holding (Propose v pkh d)
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) ( (v <ᵇ inputVal || inputVal ≡ᵇ v)) (0 <ᵇ v) pf)
-validatorImpliesTransition par Holding (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
-   rewrite p1 (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs == []) outputVal inputVal pf
-   | sym (p4 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (pkh == pkh') (d ≡ᵇ d') (sigs == []) v v' pf)
-   | p5 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (d ≡ᵇ d') (sigs == []) pkh pkh' pf
-   | p6 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (sigs == []) d d' pf
-   | p7 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') sigs [] pf
-   = TPropose (p2 (outputVal ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs == []) v inputVal pf)
-     (p3 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs == []) 0 v pf) refl refl refl
+validatorImpliesTransition par Holding (Propose v pkh d)
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs') ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  rewrite p1 (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) outputVal inputVal pf
+  | sym (p4 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (pkh == pkh') (d ≡ᵇ d') (sigs' == []) v v' pf)
+  | p5 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (d ≡ᵇ d') (sigs' == []) pkh pkh' pf
+  | p6 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (sigs' == []) d d' pf
+  | p7 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') sigs' [] pf
+  = TPropose (p2 (outputVal ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) v inputVal pf)
+    (p3 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) 0 v pf) refl refl refl
 validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) (sig == signature) (query sig (authSigs par)) pf)
 validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf 
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs') ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   rewrite p1 (sig == signature) (query sig (authSigs par)) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == (insert sig sigs)) outputVal inputVal pf
   | sym (p4 (outputVal ≡ᵇ inputVal) (sig == signature) (query sig (authSigs par)) (pkh == pkh') (d ≡ᵇ d') (sigs' == (insert sig sigs)) v v' pf)
   | p5 (outputVal ≡ᵇ inputVal) (sig == signature) (query sig (authSigs par)) (v ≡ᵇ v') (d ≡ᵇ d') (sigs' == (insert sig sigs)) pkh pkh' pf
@@ -595,20 +580,26 @@ validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
   = TAdd (a3 (outputVal ≡ᵇ inputVal) (sig == signature) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == (insert sig sigs)) sig (authSigs par) pf)
   (sym (a2 (outputVal ≡ᵇ inputVal) (query sig (authSigs par)) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == (insert sig sigs)) sig signature pf)) refl refl refl
 validatorImpliesTransition par (Collecting v pkh d sigs) Pay
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   = TPay (y4 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (pkh == payTo) (v ≡ᵇ payAmt) inputVal (outputVal + v) pf)
-  (y1 (eqInteger pkh payTo) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) (nr par) sigs pf) refl refl
-  (sym (y3 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (pkh == payTo) (inputVal ≡ᵇ outputVal + v) v payAmt pf))
-  (sym (y2 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) pkh payTo pf))
+    (y1 (eqInteger pkh payTo) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) (nr par) sigs pf) refl refl
+    (sym (y3 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (pkh == payTo) (inputVal ≡ᵇ outputVal + v) v payAmt pf))
+    (sym (y2 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) pkh payTo pf))
 validatorImpliesTransition par (Collecting v pkh d sigs) Pay
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x x₁ x₂ x₃) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs') ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   = ⊥-elim (&&false ((nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par)) pf) 
 validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
   = TCancel (c2 (outputVal ≡ᵇ inputVal) d time pf) refl refl (sym (c1 (d <ᵇ time) outputVal inputVal pf))
 validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x x₁ x₂ x₃) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
-  = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf)
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting v' pkh' d' sigs') ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } pf
+  = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf) 
+
+
 
 ≡to≡ᵇ : ∀ {a b} -> a ≡ b -> (a ≡ᵇ b) ≡ true
 ≡to≡ᵇ {zero} refl = refl
@@ -653,32 +644,43 @@ lengthToLengthNat zero [] z≤n = refl
 lengthToLengthNat zero (x ∷ l) z≤n = refl
 lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
 
+
+
 transitionImpliesValidator : ∀ {oV oA t s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : par ⊢
-                           (record { label = l ; value = (inputVal ctx) ; outVal = oV ; outAdr = oA ; now = t ; tsig = s })
+                           record { label = l ; context = record { value = (inputVal ctx) ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } }
                            ~[ i ]~>
-                           (record { label = (outputLabel ctx) ; value = (outputVal ctx) ; outVal = payAmt ctx
-                           ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx }) )
+                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } })
                            -> agdaValidator par l i ctx ≡ true
-                             
 transitionImpliesValidator par Holding (Propose v pkh d)
-  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = .(Collecting _ _ _ []) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature }
-  (TPropose p1 p2 p3 refl p5) 
-  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl 
+  record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting _ _ _ []) ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } (TPropose p1 p2 refl refl p5)
+  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl
 transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ; outputVal = inputVal ; outputLabel = .(Collecting v pkh d (insert sig sigs)) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = .sig }
-  (TAdd p1 refl refl refl refl)
+  record { inputVal = inputVal ; outputVal = .(inputVal) ; outputLabel = (Collecting .v .pkh .d .(insert sig sigs)) ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = .sig } (TAdd p1 refl refl refl refl)
   rewrite v=v inputVal | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
+transitionImpliesValidator par (Collecting v pkh d sigs) Pay
+  record { inputVal = .(addNat outputVal v) ; outputVal = outputVal ; outputLabel = Holding ;
+  time = time ; payTo = .pkh ; payAmt = .v ; signature = signature } (TPay refl p2 refl refl refl refl)
+  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p2 | v=v (outputVal + v) = refl
+transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
+  record { inputVal = inputVal ; outputVal = .(inputVal) ; outputLabel = Holding ;
+  time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } (TCancel p1 refl refl refl)
+  rewrite v=v inputVal | <to<ᵇ p1 = refl
+
+{-                             
+
 transitionImpliesValidator par (Collecting v pkh d sigs) .Pay
   record { inputVal = .(outputVal + v) ; outputVal = outputVal ; outputLabel = .Holding ; time = time ; payTo = .pkh ; payAmt = .v ; signature = signature }
   (TPay refl p2 refl refl refl refl)
-  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p2 | v=v (outputVal + v) = refl
+ 
 transitionImpliesValidator par (Collecting v pkh d sigs) .Cancel
   record { inputVal = inputVal ; outputVal = inputVal ; outputLabel = .Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature }
   (TCancel p1 refl refl refl)
-  rewrite v=v inputVal | <to<ᵇ p1 = refl
-
-
+  
 
 -}
 
@@ -778,9 +780,132 @@ prop1' {v} {pkh} {d} {sigs}
   (record { authSigs = (s1 ++ x ∷ s2) ; nr = nr₁ }) (s1 ++ x ∷ s2) (s1 ++ [ x ]) s2 refl (appendLemma x s1 s2) refl refl refl refl refl refl refl)
   (TAdd (∈lemma s1 s2 x) refl refl refl refl) -}
 
+
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
+          -> ∃[ s' ] ∃[ is ] (par ⊢ s ~[ Pay ∷ is ]~* s')
+liquidity par record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } pkh d (Hol x) p1 p2 p3
+  = ⟨ (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig }) , ⟨ (makeIs' (authSigs par) ++ ((Propose value pkh d) ∷ [])) ,
+  lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+  (snoc root (TPropose (v≤v value) p1 refl refl refl))
+  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  par (Col refl (v≤v value) p1) refl refl refl refl refl p2 p3) ⟩ ⟩
+liquidity par record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } _ _ (Col refl p2 p3) p4 p5 p6
+  = ⟨ record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig } , ⟨ makeIs' (authSigs par) ,
+  prop2 (record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = (value ∸ v) ; outVal = v ; outAdr = pkh ; now = now ; tsig = tsig }) par (Col refl p2 p3)
+  refl refl refl refl (monusLemma value v p2) p5 p6 ⟩ ⟩ 
+
+liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> Valid s -> value s > 0 -> Unique (authSigs par) -> length (authSigs par) ≥ nr par
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0) )
+          
+liquidity' par record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } pkh d (Hol x) p1 p2 p3
+  = ⟨ (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig }) ,
+  ⟨ (Pay ∷ makeIs' (authSigs par)) ++ ((Propose value pkh d) ∷ []) ,
+  ⟨ lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+  (snoc root (TPropose (v≤v value) p1 refl refl refl))
+  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  par (Col refl (v≤v value) p1) refl refl refl refl refl p2 p3) , refl ⟩ ⟩ ⟩
+  
+liquidity' par record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } _ _ (Col refl p2 p3) p4 p5 p6
+  = ⟨ ((record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })) ,
+  ⟨ ((Pay ∷ makeIs' (authSigs par)) ++ [ Propose value pkh d ]) ++ [ Cancel ] ,
+  ⟨ lemmaMultiStep par (record { label = (Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = suc d ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  [ Cancel ] ((Pay ∷ makeIs' (authSigs par)) ++ [ Propose value pkh d ] ) (snoc root (TCancel (s≤s (v≤v d)) refl refl refl))
+  (lemmaMultiStep par (record { label = Holding ; value = value ; outVal = outVal ; outAdr = outAdr ; now = suc d ; tsig = tsig })
+  (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  (((Propose value pkh d) ∷ [])) ( Pay ∷ makeIs' (authSigs par))
+  (snoc root (TPropose (v≤v value) p4 refl refl refl))
+  (prop2 (record { label = (Collecting value pkh d []) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig })
+  (record { label = Holding ; value = 0 ; outVal = value ; outAdr = pkh ; now = now ; tsig = tsig })
+  par (Col refl (v≤v value) p4) refl refl refl refl refl p5 p6)) , refl ⟩ ⟩ ⟩
+
 -}
 
 
 
 
 
+{-
+lem : (l1 l2 : List PubKeyHash) (x : PubKeyHash) -> x ∈ l1 -> x ∈ makeSigs l1 l2
+lem l1 [] x pf = pf
+lem l1 (y ∷ l2) x pf = lem (insert y l1) l2 x (insert-lem3 x y l1 pf)
+
+sublem₁ : (l₁ l₂ : List PubKeyHash)(x : PubKeyHash) → l₁ ⊆ makeSigs l₁ l₂
+  → l₁ ⊆ makeSigs (insert x l₁) l₂
+sublem₁ [] l2 x [] = []
+sublem₁ (y ∷ l1) l2 x (px ∷ pf) with x == y in eq
+...| false = lem (y ∷ insert x l1) l2 y (here refl) ∷ {!!}
+...| true rewrite ==ito≡ x y eq = px ∷ pf
+
+makeSigs-lem₁ : (l₁ l₂ : List PubKeyHash) → l₁ ⊆ makeSigs l₁ l₂
+makeSigs-lem₁ l₁ [] = ⊆-refl l₁
+makeSigs-lem₁ l₁ (x₁ ∷ l₂) = {! !} 
+--with makeSigs-lem₁ l₁ l₂ ...| IH = {!!}
+
+--⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
+
+
+
+
+makeSigs-lem₂ : (l₁ l₂ : List PubKeyHash) → l₂ ⊆ makeSigs l₁ l₂
+makeSigs-lem₂ l₁ [] = []
+makeSigs-lem₂ l₁ (x₁ ∷ l₂) = {!!} ∷ {!!}
+--insert-lem₂ x₁ (insertList l₁ l₂) ∷ ⊆-trans (insertList-lem₂ l₁ l₂) (insert-lem₁  x₁ (insertList l₁ l₂))
+-}
+{-
+insertList : {{eqA : Eq a}} -> List a -> List a -> List a
+insertList l1 [] = l1
+insertList l1 (x ∷ l2) = insert x (insertList l1 l2)
+
+makeSigs : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
+makeSigs sigs [] = sigs
+makeSigs sigs (x ∷ asigs) = (makeSigs (insert x sigs) asigs)
+
+insertList-lem₁ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₁ ⊆ insertList l₁ l₂
+insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ [] = ⊆-refl l₁
+insertList-lem₁ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
+  = ⊆-trans (insertList-lem₁ l₁ l₂) (insert-lem₁ x₁ (insertList l₁ l₂))
+
+insertList-lem₂ : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₂ ⊆ insertList l₁ l₂
+insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ [] = []
+insertList-lem₂ ⦃ eqA = eqA ⦄ l₁ (x₁ ∷ l₂) 
+  = insert-lem₂ x₁ (insertList l₁ l₂) ∷ ⊆-trans (insertList-lem₂ l₁ l₂) (insert-lem₁  x₁ (insertList l₁ l₂))
+
+del : ∀{x} (l : List a) → x ∈ l → List a
+del (_ ∷ xs) (here px) = xs
+del (x ∷ xs) (there p) = x ∷ del xs p
+
+length-del : ∀{x}{l : List a} (p : x ∈ l) → suc (length (del l p)) ≡ length l
+length-del (here px) = refl
+length-del (there p) = cong suc (length-del p) 
+
+∈-del : ∀{x y}{l₂ : List a} (p : x ∈ l₂) → x ≢ y →  y ∈  l₂ → y ∈ del l₂ p
+∈-del (here refl) e (here refl) = ⊥-elim (e refl)
+∈-del (there p)   e (here refl) = here refl
+∈-del (here refl) e (there w) = w
+∈-del (there p)   e (there w) = there (∈-del p e w) 
+
+subset-del : ∀{x}{l₁ l₂ : List a} (p : x ∈ l₂) → (x ∉ l₁) → l₁ ⊆ l₂ → l₁ ⊆ del l₂ p
+subset-del p n [] = []
+subset-del p n (px ∷ su) = ∈-del p (λ e → n (here e)) px ∷ subset-del p (λ p → n (there p)) su
+
+unique-lem : {{eqA : Eq a}}{l₁ l₂ : List a} → l₁ ⊆ l₂ → Unique l₁ → length l₂ ≥ length l₁
+unique-lem [] root = z≤n
+unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
+
+uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
+uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
+-}

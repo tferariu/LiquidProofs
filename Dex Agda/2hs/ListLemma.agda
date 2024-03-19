@@ -62,14 +62,10 @@ insert a (x ∷ l) =
 ⊆-trans [] p₂ = []
 ⊆-trans (px ∷ p₁) p₂ = All.lookup p₂ px ∷  ⊆-trans  p₁ p₂
 
-insert-lem : {{eqA : Eq a}} → (x : a)(l : List a) → l ⊆ insert x l
-insert-lem x [] = []
-insert-lem x (x₁ ∷ l) = {!!}
-
 insert-lem₁ : {{eqA : Eq a}} → (x : a)(l : List a) → l ⊆ insert x l
 insert-lem₁ x [] = []
 insert-lem₁ x (x₁ ∷ l) with x == x₁ in eq
-... | false = {!!} --here refl ∷ ⊆-cons x₁ (insert-lem₁ x l)
+... | false = here refl ∷ ⊆-cons x₁ (insert-lem₁ x l)
 ... | true with (axiom _ _ eq) 
 ... | refl = here refl ∷ ⊆-cons x (⊆-refl l)
 
@@ -121,3 +117,29 @@ uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (inser
 uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
 
 
+
+----------------------------------------------------------------------------
+
+insertList' : {{eqA : Eq a}} -> List a -> List a -> List a
+insertList' l1 [] = l1
+insertList' l1 (x ∷ l2) = insertList' (insert x l1) l2
+
+
+insert-lem₃ : {{eqA : Eq a}} → (x y : a)(l : List a) → x ∈ l → x ∈ insert y l
+insert-lem₃ {{ eqA = eqA }} x y (z ∷ l) (here px) with y == z in eq
+...| false rewrite px = here refl
+...| true rewrite axiom y z eq | px = here refl
+insert-lem₃ {{ eqA = eqA }} x y (z ∷ l) (there pf) with y == z in eq
+...| false = there (insert-lem₃ x y l pf)
+...| true = there pf
+
+insertList-sublem : {{eqA : Eq a}} → (l1 l2 : List a) (x : a) -> x ∈ l1 -> x ∈ insertList' l1 l2
+insertList-sublem {{eqA = eqA}} l1 [] x pf = pf
+insertList-sublem {{eqA = eqA}} l1 (y ∷ l2) x pf = insertList-sublem (insert y l1) l2 x (insert-lem₃ x y l1 pf)
+
+insertList-lem₂' : {{eqA : Eq a}} → (l₁ l₂ : List a) → l₂ ⊆ insertList' l₁ l₂
+insertList-lem₂' {{ eqA = eqA }} l₁ [] = []
+insertList-lem₂' {{ eqA = eqA }} l₁ (x ∷ l₂) = insertList-sublem (insert x l₁) l₂ x (insert-lem₂ x l₁) ∷ (insertList-lem₂' ((insert x l₁)) l₂)
+
+uil' :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (insertList' l1 l2) ≥ length l2)
+uil' l1 l2 pf = unique-lem (insertList-lem₂' l1 l2) pf
