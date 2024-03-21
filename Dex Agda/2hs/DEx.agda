@@ -2,6 +2,8 @@ module DEx where
 
 open import Haskell.Prelude
 
+variable
+  k v : Set
 
 Placeholder = String
 POSIXTimeRange = Placeholder
@@ -12,7 +14,9 @@ CurrencySymbol = Integer
 TokenName = Integer
 
 PubKeyHash = Integer --no longer string because of equality issues
-Value = List (CurrencySymbol × (List TokenName × Integer)) 
+
+
+Value = List (CurrencySymbol × (List (TokenName × Integer))) 
 
 
 AssetClass = CurrencySymbol × TokenName
@@ -40,15 +44,56 @@ record State : Set where
     cmap1 : List ((Rational × PubKeyHash) × Integer)
     cmap2 : List ((Rational × PubKeyHash) × Integer)
 open State public
-
+{-# COMPILE AGDA2HS State #-}
 
 eqRational : Rational -> Rational -> Bool
 eqRational b c = (num b == num c) &&
                  (den b == den c) 
 
+
+ltRational : Rational -> Rational -> Bool
+ltRational b c = num b * den c < num c * den b
+
+lookup' : {{Eq k}} -> k -> List (k × v) -> Maybe v
+lookup' x [] = Nothing
+lookup' x ( ( x' , y ) ∷ xs ) = if (x == x')
+  then Just y
+  else lookup' x xs
+
+insert' : {{Ord k}} -> k -> Integer -> List (k × Integer) -> List (k × Integer)
+insert' key val [] = ( key , val ) ∷ []
+insert' key val ( ( k , v ) ∷ xs ) = if (key < k)
+  then ( key , val ) ∷ ( ( k , v ) ∷ xs )
+  else if (key == k)
+       then (key , (v + val)) ∷ xs
+       else (k , v) ∷ (insert' key val xs)
+
+reduce' : {{Ord k}} -> k -> Integer -> List (k × Integer) -> List (k × Integer)
+reduce' key val [] = ( key , val ) ∷ []
+reduce' key val ( ( k , v ) ∷ xs ) = if (key < k)
+  then ( key , val ) ∷ ( ( k , v ) ∷ xs )
+  else if (key == k)
+       then (key , (v - val)) ∷ xs
+       else (k , v) ∷ (reduce' key val xs)
+
+delete' : {{Eq k}} -> k -> List (k × v) -> List (k × v)
+delete' x [] = []
+delete' x ( ( x' , y ) ∷ xs ) = if (x == x')
+  then xs
+  else delete' x xs
+
+
+
+singleton : CurrencySymbol -> TokenName -> Integer -> Value
+singleton cs tn v = (cs , ( (tn , v)  ∷ [])) ∷ []
+
 instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
+
+  iOrdRational : Ord Rational
+  iOrdRational = ordFromLessThan ltRational
+
 
 eqState : State -> State -> Bool
 eqState b c = (c1 b     == c1 c) &&
@@ -61,7 +106,10 @@ instance
   iEqState ._==_ = eqState
 
 
-{-# COMPILE AGDA2HS State #-}
+
+
+
+
 
 record ScriptContext : Set where
     field
@@ -79,9 +127,9 @@ checkSigned sig ctx = sig == signature ctx
 
 
 data Input : Set where
-  Offer   : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> Input
+  Offer   : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> Input
   Request : PubKeyHash -> CurrencySymbol -> TokenName -> List ((Rational × PubKeyHash) × Integer) -> Input
-  Cancel  : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> Input
+  Cancel  : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> Input
 
 {-# COMPILE AGDA2HS Input #-}
 
@@ -94,20 +142,30 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
-checkOffer : PubKeyHash -> Int -> CurrencySymbol -> TokenName -> Rational -> State -> Bool
-checkOffer a b c d e f = True
+
+
+checkOffer : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
+checkOffer pkh val cs tn r st ctx
+  = if ( cs , tn ) == c1 st
+       then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ;
+            cmap1 = insert' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
+       else if ( cs , tn ) == c2 st
+            then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
+            cmap2 = insert' (r , pkh) val (cmap2 st) }
+            else False
 
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0 && checkOffer pkh v cs tn r dat --WRONG NEEDS FIXING 
+  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0
+                           && checkOffer pkh v cs tn r dat ctx
+                           && oldValue ctx <> singleton cs tn v == newValue ctx
 
-{-
-(Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs ) -}
 
-  (Request pkh cs tn map) -> True
-  (Cancel pkh v cs tn r) -> True
+  (Request pkh cs tn map) -> True --finish this and below
+  (Cancel pkh v cs tn r) -> checkSigned pkh ctx && True
+                            && oldValue ctx == newValue ctx <> singleton cs tn v
 {-
 query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
@@ -181,5 +239,26 @@ agdaValidator param dat red ctx = case dat of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
+
+-}
+
+
+{-
+appendSubValue : List (TokenName × Integer) -> List (TokenName × Integer) -> List (TokenName × Integer)
+appendSubValue [] l = l
+appendSubValue ((x , y) ∷ zs) l = insert' x y (appendSubValue zs l)
+
+insertSubValue : CurrencySymbol -> List (TokenName × Integer) -> Value -> Value
+insertSubValue key val [] =  ( key , val ) ∷ []
+insertSubValue key val ( ( k , v ) ∷ xs ) = if (key == k)
+       then (key , (appendSubValue v val)) ∷ xs
+       else (k , v) ∷ (insertSubValue key val xs)
+
+appendValue : Value -> Value -> Value
+appendValue [] v = v
+appendValue ((x , y) ∷ zs) v = insertSubValue x y (appendValue zs v)
+
+--  iSemigroupValue : Semigroup Value
+--  iSemigroupValue ._<>_ = appendValue
 
 -}

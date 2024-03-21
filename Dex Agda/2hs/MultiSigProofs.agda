@@ -17,7 +17,6 @@ open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
 open import Data.Product
---open import Data.Maybe
 
 open import Haskell.Prim hiding (⊥ ; All)
 open import Haskell.Prim.Integer
@@ -40,7 +39,7 @@ open Context
 
 record State : Set where
   field
-    label         : Label --maybe just call it Datum 
+    label         : Label
     context       : Context
 open State
 
@@ -66,7 +65,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> tsig (context s') ≡ sig
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value (context s) ≡ value (context s') --value s ≡ value s' -- outValue s.Context ≡ outValue s'.Context
+    -> value (context s) ≡ value (context s')
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
 
@@ -84,7 +83,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> now (context s') > d
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Holding  
-    -> value (context s) ≡ value (context s') --value s ≡ value s' 
+    -> value (context s) ≡ value (context s')  
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
@@ -101,7 +100,6 @@ data ValidS : State -> Set where
     -> v > 0
     --------------------------------
     -> ValidS s
-
 
 
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
@@ -126,6 +124,9 @@ sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
   -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> v ≡ v'
 sameValue refl = refl
 
+
+
+
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
@@ -143,9 +144,6 @@ validStateMulti : ∀ {s s' : State} {is par}
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x 
 
---do it with normal lists, or define snocLists !!!!
-
-
 
 
 
@@ -157,6 +155,7 @@ makeIs (x ∷ pkhs) = Add x ∷ makeIs pkhs
 insertList : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insertList sigs [] = sigs
 insertList sigs (x ∷ asigs) = insertList (insert x sigs) asigs
+
 
 
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
@@ -198,7 +197,6 @@ prop {v} {pkh} {d} {sigs}
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs [])) } }
   record { authSigs = .(s2 ++ []) ; nr = nr₁ } .(s2 ++ []) s2 [] refl refl refl refl refl refl refl refl refl
   = root
-  
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
   context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
@@ -223,6 +221,7 @@ prop {v} {pkh} {d} {sigs}
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }}) x s3 refl ))
 
 
+--can we have a frame property?
 
 prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
         -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (insertList sigs (authSigs par))
@@ -232,14 +231,6 @@ prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
 prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7
 
 
-{- ??
-axiom : ∀ (t : Set) (x y : t) {{ eqT : Eq t }} -> (x == y) ≡ true -> x ≡ y
-axiom t x y = {!!}
-
-axiom2 : {{eqA : Eq a}} -> ∀ (x y : a) -> (x == y) ≡ false -> ¬ x ≡ y
-axiom2 = {!!}
-
--}
 
 
 data Unique : List PubKeyHash → Set where
@@ -269,7 +260,6 @@ l1 ⊆ l2 = All (_∈ l2) l1
 ≤ᵇto≤ {zero} {zero} pf = z≤n
 ≤ᵇto≤ {zero} {suc b} pf = z≤n
 ≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
---report this to Oresitis and James
 
 <ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
 <ᵇto< {zero} {suc b} pf = s≤s z≤n
@@ -670,6 +660,8 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
   record { inputVal = inputVal ; outputVal = .(inputVal) ; outputLabel = Holding ;
   time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature } (TCancel p1 refl refl refl)
   rewrite v=v inputVal | <to<ᵇ p1 = refl
+
+
 
 {-                             
 

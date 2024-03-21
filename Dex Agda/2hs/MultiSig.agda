@@ -20,24 +20,10 @@ data Label : Set where
 
 {-# COMPILE AGDA2HS Label #-}
 
-record TxInfo : Set where
-  field
-    txInfoInputs                : Placeholder --[V2.TxInInfo]
-    txInfoReferenceInputs       : Nat --[V2.TxInInfo]
-    txInfoOutputs               : Placeholder --[V2.TxOut]
-    txInfoValidRange            : POSIXTimeRange
-    txInfoSignatories           : Placeholder --[V2.PubKeyHash]
-    txInfoRedeemers             : Nat --Map ScriptPurpose V2.Redeemer
-    txInfoData                  : Nat --Map V2.DatumHash V2.Datum
-    txInfoId                    : Nat --V2.TxId
-    payTo  : PubKeyHash
-    payAmt : Value
-open TxInfo public
 
 record ScriptContext : Set where
     field
-  --      scriptContextTxInfo  : TxInfo
-  --      scriptContextPurpose : ScriptPurpose
+
         inputVal    : Nat
         outputVal   : Nat
         outputLabel : Label
