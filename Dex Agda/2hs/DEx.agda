@@ -156,15 +156,42 @@ checkOffer pkh val cs tn r st ctx
             cmap2 = insert' (r , pkh) val (cmap2 st) }
             else False
 
+checkValue : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
+checkValue pkh val cs tn r st ctx
+  = if ( cs , tn ) == c1 st
+       then (case (lookup' (r , pkh) (cmap1 st)) of λ where
+            Nothing -> False
+            (Just val') -> val' >= val)
+       else if ( cs , tn ) == c2 st
+            then (case (lookup' (r , pkh) (cmap1 st)) of λ where
+                 Nothing -> False
+                 (Just val') -> val' >= val)
+            else False
+
+checkCancel : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
+checkCancel pkh val cs tn r st ctx
+  = if ( cs , tn ) == c1 st
+       then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ;
+            cmap1 = reduce' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
+       else if ( cs , tn ) == c2 st
+            then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
+            cmap2 = reduce' (r , pkh) val (cmap2 st) }
+            else False
+
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0 && (numerator r * denominator r) > 0
+  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0
+                           && (numerator r * denominator r) > 0
                            && checkOffer pkh v cs tn r dat ctx
                            && oldValue ctx <> singleton cs tn v == newValue ctx
 
 
-  (Request pkh cs tn map) -> True --finish this and below
-  (Cancel pkh v cs tn r) -> checkSigned pkh ctx && True
+  (Request pkh cs tn map) -> True
+  (Cancel pkh v cs tn r) -> checkSigned pkh ctx
+                            && checkValue pkh v cs tn r dat ctx
+                            && checkCancel pkh v cs tn r dat ctx
                             && oldValue ctx == newValue ctx <> singleton cs tn v
 {-
 query : PubKeyHash -> List PubKeyHash -> Bool

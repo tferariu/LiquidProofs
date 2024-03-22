@@ -27,6 +27,7 @@ open import Haskell.Prim using (lengthNat)
 
 module MultiSigProofs where
 
+--can we have a frame property?
 
 record Context : Set where
   field
@@ -49,6 +50,7 @@ x ∈ xs = Any (x ≡_) xs
 _∉_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∉ xs = ¬ (x ∈ xs)
 
+--Transition Rules
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TPropose : ∀ {v pkh d s s' par} 
@@ -87,6 +89,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
+--Valid State
 data ValidS : State -> Set where
 
   Hol : ∀ {s}
@@ -101,7 +104,7 @@ data ValidS : State -> Set where
     --------------------------------
     -> ValidS s
 
-
+--Multi-Step Transition
 data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
   root : ∀ { s par }
@@ -115,6 +118,7 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 
 
+--State Validity sub-lemmas
 diffLabels : ∀ {v pkh d sigs} (l : Label) -> l ≡ Holding
            -> l ≡ Collecting v pkh d sigs -> ⊥ 
 diffLabels Holding p1 ()
@@ -124,9 +128,7 @@ sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
   -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> v ≡ v'
 sameValue refl = refl
 
-
-
-
+--State Validity Invariant
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
@@ -146,17 +148,14 @@ validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 
 
 
-
+--Prop1 sub-lemmas and helper functions
 makeIs : List PubKeyHash -> List Input
 makeIs [] = []
 makeIs (x ∷ pkhs) = Add x ∷ makeIs pkhs
 
-
 insertList : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insertList sigs [] = sigs
 insertList sigs (x ∷ asigs) = insertList (insert x sigs) asigs
-
-
 
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
 appendLemma x [] b = refl
@@ -165,8 +164,6 @@ appendLemma x (a ∷ as) b = cong (λ y → a ∷ y) (appendLemma x as b)
 ∈lemma : ∀ (xs ys : List PubKeyHash) (z : PubKeyHash) -> z ∈ (xs ++ z ∷ ys)
 ∈lemma [] ys z = here refl
 ∈lemma (x ∷ xs) ys z = there (∈lemma xs ys z)
-
-
 
 finalSig : ∀ (s : State) -> (ls : List Input) -> PubKeyHash
 finalSig s [] = tsig (context s)
@@ -182,11 +179,17 @@ finalSigLemma s1 s2 x [] pf = sym pf
 finalSigLemma s1 s2 x (y ∷ []) pf = refl
 finalSigLemma s1 s2 x (y ∷ z ∷ xs) pf = finalSigLemma s1 s2 x (z ∷ xs) pf
 
+--Generalized Prop1 (Can add signatures 1 by 1)
 prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
-         -> asigs ≡ (authSigs par) -> asigs ≡ (asigs' ++ asigs'')
-         -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (insertList sigs asigs'')
-         -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
-         -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs asigs'')
+         -> asigs ≡ (authSigs par)
+         -> asigs ≡ (asigs' ++ asigs'')
+         -> label s ≡ Collecting v pkh d sigs
+         -> label s' ≡ Collecting v pkh d (insertList sigs asigs'')
+         -> outVal (context s) ≡ outVal (context s')
+         -> outAdr (context s) ≡ outAdr (context s')
+         -> now (context s) ≡ now (context s')
+         -> value (context s) ≡ value (context s')
+         -> tsig (context s') ≡ finalSig s (makeIs asigs'')
          -> par ⊢ s ~[ makeIs asigs'' ]~* s'
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
@@ -221,21 +224,25 @@ prop {v} {pkh} {d} {sigs}
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }}) x s3 refl ))
 
 
---can we have a frame property?
 
+--Actual Prop1 (Can add all signatures 1 by 1)
 prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-        -> label s ≡ Collecting v pkh d sigs -> label s' ≡ Collecting v pkh d (insertList sigs (authSigs par))
-        -> outVal (context s) ≡ outVal (context s') -> outAdr (context s) ≡ outAdr (context s') -> now (context s) ≡ now (context s')
-        -> value (context s) ≡ value (context s') -> tsig (context s') ≡ finalSig s (makeIs (authSigs par))
+        -> label s ≡ Collecting v pkh d sigs
+        -> label s' ≡ Collecting v pkh d (insertList sigs (authSigs par))
+        -> outVal (context s) ≡ outVal (context s')
+        -> outAdr (context s) ≡ outAdr (context s')
+        -> now (context s) ≡ now (context s')
+        -> value (context s) ≡ value (context s')
+        -> tsig (context s') ≡ finalSig s (makeIs (authSigs par))
         -> par ⊢ s ~[ (makeIs (authSigs par)) ]~* s'
 prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7
 
 
 
-
-data Unique : List PubKeyHash → Set where
+--UniqueInsertLemma sub-lemmas
+data Unique {a : Set} : List a → Set where
   root : Unique []
-  _::_ : {x : PubKeyHash} {l : List PubKeyHash} -> x ∉ l -> Unique l -> Unique (x ∷ l)
+  _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
 
 _⊆_ : List a -> List a -> Set
 l1 ⊆ l2 = All (_∈ l2) l1
@@ -246,7 +253,7 @@ l1 ⊆ l2 = All (_∈ l2) l1
 
 ⊆-refl : (l : List a) -> l ⊆ l
 ⊆-refl [] = []
-⊆-refl (x ∷ l) = here refl ∷  ⊆-cons x (⊆-refl l)
+⊆-refl (x ∷ l) = here refl ∷ ⊆-cons x (⊆-refl l)
 
 ⊆-trans : {l1 l2 l3 : List a} -> l1 ⊆ l2 -> l2 ⊆ l3 -> l1 ⊆ l3
 ⊆-trans [] p2 = []
@@ -256,19 +263,9 @@ l1 ⊆ l2 = All (_∈ l2) l1
 ≡ᵇto≡ {zero} {zero} pf = refl
 ≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
 
-≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
-≤ᵇto≤ {zero} {zero} pf = z≤n
-≤ᵇto≤ {zero} {suc b} pf = z≤n
-≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
-
-<ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
-<ᵇto< {zero} {suc b} pf = s≤s z≤n
-<ᵇto< {suc a} {suc b} pf = s≤s (<ᵇto< pf)
-
 ==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
 ==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
 ==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
-
 
 insert-lem1 : (x : PubKeyHash)(l : List PubKeyHash) -> x ∈ insert x l
 insert-lem1 x [] = here refl
@@ -284,7 +281,6 @@ insert-lem2 x y (z ∷ l) (here px) with y == z in eq
 insert-lem2 x y (z ∷ l) (there pf) with y == z in eq
 ...| false = there (insert-lem2 x y l pf) 
 ...| true rewrite ==ito≡ y z eq = there pf
-
 
 del : ∀{x} (l : List a) -> x ∈ l -> List a
 del (_ ∷ xs) (here px) = xs
@@ -304,7 +300,7 @@ subset-del : ∀{x}{l1 l2 : List a} (p : x ∈ l2) -> (x ∉ l1) -> l1 ⊆ l2 ->
 subset-del p n [] = []
 subset-del p n (px ∷ su) = ∈-del p (λ e -> n (here e)) px ∷ subset-del p (λ p → n (there p)) su
 
-unique-lem : {l1 l2 : List PubKeyHash} -> l1 ⊆ l2 -> Unique l1 -> length l2 ≥ length l1
+unique-lem : {l1 l2 : List a} -> l1 ⊆ l2 -> Unique l1 -> length l2 ≥ length l1
 unique-lem [] root = z≤n
 unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
 
@@ -316,11 +312,12 @@ insertList-lem : (l1 l2 : List PubKeyHash) -> l2 ⊆ insertList l1 l2
 insertList-lem l1 [] = []
 insertList-lem l1 (x ∷ l2) = insertList-sublem (insert x l1) l2 x (insert-lem1 x l1) ∷ (insertList-lem (insert x l1) l2)
 
+--Unique Insert Lemma
 uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
 uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
 
 
-
+--Valid Parameters
 data ValidP : Params -> Set where
 
   Always : ∀ {par}
@@ -330,6 +327,7 @@ data ValidP : Params -> Set where
     -> ValidP par
 
 
+--Multi-Step lemma
 lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is  ]~* s'
                    -> par ⊢ s' ~[ is' ]~* s''
@@ -337,6 +335,8 @@ lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
 lemmaMultiStep par s .s s'' [] is' root p2 = p2
 lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
 
+
+--Prop2 (Can add signatures 1 by 1 and then pay)
 prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
           -> ValidS s
           -> label s ≡ Collecting v pkh d sigs
@@ -357,6 +357,8 @@ prop2 {d = d} {sigs = sigs}
     tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
     context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (authSigs par)) } })
     record { label = Holding ; context = context₁ } (makeIs (authSigs par)) [ Pay ]
+--generate some possible improvements and then go through them together
+--possible let/where bindings for readibility, or functions (especially on repeated patterns)
     (prop1 (record
              { label = Collecting (outVal context₁) (outAdr context₁) d sigs
              ; context =
@@ -396,25 +398,14 @@ prop2 {d = d} {sigs = sigs}
     (cons (TPay refl (≤-trans p5 (uil sigs (authSigs par) p4)) refl refl refl refl) root)
 
 
-+0 : ∀ (v : Value) -> v ≡ v + zero
-+0 zero = refl
-+0 (suc v) = cong suc (+0 v)
 
-+suc : ∀ (a b : Value) -> a + suc b ≡ suc (a + b)
-+suc zero b = refl
-+suc (suc a) b = cong suc (+suc a b)
-
-monusLemma : ∀ (a b : Value) -> a ≥ b -> a ≡ a ∸ b + b
-monusLemma zero zero z≤n = refl
-monusLemma zero (suc b) ()
-monusLemma (suc a) zero z≤n = cong suc (+0 a)
-monusLemma (suc a) (suc b) (s≤s pf) rewrite +suc (a ∸ b) b = cong suc (monusLemma a b pf)
 
 v≤v : ∀ (v : Value) -> v ≤ v
 v≤v zero = z≤n
 v≤v (suc v) = s≤s (v≤v v)
 
-
+--Liquidity (For any state that is valid and has valid parameters,
+--there exists another state and some inputs such that we can transition there and have no value left int he contract)
 liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
           -> ValidS s -> ValidP par
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )
@@ -443,8 +434,11 @@ liquidity' par
   pkh d (Col refl p2 p3) (Always p4 p5)
   = ⟨ (record { label = Holding ; context = record { value = zero ; outVal = (suc value) ; outAdr = pkh ; now = now ; tsig = tsig } }) ,
     ⟨ Cancel ∷ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
-    ⟨ cons (TCancel {s' =
-    record { label = Holding ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = suc d' ; tsig = tsig } }}
+    ⟨ cons (TCancel {s' = record {
+                                 label = Holding ;
+                                 context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = suc d' ; tsig = tsig } }}
+
+--why? write details
     (s≤s (v≤v d')) refl refl refl)
     (cons (TPropose (s≤s (v≤v value)) (s≤s z≤n) refl refl refl)
     (prop2 (record { label = Collecting (suc value) pkh d [] ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = d + 1 ; tsig = tsig } })
@@ -453,7 +447,15 @@ liquidity' par
 
 
 
+--sub-lemmas and helper functions for validator returning true implies transition
+≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
+≤ᵇto≤ {zero} {zero} pf = z≤n
+≤ᵇto≤ {zero} {suc b} pf = z≤n
+≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
 
+<ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
+<ᵇto< {zero} {suc b} pf = s≤s z≤n
+<ᵇto< {suc a} {suc b} pf = s≤s (<ᵇto< pf)
 
 3&&false : ∀ (a b c : Bool) -> (a && b && c && false) ≡ true -> ⊥
 3&&false true true true ()
@@ -530,8 +532,7 @@ c1 a x y pf = ≡ᵇto≡ (get (x ≡ᵇ y) pf)
 c2 : ∀ (a : Bool) (x y : Deadline) -> (a && (x <ᵇ y)) ≡ true -> x < y
 c2 a x y pf = <ᵇto< (go a pf)
 
-
---can we get a better solution where state = label (under our control) and stuff controlled by blockchain?
+--Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {oV oA t s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator par l i ctx ≡ true)
                            -> par ⊢
@@ -590,7 +591,7 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
   = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf) 
 
 
-
+--sub-lemmas for transition implies validation returns true
 ≡to≡ᵇ : ∀ {a b} -> a ≡ b -> (a ≡ᵇ b) ≡ true
 ≡to≡ᵇ {zero} refl = refl
 ≡to≡ᵇ {suc a} refl = ≡to≡ᵇ {a} refl
@@ -604,7 +605,6 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
 <to<ᵇ : ∀ {a b} -> a < b -> (a <ᵇ b) ≡ true
 <to<ᵇ {zero} (s≤s pf) = refl
 <to<ᵇ {suc a} (s≤s pf) = <to<ᵇ pf
-
 
 v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
 v=v zero = refl
@@ -623,7 +623,6 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ∈toQuery : ∀ {sig sigs} -> sig ∈ sigs -> (query sig sigs) ≡ true
 ∈toQuery {sig} (here refl) rewrite i=i sig = refl
 ∈toQuery (there pf) rewrite ∈toQuery pf = ||true
-
 
 l=l : ∀ (l : List PubKeyHash) -> (l == l) ≡ true
 l=l [] = refl
@@ -663,6 +662,7 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
 
 
 
+--Leftover code from previous attempts
 {-                             
 
 transitionImpliesValidator par (Collecting v pkh d sigs) .Pay

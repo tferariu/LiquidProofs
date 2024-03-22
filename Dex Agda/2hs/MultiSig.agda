@@ -8,7 +8,7 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-PubKeyHash = Integer --no longer string because of equality issues
+PubKeyHash = Integer
 Value = Nat
 Deadline = Nat
 
@@ -23,7 +23,6 @@ data Label : Set where
 
 record ScriptContext : Set where
     field
-
         inputVal    : Nat
         outputVal   : Nat
         outputLabel : Label
@@ -53,7 +52,8 @@ insert pkh (x ∷ l') = if (pkh == x)
   then (pkh ∷ l')
   else (x ∷ (insert pkh l'))
 
---WHYYYYYYY??? x == pkh -> x :: l'
+--interesting complication if using "x == pkh -> x :: l'" instead
+
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
 
