@@ -154,8 +154,8 @@ makeIs [] = []
 makeIs (x ∷ pkhs) = Add x ∷ makeIs pkhs
 
 insertList : List PubKeyHash -> List PubKeyHash -> List PubKeyHash
-insertList sigs [] = sigs
-insertList sigs (x ∷ asigs) = insertList (insert x sigs) asigs
+insertList [] sigs = sigs
+insertList (x ∷ asigs) sigs = insertList asigs (insert x sigs)
 
 appendLemma : ∀ (x : PubKeyHash) (a b : List PubKeyHash) -> a ++ x ∷ b ≡ (a ++ x ∷ []) ++ b
 appendLemma x [] b = refl
@@ -184,7 +184,7 @@ prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : 
          -> asigs ≡ (authSigs par)
          -> asigs ≡ (asigs' ++ asigs'')
          -> label s ≡ Collecting v pkh d sigs
-         -> label s' ≡ Collecting v pkh d (insertList sigs asigs'')
+         -> label s' ≡ Collecting v pkh d (insertList asigs'' sigs)
          -> outVal (context s) ≡ outVal (context s')
          -> outAdr (context s) ≡ outAdr (context s')
          -> now (context s) ≡ now (context s')
@@ -194,7 +194,7 @@ prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : 
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
   context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
-  record { label = .(Collecting v pkh d (insertList sigs [])) ;
+  record { label = .(Collecting v pkh d (insertList [] sigs)) ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
   tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs [])) } }
@@ -203,7 +203,7 @@ prop {v} {pkh} {d} {sigs}
 prop {v} {pkh} {d} {sigs}
   record { label = .(Collecting v pkh d sigs) ;
   context = record { value = .value₁ ; outVal = .outVal₁ ; outAdr = .outAdr₁ ; now = .now₁ ; tsig = tsig₁ } }
-  record { label = .(Collecting v pkh d (insertList sigs (x ∷ s3))) ;
+  record { label = .(Collecting v pkh d (insertList (x ∷ s3) sigs)) ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
   tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
   context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (x ∷ s3))) } }
@@ -211,7 +211,7 @@ prop {v} {pkh} {d} {sigs}
   = cons ((TAdd (∈lemma s2 s3 x) refl refl refl refl))
     (prop (record { label = Collecting v pkh d (insert x sigs) ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = x }})
-    (record { label = (Collecting v pkh d (insertList sigs (x ∷ s3))) ;
+    (record { label = (Collecting v pkh d (insertList (x ∷ s3) sigs)) ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
     tsig = (finalSig (record { label = Collecting v pkh d sigs ;
     context = record { value = value₁ ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } })
@@ -228,7 +228,7 @@ prop {v} {pkh} {d} {sigs}
 --Actual Prop1 (Can add all signatures 1 by 1)
 prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
         -> label s ≡ Collecting v pkh d sigs
-        -> label s' ≡ Collecting v pkh d (insertList sigs (authSigs par))
+        -> label s' ≡ Collecting v pkh d (insertList (authSigs par) sigs)
         -> outVal (context s) ≡ outVal (context s')
         -> outAdr (context s) ≡ outAdr (context s')
         -> now (context s) ≡ now (context s')
@@ -304,16 +304,17 @@ unique-lem : {l1 l2 : List a} -> l1 ⊆ l2 -> Unique l1 -> length l2 ≥ length 
 unique-lem [] root = z≤n
 unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
 
-insertList-sublem : (l1 l2 : List PubKeyHash) (x : PubKeyHash) -> x ∈ l1 -> x ∈ insertList l1 l2
-insertList-sublem l1 [] x pf = pf
-insertList-sublem l1 (y ∷ l2) x pf = insertList-sublem (insert y l1) l2 x (insert-lem2 x y l1 pf)
+insertList-sublem : (l1 l2 : List PubKeyHash) (x : PubKeyHash) -> x ∈ l2 -> x ∈ insertList l1 l2
+insertList-sublem [] l x pf = pf
+insertList-sublem (y ∷ l1) l2 x pf = insertList-sublem l1 (insert y l2) x (insert-lem2 x y l2 pf)
 
-insertList-lem : (l1 l2 : List PubKeyHash) -> l2 ⊆ insertList l1 l2
-insertList-lem l1 [] = []
-insertList-lem l1 (x ∷ l2) = insertList-sublem (insert x l1) l2 x (insert-lem1 x l1) ∷ (insertList-lem (insert x l1) l2)
+
+insertList-lem : (l1 l2 : List PubKeyHash) -> l1 ⊆ insertList l1 l2
+insertList-lem [] l = []
+insertList-lem (x ∷ l1) l2 = insertList-sublem l1 (insert x l2) x (insert-lem1 x l2) ∷ insertList-lem l1 (insert x l2)
 
 --Unique Insert Lemma
-uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
+uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l1) -> (length (insertList l1 l2) ≥ length l1)
 uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
 
 
@@ -352,7 +353,7 @@ prop2 {d = d} {sigs = sigs}
   record { label = .Holding ; context = context₁ } par (Col p1 p2 p3) refl refl refl refl refl (Always p4 p5)
   = lemmaMultiStep par (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
     context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } })
-    (record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList sigs (authSigs par)) ;
+    (record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList (authSigs par) sigs) ;
     context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ;
     tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
     context = record { value = (addNat (value context₁) (outVal context₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; now = now₁ ; tsig = tsig₁ } }) (makeIs (authSigs par)) } })
@@ -372,7 +373,7 @@ prop2 {d = d} {sigs = sigs}
              }) (record
                   { label =
                       Collecting (outVal context₁) (outAdr context₁) d
-                      (insertList sigs (authSigs par))
+                      (insertList (authSigs par) sigs)
                   ; context =
                       record
                       { value = addNat (value context₁) (outVal context₁)
@@ -395,8 +396,7 @@ prop2 {d = d} {sigs = sigs}
                           (makeIs (authSigs par))
                       }
                   }) par refl refl refl refl refl refl refl)
-    (cons (TPay refl (≤-trans p5 (uil sigs (authSigs par) p4)) refl refl refl refl) root)
-
+    (cons (TPay refl (≤-trans p5 (uil (authSigs par) sigs p4)) refl refl refl refl) root)
 
 
 
