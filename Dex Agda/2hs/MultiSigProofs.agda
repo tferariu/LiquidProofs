@@ -25,7 +25,13 @@ open import Haskell.Prim.Eq
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 
+
 module MultiSigProofs where
+
+
+
+
+--open import ListInsertLib (PubKeyHash) (==ito≡) (=/=ito≢)
 
 --can we have a frame property?
 
@@ -258,6 +264,7 @@ l1 ⊆ l2 = All (_∈ l2) l1
 ⊆-trans : {l1 l2 l3 : List a} -> l1 ⊆ l2 -> l2 ⊆ l3 -> l1 ⊆ l3
 ⊆-trans [] p2 = []
 ⊆-trans (px ∷ p1) p2 = All.lookup p2 px ∷ ⊆-trans  p1 p2
+
 
 ≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
 ≡ᵇto≡ {zero} {zero} pf = refl
@@ -606,15 +613,19 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
 <to<ᵇ {zero} (s≤s pf) = refl
 <to<ᵇ {suc a} (s≤s pf) = <to<ᵇ pf
 
-v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
-v=v zero = refl
-v=v (suc v) = v=v v
-
 i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
 i=i (pos zero) = refl
 i=i (pos (suc n)) = i=i (pos n)
 i=i (negsuc zero) = refl
 i=i (negsuc (suc n)) = i=i (pos n)
+
+v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
+v=v zero = refl
+v=v (suc v) = v=v v
+
+l=l : ∀ (l : List PubKeyHash) -> (l == l) ≡ true
+l=l [] = refl
+l=l (x ∷ l) rewrite i=i x = l=l l
 
 ||true : ∀ {b} -> (b || true) ≡ true
 ||true {false} = refl
@@ -623,10 +634,6 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ∈toQuery : ∀ {sig sigs} -> sig ∈ sigs -> (query sig sigs) ≡ true
 ∈toQuery {sig} (here refl) rewrite i=i sig = refl
 ∈toQuery (there pf) rewrite ∈toQuery pf = ||true
-
-l=l : ∀ (l : List PubKeyHash) -> (l == l) ≡ true
-l=l [] = refl
-l=l (x ∷ l) rewrite i=i x = l=l l 
 
 lengthToLengthNat : ∀ (n : ℕ) (l : List PubKeyHash) -> n ≤ length l -> (n <ᵇ lengthNat l || lengthNat l ≡ᵇ n) ≡ true
 lengthToLengthNat zero [] z≤n = refl
@@ -900,4 +907,22 @@ unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-le
 
 uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (insertList l1 l2) ≥ length l2)
 uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
+
+
+get⊥ : true ≡ false -> ⊥
+get⊥ ()
+
+
+=/=ito≢ : ∀ (a b : Int) -> (a == b) ≡ false -> a ≢ b
+=/=ito≢ (pos n) (pos .n) pf refl rewrite v=v n = get⊥ pf
+=/=ito≢ (negsuc n) (negsuc .n) pf refl rewrite v=v n = get⊥ pf
+
+aux : ∀ (x : Int) (l : List Int) -> (x == x && l == l) ≡ false -> ⊥
+aux x l rewrite i=i x | l=l l = λ ()
+
+=/=lto≢ : ∀ (a b : List PubKeyHash) -> (a == b) ≡ false -> a ≢ b
+=/=lto≢ [] (x ∷ b) pf = λ ()
+=/=lto≢ (x ∷ a) [] pf = λ ()
+=/=lto≢ (x ∷ a) (y ∷ b) pf = λ {refl → aux x a pf}
+
 -}
