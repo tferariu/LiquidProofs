@@ -54,7 +54,6 @@ l₁ ⊆ l₂ = All (_∈ l₂) l₁
 ⊆-trans (px ∷ p₁) p₂ = All.lookup p₂ px ∷ ⊆-trans  p₁ p₂
 
 
-
 insert-lem₁ : ∀ (x : A) (l : List A) → l ⊆ insert x l
 insert-lem₁ x [] = []
 insert-lem₁ x (y ∷ l) with x == y in eq
