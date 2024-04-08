@@ -17,6 +17,10 @@ open import Data.Empty
 open import Data.List.Relation.Unary.All as All
 open import Agda.Primitive
 
+
+open import Data.List.Base
+open import Function.Base
+
 open import Relation.Binary
 
 S : Setoid lzero lzero
@@ -167,7 +171,21 @@ l₁ ∅ l₂ = All (_∉ l₂) l₁
 
 
 insertList' : List A -> List A -> List A
-insertList' l1 [] = l1
-insertList' l1 (x ∷ l2) = insertList' (insert x l1) l2
+insertList' l₁ [] = l₁
+insertList' l₁ (x ∷ l₂) = insertList' (insert x l₁) l₂
 
+
+filterᵇ : (A → Bool) → List A → List A
+filterᵇ p []       = []
+filterᵇ p (x ∷ xs) = if p x then x ∷ filterᵇ p xs else filterᵇ p xs
+
+deduplicateᵇ : (A → A → Bool) → List A → List A
+deduplicateᵇ r [] = []
+deduplicateᵇ r (x ∷ xs) = x ∷ filterᵇ (not ∘ r x) (deduplicateᵇ r xs)
+
+{-
+asdf : ∀ (xs ys : List A) -> insertList' xs ys ≡ xs ++ (deduplicateᵇ _==_ ys)
+asdf xs [] = sym (++-identityʳ xs)
+asdf xs (y ∷ ys) = {!!}
+-}
 
