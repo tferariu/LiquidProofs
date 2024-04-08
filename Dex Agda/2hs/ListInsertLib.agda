@@ -17,12 +17,23 @@ open import Data.Empty
 open import Data.List.Relation.Unary.All as All
 open import Agda.Primitive
 
+open import Relation.Binary
 
+S : Setoid lzero lzero
+S = record { Carrier = A ; _≈_ = _≡_ ;
+             isEquivalence = record { refl = refl ;
+                                      sym = sym ;
+                                      trans = trans } }
+
+open import Data.List.Membership.Setoid S
+
+{-
 _∈_ : ∀ (x : A) (xs : List A) → Set
 x ∈ xs = Any (x ≡_) xs
 
 _∉_ : ∀ (x : A) (xs : List A) → Set
 x ∉ xs = ¬ (x ∈ xs)
+-}
 
 insert : A → List A → List A
 insert a [] = a ∷ []
