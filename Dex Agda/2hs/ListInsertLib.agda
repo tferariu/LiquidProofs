@@ -30,14 +30,10 @@ S = record { Carrier = A ; _≈_ = _≡_ ;
                                       trans = trans } }
 
 open import Data.List.Membership.Setoid S
+open import Data.List.Relation.Unary.Unique.Setoid S
+open import Data.List.Relation.Binary.Subset.Setoid S
+open import Data.List.Relation.Binary.Subset.Setoid.Properties
 
-{-
-_∈_ : ∀ (x : A) (xs : List A) → Set
-x ∈ xs = Any (x ≡_) xs
-
-_∉_ : ∀ (x : A) (xs : List A) → Set
-x ∉ xs = ¬ (x ∈ xs)
--}
 
 insert : A → List A → List A
 insert a [] = a ∷ []
@@ -49,52 +45,67 @@ insertList : List A → List A → List A
 insertList [] l = l
 insertList (x ∷ l₁) l₂ = insertList l₁ (insert x l₂)
 
-data Unique : List A → Set where
-  root : Unique []
-  _::_ : {x : A} {l : List A} → x ∉ l → Unique l → Unique (x ∷ l)
-
-_⊆_ : List A → List A → Set
-l₁ ⊆ l₂ = All (_∈ l₂) l₁
-
 ⊆-cons : ∀ {l₁ l₂ : List A} (x : A) → l₁ ⊆  l₂ → l₁ ⊆ (x ∷ l₂)
-⊆-cons x [] = []
-⊆-cons x (px ∷ p) = there px ∷ ⊆-cons x p
+⊆-cons x p1 p2 = there (p1 p2)
 
-⊆-refl : ∀ (l : List A) → l ⊆ l
-⊆-refl [] = []
-⊆-refl (x ∷ l) = here refl ∷  ⊆-cons x (⊆-refl l)
-
-⊆-trans : ∀ {l₁ l₂ l₃ : List A} → l₁ ⊆ l₂ → l₂ ⊆ l₃ → l₁ ⊆ l₃
-⊆-trans [] p₂ = []
-⊆-trans (px ∷ p₁) p₂ = All.lookup p₂ px ∷ ⊆-trans  p₁ p₂
 
 
 insert-lem₁ : ∀ (x : A) (l : List A) → l ⊆ insert x l
-insert-lem₁ x [] = []
+insert-lem₁ x [] = λ ()
 insert-lem₁ x (y ∷ l) with x == y in eq
-... | false = here refl ∷ ⊆-cons y (insert-lem₁ x l)
-... | true rewrite axiom1 x y eq = (here refl) ∷ ⊆-cons y (⊆-refl l)
+... | false = λ { (here px) → here px ; (there p) → there (insert-lem₁ x l p)}
+... | true rewrite axiom1 x y eq = λ z → z
 
 insert-lem₂ : ∀ (x : A) (l : List A) → x ∈ insert x l
 insert-lem₂ x [] = here refl
-insert-lem₂ x (x₁ ∷ l) with x == x₁ in eq
+insert-lem₂ x (y ∷ l) with x == y in eq
 ... | false = there (insert-lem₂ x l) 
 ... | true = here refl
 
-insert-lem₃ : ∀ (x y : A) (l : List A) → x ∈ l → x ∈ insert y l
-insert-lem₃ x y (z ∷ l) (here px) with y == z in eq
+insert-lem₃ : ∀ {x y : A} (l : List A) → x ∈ l → x ∈ insert y l
+insert-lem₃ {x} {y} (z ∷ l) (here px) with y == z in eq
 ...| false rewrite px = here refl
 ...| true rewrite axiom1 y z eq | px = here refl
-insert-lem₃ x y (z ∷ l) (there pf) with y == z in eq
-...| false = there (insert-lem₃ x y l pf)
+insert-lem₃ {x} {y} (z ∷ l) (there pf) with y == z in eq
+...| false = there (insert-lem₃ l pf)
 ...| true = there pf
 
-insert-lem₄ : ∀ (x : A) (l : List A) -> x ∉ l → insert x l ≡ l ++ [ x ]
-insert-lem₄ x [] pf = refl
-insert-lem₄ x (y ∷ l) pf with x == y in eq
-...| false = cong (y ∷_) (insert-lem₄ x l (λ z → pf (there z)))
+insert-lem₄ : ∀ {x : A} (l : List A) -> x ∉ l → insert x l ≡ l ++ [ x ]
+insert-lem₄ {x} [] pf = refl
+insert-lem₄ {x} (y ∷ l) pf with x == y in eq
+...| false = cong (y ∷_) (insert-lem₄ l (λ z → pf (there z)))
 ...| true rewrite axiom1 x y eq = ⊥-elim (pf (here refl)) 
 
+
+insertList-sublem : ∀ (l₁ l₂ : List A) (x : A) → x ∈ l₂ → x ∈ insertList l₁ l₂
+insertList-sublem [] l x pf = pf
+insertList-sublem (y ∷ l₁) l₂ x pf = insertList-sublem l₁ (insert y l₂) x (insert-lem₃ l₂ pf)
+
+insertList-lem₁ : ∀ (l₁ l₂ : List A) → l₁ ⊆ insertList l₁ l₂
+insertList-lem₁ [] l₂ = λ ()
+insertList-lem₁ (x ∷ l₁) l₂ 
+  = λ { (here refl) → insertList-sublem l₁ (insert x l₂) x (insert-lem₂ x l₂) ;
+        (there y) → insertList-lem₁ l₁ (insert x l₂) y}
+
+
+insertList-lem₂ : ∀ (l₁ l₂ : List A) → l₂ ⊆ insertList l₁ l₂
+insertList-lem₂ [] l₂ = λ z → z
+insertList-lem₂ (x ∷ l₁) l₂ = ⊆-trans S (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
+
+{-
+insertList-lem₂ (x ∷ l₁) [] = λ ()
+insertList-lem₂ (x ∷ l₁) (y ∷ l₂) with x == y in eq
+...| false = λ { (here refl) → insertList-sublem l₁ (y ∷ insert x l₂) y (here refl) ;
+                 (there z) → insertList-lem₂ l₁ (y ∷ insert x l₂) (there (insert-lem₃ l₂ z)) }
+...| true = λ { (here refl) → insertList-sublem l₁ (x ∷ l₂) y (here (sym (axiom1 x y eq))) ;
+                (there z) → insertList-lem₂ l₁ (x ∷ l₂) (there z)}
+  -}
+
+--⊆-trans (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
+  
+{--}
+
+{-
 
 del : ∀ {x} (l : List A) → x ∈ l → List A
 del (_ ∷ xs) (here px) = xs
@@ -115,23 +126,13 @@ subset-del p n [] = []
 subset-del p n (px ∷ su) = ∈-del p (λ e → n (here e)) px ∷ subset-del p (λ p → n (there p)) su
 
 unique-lem : ∀ {l₁ l₂ : List A} → l₁ ⊆ l₂ → Unique l₁ → length l₁ ≤ length l₂
-unique-lem [] root = z≤n
-unique-lem (px ∷ sub) (x :: un) rewrite sym (length-del px) = s≤s (unique-lem (subset-del px x sub) un)
+unique-lem [] [] = z≤n
+unique-lem (px ∷ sub) (x ∷ un) rewrite sym (length-del px) = s≤s {!!}
+--rewrite sym (length-del px) = s≤s (unique-lem (subset-del px {!!} sub) un)
 
 
-insertList-sublem : ∀ (l₁ l₂ : List A) (x : A) → x ∈ l₂ → x ∈ insertList l₁ l₂
-insertList-sublem [] l x pf = pf
-insertList-sublem (y ∷ l₁) l₂ x pf = insertList-sublem l₁ (insert y l₂) x (insert-lem₃ x y l₂ pf)
 
-insertList-lem₁ : ∀ (l₁ l₂ : List A) → l₁ ⊆ insertList l₁ l₂
-insertList-lem₁ [] l₂ = []
-insertList-lem₁ (x ∷ l₁) l₂ 
-  = insertList-sublem l₁ (insert x l₂) x (insert-lem₂ x l₂) ∷ insertList-lem₁ l₁ (insert x l₂)
 
-insertList-lem₂ : ∀ (l₁ l₂ : List A) → l₂ ⊆ insertList l₁ l₂
-insertList-lem₂ [] l₂ = ⊆-refl l₂
-insertList-lem₂ (x ∷ l₁) l₂
-  = ⊆-trans (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
 
 
 uniqueInsertLemma : ∀ (l₁ l₂ : List A) (pf : Unique l₁)
@@ -164,11 +165,12 @@ l₁ ∅ l₂ = All (_∉ l₂) l₁
 ++lemma x [] l₂ = refl
 ++lemma x (y ∷ l₁) l₂ = cong (y ∷_) (++lemma x l₁ l₂)
 
+{-
 ++insertLemma : ∀ (l₁ l₂ : List A) → l₁ ∅ l₂ → Unique l₁ → insertList l₁ l₂ ≡ l₂ ++ l₁
 ++insertLemma [] l₂ pf₁ pf₂ = sym (++-identityʳ l₂)
-++insertLemma (x ∷ l₁) l₂ (p₁ ∷ pf₁) (p₂ :: pf₂) rewrite insert-lem₄ x l₂ p₁
+++insertLemma (x ∷ l₁) l₂ (p₁ ∷ pf₁) (p₂ ∷ pf₂) rewrite insert-lem₄ x l₂ p₁
               | ++insertLemma l₁ (l₂ ++ x ∷ []) (∅-lemma x l₁ l₂ pf₁ p₂) pf₂ = ++lemma x l₂ l₁
-
+-}
 
 insertList' : List A -> List A -> List A
 insertList' l₁ [] = l₁
@@ -188,4 +190,4 @@ asdf : ∀ (xs ys : List A) -> insertList' xs ys ≡ xs ++ (deduplicateᵇ _==_ 
 asdf xs [] = sym (++-identityʳ xs)
 asdf xs (y ∷ ys) = {!!}
 -}
-
+-}
