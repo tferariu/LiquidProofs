@@ -15,6 +15,7 @@ open import Relation.Nullary using (¬_)
 
 open import Data.Empty
 open import Data.List.Relation.Unary.All as All
+open import Data.List.Relation.Unary.All.Properties
 open import Agda.Primitive
 
 
@@ -92,21 +93,6 @@ insertList-lem₂ : ∀ (l₁ l₂ : List A) → l₂ ⊆ insertList l₁ l₂
 insertList-lem₂ [] l₂ = λ z → z
 insertList-lem₂ (x ∷ l₁) l₂ = ⊆-trans S (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
 
-{-
-insertList-lem₂ (x ∷ l₁) [] = λ ()
-insertList-lem₂ (x ∷ l₁) (y ∷ l₂) with x == y in eq
-...| false = λ { (here refl) → insertList-sublem l₁ (y ∷ insert x l₂) y (here refl) ;
-                 (there z) → insertList-lem₂ l₁ (y ∷ insert x l₂) (there (insert-lem₃ l₂ z)) }
-...| true = λ { (here refl) → insertList-sublem l₁ (x ∷ l₂) y (here (sym (axiom1 x y eq))) ;
-                (there z) → insertList-lem₂ l₁ (x ∷ l₂) (there z)}
-  -}
-
---⊆-trans (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
-  
-{--}
-
-{-
-
 del : ∀ {x} (l : List A) → x ∈ l → List A
 del (_ ∷ xs) (here px) = xs
 del (x ∷ xs) (there p) = x ∷ del xs p
@@ -122,17 +108,17 @@ length-del (there p) = cong suc (length-del p)
 ∈-del (there p)   e (there w) = there (∈-del p e w) 
 
 subset-del : ∀ {x} {l₁ l₂ : List A} (p : x ∈ l₂) → (x ∉ l₁) → l₁ ⊆ l₂ → l₁ ⊆ del l₂ p
-subset-del p n [] = []
-subset-del p n (px ∷ su) = ∈-del p (λ e → n (here e)) px ∷ subset-del p (λ p → n (there p)) su
+subset-del p nin sub y = ∈-del p (λ {refl → nin y}) (sub y)
+
+
+∈[] : ∀ {x} → x ∈ [] → ⊥
+∈[] ()
 
 unique-lem : ∀ {l₁ l₂ : List A} → l₁ ⊆ l₂ → Unique l₁ → length l₁ ≤ length l₂
-unique-lem [] [] = z≤n
-unique-lem (px ∷ sub) (x ∷ un) rewrite sym (length-del px) = s≤s {!!}
---rewrite sym (length-del px) = s≤s (unique-lem (subset-del px {!!} sub) un)
-
-
-
-
+unique-lem p [] = z≤n
+unique-lem {x ∷ xs} {[]} p (u ∷ us) = ⊥-elim (∈[] (p (here refl)))
+unique-lem {x ∷ xs} {y ∷ ys} p (u ∷ us) rewrite sym (length-del (p (here refl)))
+  = s≤s (unique-lem (subset-del (p (here refl)) (All¬⇒¬Any u) (λ z → p (there z))) us)
 
 
 uniqueInsertLemma : ∀ (l₁ l₂ : List A) (pf : Unique l₁)
@@ -165,12 +151,13 @@ l₁ ∅ l₂ = All (_∉ l₂) l₁
 ++lemma x [] l₂ = refl
 ++lemma x (y ∷ l₁) l₂ = cong (y ∷_) (++lemma x l₁ l₂)
 
-{-
+
 ++insertLemma : ∀ (l₁ l₂ : List A) → l₁ ∅ l₂ → Unique l₁ → insertList l₁ l₂ ≡ l₂ ++ l₁
 ++insertLemma [] l₂ pf₁ pf₂ = sym (++-identityʳ l₂)
-++insertLemma (x ∷ l₁) l₂ (p₁ ∷ pf₁) (p₂ ∷ pf₂) rewrite insert-lem₄ x l₂ p₁
-              | ++insertLemma l₁ (l₂ ++ x ∷ []) (∅-lemma x l₁ l₂ pf₁ p₂) pf₂ = ++lemma x l₂ l₁
--}
+++insertLemma (x ∷ l₁) l₂ (p₁ ∷ pf₁) (p₂ ∷ pf₂) rewrite insert-lem₄ l₂ p₁
+              | ++insertLemma l₁ (l₂ ++ x ∷ []) (∅-lemma x l₁ l₂ pf₁ (All¬⇒¬Any p₂)) pf₂
+              = ++lemma x l₂ l₁
+
 
 insertList' : List A -> List A -> List A
 insertList' l₁ [] = l₁
@@ -184,6 +171,54 @@ filterᵇ p (x ∷ xs) = if p x then x ∷ filterᵇ p xs else filterᵇ p xs
 deduplicateᵇ : (A → A → Bool) → List A → List A
 deduplicateᵇ r [] = []
 deduplicateᵇ r (x ∷ xs) = x ∷ filterᵇ (not ∘ r x) (deduplicateᵇ r xs)
+
+nub : List A → List A
+nub = deduplicateᵇ _==_
+
+{-
+∈-++⁺ˡ : ∀ {v xs ys} → v ∈ xs → v ∈ xs ++ ys
+  ∈-++⁺ˡ = Any.++⁺ˡ
+
+  ∈-++⁺ʳ : ∀ {v} xs {ys} → v ∈ ys → v ∈ xs ++ ys
+  ∈-++⁺ʳ = Any.++⁺ʳ
+
+  ∈-++⁻ : ∀ {v} xs {ys} → v ∈ xs ++ ys → (v ∈ xs) ⊎ (v ∈ ys)
+  ∈-++⁻ = Any.++⁻
+-}
+
+--length-++ : ∀ (xs : List A) {ys} → length (xs ++ ys) ≡ length xs + length ys
+--m≤m+n : ∀ m n → m ≤ m + n
+
+--length (nub (nub xs ++ nub ys)) <= length (nub xs) + length (nub ys)
+--distinct us && distinct vs -> length (nub (us ++ vs)) <= length us + length vs
+
+-- insertList xs ys = nub (ys ++ xs)
+--  ∀ (l₁ l₂ : List A) (pf : Unique l₁) → (length (insertList l₁ l₂) ≥ length l₁)
+
+--prop : ∀ (xs ys : List A) → length (insertList' xs ys) ≡ length 
+
+
+
+{-[] [] = z≤n
+unique-lem (px ∷ sub) (x ∷ un) rewrite sym (length-del px) = s≤s {!!}-}
+--rewrite sym (length-del px) = s≤s (unique-lem (subset-del px {!!} sub) un)
+
+
+{-
+insertList-lem₂ (x ∷ l₁) [] = λ ()
+insertList-lem₂ (x ∷ l₁) (y ∷ l₂) with x == y in eq
+...| false = λ { (here refl) → insertList-sublem l₁ (y ∷ insert x l₂) y (here refl) ;
+                 (there z) → insertList-lem₂ l₁ (y ∷ insert x l₂) (there (insert-lem₃ l₂ z)) }
+...| true = λ { (here refl) → insertList-sublem l₁ (x ∷ l₂) y (here (sym (axiom1 x y eq))) ;
+                (there z) → insertList-lem₂ l₁ (x ∷ l₂) (there z)}
+  -}
+
+--⊆-trans (insert-lem₁ x l₂) (insertList-lem₂ l₁ (insert x l₂))
+  
+
+{-
+
+
 
 {-
 asdf : ∀ (xs ys : List A) -> insertList' xs ys ≡ xs ++ (deduplicateᵇ _==_ ys)
