@@ -40,4 +40,13 @@ test4 : insertList' (1 ∷ 1 ∷ 4 ∷ 5 ∷ []) (1 ∷ 2 ∷ 3 ∷ [])
         ≡ 1 ∷ 1 ∷ 4 ∷ 5 ∷ 2 ∷ 3 ∷ []
 test4 = refl
 
+open import Data.List.Membership.Setoid S
+open import Data.List.Relation.Unary.Unique.Setoid S
+open import Data.List.Relation.Binary.Subset.Setoid S
+open import Data.List.Relation.Binary.Subset.Setoid.Properties
+
+open import Data.List.Relation.Unary.Any
+
+test5 : (1 ∷ 1 ∷ 1 ∷ 1 ∷ []) ⊆ (1 ∷ 2 ∷ 3 ∷ [])
+test5 = λ { (here refl) → here refl ; (there (here refl)) → here refl ; (there (there (here refl))) → here refl ; (there (there (there (here refl)))) → here refl}
 

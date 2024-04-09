@@ -50,7 +50,6 @@ insertList (x ∷ l₁) l₂ = insertList l₁ (insert x l₂)
 ⊆-cons x p1 p2 = there (p1 p2)
 
 
-
 insert-lem₁ : ∀ (x : A) (l : List A) → l ⊆ insert x l
 insert-lem₁ x [] = λ ()
 insert-lem₁ x (y ∷ l) with x == y in eq
@@ -113,6 +112,15 @@ subset-del p nin sub y = ∈-del p (λ {refl → nin y}) (sub y)
 
 ∈[] : ∀ {x} → x ∈ [] → ⊥
 ∈[] ()
+
+
+{-
+test-lem : ∀ {l1 l2 : List A} -> l1 ⊆ l2 -> length l1 ≤ length l2
+test-lem = {!!}
+
+--incorrect because  (1 ∷ 1 ∷ 1 ∷ 1 ∷ []) ⊆ (1 ∷ 2 ∷ 3 ∷ [])
+
+-}
 
 unique-lem : ∀ {l₁ l₂ : List A} → l₁ ⊆ l₂ → Unique l₁ → length l₁ ≤ length l₂
 unique-lem p [] = z≤n
