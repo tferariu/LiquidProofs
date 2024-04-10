@@ -90,6 +90,19 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
+data Unique {a : Set} : List a → Set where
+  root : Unique []
+  _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
+
+≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
+≡ᵇto≡ {zero} {zero} pf = refl
+≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
+
+
+==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
+==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
+
 --Valid State
 data ValidS : State -> Set where
 
@@ -102,6 +115,7 @@ data ValidS : State -> Set where
     -> label s ≡ Collecting v pkh d sigs
     -> value (context s) ≥ v
     -> v > 0
+    -> Unique sigs
     --------------------------------
     -> ValidS s
 
@@ -129,14 +143,56 @@ sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
   -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> v ≡ v'
 sameValue refl = refl
 
+sameSigs : ∀ {v v' pkh pkh' d d' sigs sigs'}
+  -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> sigs ≡ sigs'
+sameSigs refl = refl
+
+get⊥ : true ≡ false -> ⊥
+get⊥ ()
+
+v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
+v=v zero = refl
+v=v (suc v) = v=v v
+
+=/=ito≢ : ∀ {a b : Int} -> (a == b) ≡ false -> a ≢ b
+=/=ito≢ {pos n} {pos .n} pf refl rewrite v=v n = get⊥ pf
+=/=ito≢ {negsuc n} {negsuc .n} pf refl rewrite v=v n = get⊥ pf
+
+
+reduce∈ : ∀ {A : Set} {x y : A} {xs} -> y ∈ (x ∷ xs) -> y ≢ x -> y ∈ xs
+reduce∈ (here px) p2 = ⊥-elim (p2 px)
+reduce∈ (there p1) p2 = p1 
+
+
+insertPreserves∈ : ∀ {x y zs}
+  -> x ∈ insert y zs -> (y == x) ≡ false -> x ∈ zs
+insertPreserves∈ {zs = []} (here px) p2 = ⊥-elim (=/=ito≢ p2 (sym px))
+insertPreserves∈ {x} {y} {z ∷ zs} p1 p2 with y == x in eq1
+...| true =  ⊥-elim (get⊥ p2)
+...| false with y == z in eq2
+...| true rewrite ==ito≡ y z eq2 = p1 
+...| false with x == z in eq3
+...| true rewrite ==ito≡ x z eq3 = here refl 
+...| false = there (insertPreserves∈ (reduce∈ p1 (=/=ito≢ eq3)) eq1)
+
+
+insertPreservesUniqueness : ∀ {sig sigs}
+  -> Unique sigs -> Unique (insert sig sigs)
+insertPreservesUniqueness root = (λ ()) :: root
+insertPreservesUniqueness {sig} {(x ∷ xs)} (p :: ps) with sig == x in eq
+...| false = (λ z → p (insertPreserves∈ z eq)) :: (insertPreservesUniqueness ps)
+...| true rewrite ==ito≡ sig x eq = p :: ps
+
 --State Validity Invariant
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
   -> ValidS s'
-validStateTransition iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2
+validStateTransition iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2 root
 validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
-validStateTransition (Col pf1 pf2 pf3) (TAdd p1 p2 p3 p4 p5) rewrite pf1 | sameValue p3 | p5 = Col p4 pf2 pf3
+validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5)
+                     rewrite pf1 | sameValue p3 | p5 | sameSigs p3
+                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
 validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
 validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3
 
@@ -260,9 +316,7 @@ prop1 s s' par p1 p2 p3 p4 p5 p6 p7 = prop s s' par (authSigs par) [] (authSigs 
 
 
 --UniqueInsertLemma sub-lemmas
-data Unique {a : Set} : List a → Set where
-  root : Unique []
-  _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
+
 
 _⊆_ : List a -> List a -> Set
 l1 ⊆ l2 = All (_∈ l2) l1
@@ -280,13 +334,8 @@ l1 ⊆ l2 = All (_∈ l2) l1
 ⊆-trans (px ∷ p1) p2 = All.lookup p2 px ∷ ⊆-trans  p1 p2
 
 
-≡ᵇto≡ : ∀ {a b} -> (a ≡ᵇ b) ≡ true -> a ≡ b
-≡ᵇto≡ {zero} {zero} pf = refl
-≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
 
-==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
-==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
+
 
 insert-lem1 : (x : PubKeyHash)(l : List PubKeyHash) -> x ∈ insert x l
 insert-lem1 x [] = here refl
@@ -376,7 +425,7 @@ prop2 {d = d} {sigs = sigs}
                                   now = now₁ ;
                                   tsig = tsig₁ } })
   s2@record { label = .Holding ; context = context₁ }
-  par (Col p1 p2 p3) refl refl refl refl refl (Always p4 p5)
+  par (Col p1 p2 p3 p6) refl refl refl refl refl (Always p4 p5)
   = lemmaMultiStep par s1 s' s2 (makeIs (authSigs par)) [ Pay ]   
     (prop1 s1 s' par refl refl refl refl refl refl refl)
     (cons (TPay refl (≤-trans p5 (uil (authSigs par) sigs p4)) refl refl refl refl) root)
@@ -425,7 +474,7 @@ liquidity' par
   pkh d (Hol refl) (Always p2 p3)
   = ⟨ s'' , ⟨ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
     ⟨ cons (TPropose (s≤s (v≤v value)) (s≤s z≤n) refl refl refl)
-    (prop2 s' s'' par (Col refl (s≤s (v≤v value)) (s≤s z≤n)) refl refl refl refl refl (Always p2 p3)) , refl ⟩ ⟩ ⟩
+    (prop2 s' s'' par (Col refl (s≤s (v≤v value)) (s≤s z≤n) root) refl refl refl refl refl (Always p2 p3)) , refl ⟩ ⟩ ⟩
       where
         s'' = record { label = Holding ;
                       context = record { value = zero ;
@@ -447,16 +496,16 @@ liquidity'
                                  outAdr = outAdr ;
                                  now = now ;
                                  tsig = tsig } })
-  pkh d (Col p1 p2 p3) (Always p4 p5)
+  pkh d (Col p1 p2 p3 p6) (Always p4 p5)
   = ⟨ s , ⟨ [] , ⟨ root , refl ⟩ ⟩ ⟩
 liquidity' par
   record { label = (Collecting v' pkh' d' sigs') ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
-  pkh d (Col refl p2 p3) (Always p4 p5)
+  pkh d (Col refl p2 p3 p6) (Always p4 p5)
   = ⟨ s''' , ⟨ Cancel ∷ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
     ⟨ cons (TCancel {s' = s'}
     (s≤s (v≤v d')) refl refl refl)
     (cons (TPropose (s≤s (v≤v value)) (s≤s z≤n) refl refl refl)
-    (prop2 s'' s''' par (Col refl (s≤s (v≤v value)) (s≤s z≤n)) refl refl refl refl refl (Always p4 p5))) , refl ⟩ ⟩ ⟩
+    (prop2 s'' s''' par (Col refl (s≤s (v≤v value)) (s≤s z≤n) root) refl refl refl refl refl (Always p4 p5))) , refl ⟩ ⟩ ⟩
       where
         s''' = record { label = Holding ;
                        context = record { value = zero ;
@@ -684,9 +733,7 @@ i=i (pos (suc n)) = i=i (pos n)
 i=i (negsuc zero) = refl
 i=i (negsuc (suc n)) = i=i (pos n)
 
-v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
-v=v zero = refl
-v=v (suc v) = v=v v
+
 
 l=l : ∀ (l : List PubKeyHash) -> (l == l) ≡ true
 l=l [] = refl
@@ -998,13 +1045,7 @@ uil :  {{eqA : Eq a}} -> ∀ (l1 l2 : List a) (pf : Unique l2) -> (length (inser
 uil l1 l2 pf = unique-lem (insertList-lem₂ l1 l2) pf
 
 
-get⊥ : true ≡ false -> ⊥
-get⊥ ()
 
-
-=/=ito≢ : ∀ (a b : Int) -> (a == b) ≡ false -> a ≢ b
-=/=ito≢ (pos n) (pos .n) pf refl rewrite v=v n = get⊥ pf
-=/=ito≢ (negsuc n) (negsuc .n) pf refl rewrite v=v n = get⊥ pf
 
 aux : ∀ (x : Int) (l : List Int) -> (x == x && l == l) ≡ false -> ⊥
 aux x l rewrite i=i x | l=l l = λ ()
@@ -1015,3 +1056,18 @@ aux x l rewrite i=i x | l=l l = λ ()
 =/=lto≢ (x ∷ a) (y ∷ b) pf = λ {refl → aux x a pf}
 
 -}
+
+{-
+insertPreserves∉ : ∀ {x y zs}
+  -> x ∉ zs -> (y == x) ≡ false -> x ∉ insert y zs
+insertPreserves∉ {zs = []} p1 p2 = λ { (here px) → ⊥-elim (=/=ito≢ p2 (sym px))}
+insertPreserves∉ {x} {y} {zs = z ∷ zs} p1 p2 with y == x in eq
+...| true = λ z → ⊥-elim (get⊥ p2)
+...| false with y == z in eq2
+...| true rewrite ==ito≡ y z eq2 = p1 
+...| false = λ { (here refl) → p1 (here refl) ;
+                 (there t) → p1 (there {!insertPreserves∉!})} --p1 (there {!insertPreserves∉!})
+
+--insertPreserves∉ {!!} eq --λ t → {!!}
+
+--λ z → {!!} --insertPreserves∉ {!!} {!!} {!!}-}

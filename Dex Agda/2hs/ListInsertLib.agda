@@ -9,6 +9,7 @@ module ListInsertLib (A : Set) (_==_ : A → A → Bool)
 open import Data.List
 open import Data.List.Properties
 open import Data.List.Relation.Unary.Any
+open import Data.List.Base
 open import Data.Nat
 open import Data.Nat.Properties using (≤-refl; ≤-trans )
 open import Relation.Nullary using (¬_)
@@ -41,6 +42,13 @@ insert a [] = a ∷ []
 insert a (x ∷ l) =
   if a == x then a ∷ l
             else x ∷ (insert a l)
+
+--xs@(x ∷ l)
+--a ∷ l replaced by xs
+
+--what if x ∷ l instead?
+
+--needs separation?
 
 insertList : List A → List A → List A
 insertList [] l = l
@@ -159,6 +167,15 @@ l₁ ∅ l₂ = All (_∉ l₂) l₁
 ++lemma x [] l₂ = refl
 ++lemma x (y ∷ l₁) l₂ = cong (y ∷_) (++lemma x l₁ l₂)
 
+-- Unique ys -> insertList xs ys ≡ nub (ys ++ xs)
+
+-- Unique ys ? -> length (nub (ys ++ xs)) ≥ length (nub xs)
+
+-- Unique xs -> length (nub (ys ++ xs)) ≥ length xs !!
+
+-- Unique ys -> insert x ys ≡ nub (ys ++ [ x ]) --start here -> write spec with nub (dedidable deduplicate) ++ length
+
+-- make your own good nub?
 
 ++insertLemma : ∀ (l₁ l₂ : List A) → l₁ ∅ l₂ → Unique l₁ → insertList l₁ l₂ ≡ l₂ ++ l₁
 ++insertLemma [] l₂ pf₁ pf₂ = sym (++-identityʳ l₂)
@@ -182,6 +199,27 @@ deduplicateᵇ r (x ∷ xs) = x ∷ filterᵇ (not ∘ r x) (deduplicateᵇ r xs
 
 nub : List A → List A
 nub = deduplicateᵇ _==_
+
+{-
+sublem1 : ∀ {z} (xs ys : List A) → length (nub xs) ≤ length (nub (xs ++ ys))
+          → length (filterᵇ (not ∘ _==_ z) (nub xs)) ≤ length (filterᵇ (not ∘ _==_ z) (nub (xs ++ ys)))
+sublem1 [] ys p = z≤n
+sublem1 {z} (x ∷ xs) ys (s≤s p) with z == x in eq
+...| true = {!!} --sublem1 xs ys p
+...| false = s≤s {!!} --(sublem1 xs ys p)
+
+-- insert x ys -> x ∈ ys
+
+--
+
+--  length (xs ++ ys) ≥ length xs
+
+lem1 : ∀ (xs ys : List A) → length (nub (xs ++ ys)) ≥ length (nub xs)
+lem1 [] ys = z≤n
+lem1 (x ∷ xs) ys = s≤s {!!}
+-}
+--(sublem1 {!xs!} {!!} {!!}) --s≤s {!!} --(lem1 {!!} ys)
+
 
 {-
 ∈-++⁺ˡ : ∀ {v xs ys} → v ∈ xs → v ∈ xs ++ ys
