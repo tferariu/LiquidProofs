@@ -39,8 +39,8 @@ open import Data.List.Relation.Binary.Subset.Setoid.Properties
 
 insert : A → List A → List A
 insert a [] = a ∷ []
-insert a (x ∷ l) =
-  if a == x then a ∷ l
+insert a xs@(x ∷ l) =
+  if a == x then xs
             else x ∷ (insert a l)
 
 --xs@(x ∷ l)
@@ -68,7 +68,7 @@ insert-lem₂ : ∀ (x : A) (l : List A) → x ∈ insert x l
 insert-lem₂ x [] = here refl
 insert-lem₂ x (y ∷ l) with x == y in eq
 ... | false = there (insert-lem₂ x l) 
-... | true = here refl
+... | true = here (axiom1 x y eq)
 
 insert-lem₃ : ∀ {x y : A} (l : List A) → x ∈ l → x ∈ insert y l
 insert-lem₃ {x} {y} (z ∷ l) (here px) with y == z in eq
@@ -175,6 +175,7 @@ l₁ ∅ l₂ = All (_∉ l₂) l₁
 
 -- Unique ys -> insert x ys ≡ nub (ys ++ [ x ]) --start here -> write spec with nub (dedidable deduplicate) ++ length
 
+
 -- make your own good nub?
 
 ++insertLemma : ∀ (l₁ l₂ : List A) → l₁ ∅ l₂ → Unique l₁ → insertList l₁ l₂ ≡ l₂ ++ l₁
@@ -199,7 +200,16 @@ deduplicateᵇ r (x ∷ xs) = x ∷ filterᵇ (not ∘ r x) (deduplicateᵇ r xs
 
 nub : List A → List A
 nub = deduplicateᵇ _==_
+{-
+filter-lem : ∀ (y : A) (xs : List A) → (y ∷ (nub xs)) ≡ (y ∷ (filterᵇ (λ z → not (y == z)) (nub xs)))
+filter-lem = {!!}
 
+insertU-lem : ∀ {y xs} → insert y xs ≡ nub (xs ++ [ y ])
+insertU-lem {xs = []} = refl
+insertU-lem {y} {x ∷ xs} with y == x in eq
+...| true = {!!}
+...| false rewrite insertU-lem {y} {xs} = {!!} -- cong (x ∷_) {!insertU-lem!}
+-}
 {-
 sublem1 : ∀ {z} (xs ys : List A) → length (nub xs) ≤ length (nub (xs ++ ys))
           → length (filterᵇ (not ∘ _==_ z) (nub xs)) ≤ length (filterᵇ (not ∘ _==_ z) (nub (xs ++ ys)))
