@@ -2,7 +2,7 @@ open import Relation.Binary.Bundles
 open import Data.Bool hiding (_≤_)
 open import Relation.Binary.PropositionalEquality hiding ([_])
 
-module ListInsertLib (A : Set) (_==_ : A → A → Bool)
+module ListInsertLibDec (A : Set) (_==_ : A → A → Bool)
        (axiom1 : ∀ (x y : A) → (x == y) ≡ true → x ≡ y)
        (axiom2 : ∀ (x y : A) → (x == y) ≡ false → x ≢ y ) where
 
@@ -39,8 +39,8 @@ open import Data.List.Relation.Binary.Subset.Setoid.Properties
 
 insert : A → List A → List A
 insert a [] = a ∷ []
-insert a xs@(x ∷ l) =
-  if a == x then xs
+insert a (x ∷ l) =
+  if a == x then (x ∷ l)
             else x ∷ (insert a l)
 
 --xs@(x ∷ l)
@@ -200,70 +200,16 @@ deduplicateᵇ r (x ∷ xs) = x ∷ filterᵇ (not ∘ r x) (deduplicateᵇ r xs
 
 nub : List A → List A
 nub = deduplicateᵇ _==_
+{-
+filter-lem : ∀ (y : A) (xs : List A) → (y ∷ (nub xs)) ≡ (y ∷ (filterᵇ (λ z → not (y == z)) (nub xs)))
+filter-lem = {!!}
 
-
-
-==refl : ∀ (x : A) → x == x ≡ true
-==refl x with x == x in eq
-...| true = refl
-...| false = ⊥-elim (axiom2 x x eq refl)
-
-∉-lem : ∀ {y x : A} {zs : List A} → y ∉ (x ∷ zs) → y ∉ zs
-∉-lem p = λ t → p (there t)
-
-∉-lem' : ∀ {y x z : A} {ts : List A} → y ∉ (x ∷ z ∷ ts) → y ∉ (x ∷ ts)
-∉-lem' p = λ { (here px) → p (here px)
-             ; (there f) → p (there (there f))}
-
-
-filter-lem' : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) xs ≡ xs
-filter-lem' {y} {[]} p = refl
-filter-lem' {y} {x ∷ xs} p with y == x in eq
-...| true = ⊥-elim (p (here (axiom1 y x eq)))
-...| false = cong (x ∷_) (filter-lem' (∉-lem p))
-
-
-∉-lem2 : ∀ {y x : A} {zs : List A} → y ∉ x ∷ zs → x ∉ zs → x ∉ zs ++ y ∷ []
-∉-lem2 {y} {x} {[]} p1 p2 = λ { (here px) → p1 (here (sym px))}
-∉-lem2 {y} {x} {x₁ ∷ zs} p1 p2 = λ { (here px) → p2 (here px)
-                                   ; (there t) → ∉-lem2 (∉-lem' p1) (∉-lem p2) t}
-
-nub-lem : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → nub (xs ++ y ∷ []) ≡ xs ++ y ∷ []
-nub-lem {y} {[]} [] p2 = refl
-nub-lem {y} {x ∷ xs} (p ∷ p1) p2 rewrite nub-lem p1 (∉-lem p2) | filter-lem' (∉-lem2 p2 (All¬⇒¬Any p)) = refl
-
-filter-lem : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) (xs ++ y ∷ []) ≡ xs
-filter-lem {y} {[]} pf rewrite ==refl y = refl
-filter-lem {y} {x ∷ xs} pf with y == x in eq
-...| true = ⊥-elim (pf (here (axiom1 y x eq)))
-...| false = cong (x ∷_) (filter-lem (∉-lem pf))
-
---filterᵇ (λ z → not (y == z)) xs ≡ xs
-
-filterNub-lem : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → xs ≡ filterᵇ (λ z → not (y == z)) (nub (xs ++ y ∷ []))
-filterNub-lem p1 p2 rewrite nub-lem p1 p2 | filter-lem p2 = refl
-
-{-y} {[]} [] p2 rewrite ==refl y = refl
-filter-lem2 {y} {x ∷ xs} (p ∷ p1) p2 = {!!}
-{-with y == x in eq
-...| true = ⊥-elim (p2 (here (axiom1 y x eq)))
-...| false = {!!}
--}-}
---rewrite filter-lem2 p1 (∉-lem p2) = {!!}
-
-
-
-∉nub-lem : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → y ∉ nub xs
-∉nub-lem {y} {[]} p1 p2 = p2
-∉nub-lem {y} {x ∷ xs} (p ∷ p1) p2 = λ { (here px) → ⊥-elim (p2 (here px))
-                                      ; (there z) → ∉nub-lem p1 (∉-lem p2) {!sym!} } --∉nub-lem {!!} {!!}}
-
-insertU-lem : ∀ {y : A} {xs : List A} → Unique xs → insert y xs ≡ nub (xs ++ [ y ])
-insertU-lem {xs = []} p = refl
-insertU-lem {y} {x ∷ xs} (p ∷ ps) with y == x in eq
-...| true rewrite axiom1 y x eq | sym (filterNub-lem ps (All¬⇒¬Any p))= refl
-...| false rewrite insertU-lem {y} {xs} ps = cong (x ∷_) (sym (filter-lem' {!!})) -- cong (x ∷_) {!insertU-lem!} -}
-{--}
+insertU-lem : ∀ {y xs} → insert y xs ≡ nub (xs ++ [ y ])
+insertU-lem {xs = []} = refl
+insertU-lem {y} {x ∷ xs} with y == x in eq
+...| true = {!!}
+...| false rewrite insertU-lem {y} {xs} = {!!} -- cong (x ∷_) {!insertU-lem!}
+-}
 {-
 sublem1 : ∀ {z} (xs ys : List A) → length (nub xs) ≤ length (nub (xs ++ ys))
           → length (filterᵇ (not ∘ _==_ z) (nub xs)) ≤ length (filterᵇ (not ∘ _==_ z) (nub (xs ++ ys)))
