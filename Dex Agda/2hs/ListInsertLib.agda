@@ -202,7 +202,6 @@ nub : List A → List A
 nub = deduplicateᵇ _==_
 
 
-
 ==refl : ∀ (x : A) → x == x ≡ true
 ==refl x with x == x in eq
 ...| true = refl
@@ -211,24 +210,14 @@ nub = deduplicateᵇ _==_
 ∉-lem : ∀ {y x : A} {zs : List A} → y ∉ (x ∷ zs) → y ∉ zs
 ∉-lem p = λ t → p (there t)
 
-{-
-∉-lem' : ∀ {y x z : A} {ts : List A} → y ∉ (x ∷ z ∷ ts) → y ∉ (x ∷ ts)
-∉-lem' p = λ { (here px) → p (here px)
-             ; (there f) → p (there (there f))}
--}
 
-filter-lem' : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) xs ≡ xs
-filter-lem' {y} {[]} p = refl
-filter-lem' {y} {x ∷ xs} p with y == x in eq
+filter-lem : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) xs ≡ xs
+filter-lem {y} {[]} p = refl
+filter-lem {y} {x ∷ xs} p with y == x in eq
 ...| true = ⊥-elim (p (here (axiom1 y x eq)))
-...| false = cong (x ∷_) (filter-lem' (∉-lem p))
+...| false = cong (x ∷_) (filter-lem (∉-lem p))
 
-{-
-∉-lem2 : ∀ {y x : A} {zs : List A} → y ∉ x ∷ zs → x ∉ zs → x ∉ zs ++ y ∷ []
-∉-lem2 {y} {x} {[]} p1 p2 = λ { (here px) → p1 (here (sym px))}
-∉-lem2 {y} {x} {x₁ ∷ zs} p1 p2 = λ { (here px) → p2 (here px)
-                                   ; (there t) → ∉-lem2 (∉-lem' p1) (∉-lem p2) t}
--}
+
 ∉-lem2 : ∀ {y x : A} {zs : List A} → y ≢ x → x ∉ zs → x ∉ zs ++ y ∷ []
 ∉-lem2 {y} {x} {[]} p1 p2 = λ { (here px) → p1 (sym px)}
 ∉-lem2 {y} {x} {x₁ ∷ zs} p1 p2 = λ { (here px) → p2 (here px)
@@ -236,23 +225,17 @@ filter-lem' {y} {x ∷ xs} p with y == x in eq
 
 nub-lem : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → nub (xs ++ y ∷ []) ≡ xs ++ y ∷ []
 nub-lem {y} {[]} [] p2 = refl
-nub-lem {y} {x ∷ xs} (p ∷ p1) p2 rewrite nub-lem p1 (∉-lem p2) | filter-lem' (∉-lem2 (λ z → p2 (here z)) (All¬⇒¬Any p)) = refl
+nub-lem {y} {x ∷ xs} (p ∷ p1) p2 rewrite nub-lem p1 (∉-lem p2) | filter-lem (∉-lem2 (λ z → p2 (here z)) (All¬⇒¬Any p)) = refl
 
-filter-lem : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) (xs ++ y ∷ []) ≡ xs
-filter-lem {y} {[]} pf rewrite ==refl y = refl
-filter-lem {y} {x ∷ xs} pf with y == x in eq
+filterAppend-lem : ∀ {y : A} {xs : List A} → y ∉ xs → filterᵇ (λ z → not (y == z)) (xs ++ y ∷ []) ≡ xs
+filterAppend-lem {y} {[]} pf rewrite ==refl y = refl
+filterAppend-lem {y} {x ∷ xs} pf with y == x in eq
 ...| true = ⊥-elim (pf (here (axiom1 y x eq)))
-...| false = cong (x ∷_) (filter-lem (∉-lem pf))
+...| false = cong (x ∷_) (filterAppend-lem (∉-lem pf))
 
 
 filterNub-lem : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → xs ≡ filterᵇ (λ z → not (y == z)) (nub (xs ++ y ∷ []))
-filterNub-lem p1 p2 rewrite nub-lem p1 p2 | filter-lem p2 = refl
-
-{-
-filterNub-lem' : ∀ {y : A} {xs : List A} → Unique xs → y ∉ xs → xs ≡ filterᵇ (λ z → not (y == z)) (nub xs)
-filterNub-lem' p1 p2 = {!!}
--}
---rewrite nub-lem p1 p2 | filter-lem p2 = refl
+filterNub-lem p1 p2 rewrite nub-lem p1 p2 | filterAppend-lem p2 = refl
 
 
 filter∈-lem : ∀ {y x : A} {zs : List A} → y ∈ filterᵇ (λ t → not (x == t)) zs → y ∈ zs
@@ -279,25 +262,146 @@ insertU-lem : ∀ {y : A} {xs : List A} → Unique xs → insert y xs ≡ nub (x
 insertU-lem {xs = []} p = refl
 insertU-lem {y} {x ∷ xs} (p ∷ ps) with y == x in eq
 ...| true rewrite axiom1 y x eq | sym (filterNub-lem ps (All¬⇒¬Any p))= refl
-...| false rewrite insertU-lem {y} {xs} ps = cong (x ∷_) (sym (filter-lem' (∉nub-lem (∉-lem2 (axiom2 y x eq) (All¬⇒¬Any p))))) 
+...| false rewrite insertU-lem {y} {xs} ps = cong (x ∷_) (sym (filter-lem (∉nub-lem (∉-lem2 (axiom2 y x eq) (All¬⇒¬Any p))))) 
 
-
-
-
-nubLength-sublem : ∀ (xs ys : List A) -> length (nub (ys ++ xs)) ≡ length (nub (xs ++ ys))
-nubLength-sublem [] [] = refl
-nubLength-sublem [] (x ∷ ys) rewrite ++-identityʳ ys = refl
-nubLength-sublem (x ∷ xs) [] rewrite ++-identityʳ xs = refl 
-nubLength-sublem (x ∷ xs) (y ∷ ys) = {!!}
-{--}
---rewrite nubLength-sublem (x ∷ xs) ys = {!!} --cong suc {!!} --refl
 
 nubUnique-lem : ∀ {xs} → Unique xs → nub xs ≡ xs
 nubUnique-lem [] = refl
-nubUnique-lem {x ∷ xs} (p ∷ ps) rewrite nubUnique-lem ps = cong (x ∷_) (filter-lem' (λ y → All¬⇒¬Any p y))
+nubUnique-lem {x ∷ xs} (p ∷ ps) rewrite nubUnique-lem ps = cong (x ∷_) (filter-lem (λ y → All¬⇒¬Any p y))
+
+filterX-lem : ∀ (y : A) (xs : List A) → All (λ z → y ≡ z → ⊥) (filterᵇ (λ t → not (y == t)) xs)
+filterX-lem y [] = []
+filterX-lem y (x ∷ xs) with y == x in eq
+...| true = filterX-lem y xs
+...| false = (axiom2 y x eq) ∷ (filterX-lem y xs)
+
+filterDistinct-lem : ∀ (y x : A) (zs : List A) → All (λ t → x ≡ t → ⊥) zs
+                     → All (λ t → x ≡ t → ⊥) (filterᵇ (λ t → not (y == t)) zs)
+filterDistinct-lem y x [] p = p
+filterDistinct-lem y x (z ∷ zs) (p ∷ ps) with y == z in eq
+...| true = filterDistinct-lem y x zs ps
+...| false = p ∷ (filterDistinct-lem y x zs ps)
+
+filterUniqueNub-lem : ∀ (y : A) (xs : List A) → Unique xs → Unique (filterᵇ (λ z → not (y == z)) xs) 
+filterUniqueNub-lem y [] p = p
+filterUniqueNub-lem y (x ∷ xs) (p ∷ ps) with y == x in eq
+...| true = filterUniqueNub-lem y xs ps
+...| false = filterDistinct-lem y x xs p ∷ filterUniqueNub-lem y xs ps
+
+uniqueNub-lem : ∀ (xs : List A) → Unique (nub xs)
+uniqueNub-lem [] = Unique.[]
+uniqueNub-lem (x ∷ xs) = filterX-lem x (nub xs) ∷ filterUniqueNub-lem x (nub xs) (uniqueNub-lem xs)
+
+double-filter : ∀ (x : A) (zs : List A) ->
+       (filterᵇ (λ y → not (x == y)) (filterᵇ (λ z → not (x == z)) zs)) ≡
+       (filterᵇ (λ y → not (x == y)) zs)
+double-filter x [] = refl
+double-filter x (z ∷ zs) with x == z in eq
+...| true = double-filter x zs
+...| false rewrite eq = cong (z ∷_ ) (double-filter x zs)
+
+filter-swap : ∀ (x y : A) (zs : List A) →
+            (filterᵇ (λ t → not (x == t)) (filterᵇ (λ t → not (y == t)) zs)) ≡
+            (filterᵇ (λ t → not (y == t)) (filterᵇ (λ t → not (x == t)) zs))
+filter-swap x y [] = refl
+filter-swap x y (z ∷ zs) with y == z in eq1
+...                      | true with x == z in eq2
+...                             | true = filter-swap x y zs
+...                             | false rewrite eq2 | eq1 = filter-swap x y zs
+filter-swap x y (z ∷ zs) | false with x == z in eq2
+...                              | true = filter-swap x y zs
+...                              | false rewrite eq1 = cong (z ∷_) (filter-swap x y zs)
 
 
-length-filterᵇ : ∀ (xs : List A) (f : A → Bool)  → length (filterᵇ f xs) ≤ length xs
+reshuffle : ∀ (y : A) (xs : List A) → filterᵇ (λ z → not (y == z)) (nub (filterᵇ (λ z → not (y == z)) xs))
+            ≡ filterᵇ (λ z → not (y == z)) (filterᵇ (λ z → not (y == z)) (nub xs))
+reshuffle y [] = refl
+reshuffle y (x ∷ xs) with y == x in eq
+...| true rewrite axiom1 y x eq | double-filter x (nub xs) = reshuffle x xs 
+...| false rewrite eq | double-filter y (filterᵇ (λ z → not (x == z)) (nub xs)) |
+           filter-swap y x (nub (filterᵇ (λ z → not (y == z)) xs)) |
+           reshuffle y xs | double-filter y (nub xs) |
+           filter-swap x y (nub xs) = cong (x ∷_) refl 
+
+double-nub : ∀ (xs : List A) → nub (nub xs) ≡ nub xs
+double-nub [] = refl
+double-nub (x ∷ xs) rewrite reshuffle x (nub xs) | double-nub xs |
+                            double-filter x (nub xs) = cong (x ∷_) refl
+
+--filter-distrib 
+
+partial-reshuffle : ∀ (y : A) (xs zs : List A) → filterᵇ (λ z → not (y == z)) (nub (filterᵇ (λ z → not (y == z)) xs ++ zs))
+            ≡ filterᵇ (λ z → not (y == z)) (filterᵇ (λ z → not (y == z)) (nub (xs ++ zs)))
+partial-reshuffle y [] zs rewrite double-filter y (nub zs) = refl 
+partial-reshuffle y (x ∷ xs) zs with y == x in eq
+...| true rewrite axiom1 y x eq | double-filter x (filterᵇ (λ t → not (x == t)) (nub (xs ++ zs))) = partial-reshuffle x xs zs
+...| false rewrite eq | double-filter y (filterᵇ (λ t → not (x == t)) (nub (xs ++ zs)))
+           | filter-swap y x (nub (filterᵇ (λ z → not (y == z)) xs ++ zs)) | partial-reshuffle y xs zs
+           | double-filter y (nub (xs ++ zs)) | filter-swap x y (nub (xs ++ zs)) = cong (x ∷_) refl
+
+partial-nub : ∀ (xs ys : List A) → nub ((nub xs) ++ ys) ≡ nub (xs ++ ys)
+partial-nub [] ys = refl
+partial-nub (x ∷ xs) ys rewrite (sym (partial-nub xs ys)) | partial-reshuffle x (nub xs) ys
+                        | double-filter x (nub ((nub xs) ++ ys)) = cong (x ∷_) refl
+
+++∷++lem : ∀ (z : A) (xs ys : List A) → (xs ++ z ∷ []) ++ ys ≡ xs ++ z ∷ ys
+++∷++lem z [] ys = refl
+++∷++lem z (x ∷ xs) ys = cong (x ∷_) (++∷++lem z xs ys)
+
+insertList-lem : ∀ (xs ys : List A) → Unique xs → Unique ys → insertList xs ys ≡ nub (ys ++ xs)
+insertList-lem [] ys p1 p2 rewrite ++-identityʳ ys = sym (nubUnique-lem p2)
+insertList-lem (x ∷ xs) ys (p1 ∷ p1s) p2 rewrite insertU-lem {x} {ys} p2
+               | insertList-lem xs (nub (ys ++ x ∷ [])) p1s (uniqueNub-lem (ys ++ x ∷ []))
+               | partial-nub (ys ++ x ∷ []) xs | ++∷++lem x ys xs = refl
+
+
+
+filterUniqueLength : ∀ (y : A) (xs : List A) → Unique xs → suc (length (filterᵇ (λ x₁ → not (y == x₁)) xs)) ≥ length xs
+filterUniqueLength y [] p = z≤n
+filterUniqueLength y (x ∷ xs) (p ∷ ps) with y == x in eq
+...| true rewrite axiom1 y x eq | filter-lem (All¬⇒¬Any p) = s≤s ≤-refl
+...| false = s≤s (filterUniqueLength y xs ps)
+
+nub∷Length-lem : ∀ (y : A) (xs : List A) → length (nub xs) ≤ length (nub (y ∷ xs))
+nub∷Length-lem y [] = z≤n
+nub∷Length-lem y (x ∷ xs) with y == x in eq
+...| true rewrite axiom1 y x eq | double-filter x (nub xs) = ≤-refl
+...| false = s≤s (≤-trans ≤-refl (filterUniqueLength y (filterᵇ (λ z → not (x == z)) (nub xs))
+             (filterUniqueNub-lem x (nub xs) (uniqueNub-lem xs)) ))
+
+nubLength-lem : ∀ {xs} (ys : List A) → Unique xs -> length (nub (ys ++ xs)) ≥ length xs
+nubLength-lem {xs} [] p rewrite nubUnique-lem p = ≤-refl
+nubLength-lem {xs} (y ∷ ys) p = ≤-trans (nubLength-lem ys p) (nub∷Length-lem y (ys ++ xs))
+
+
+uniqueInsertLemma2 : ∀ (l₁ l₂ : List A) (pf1 : Unique l₁) (pf2 : Unique l₂) → (length (insertList l₁ l₂) ≥ length l₁)
+uniqueInsertLemma2 l1 l2 p1 p2 rewrite insertList-lem l1 l2 p1 p2 = nubLength-lem l2 p1
+
+
+reduce∈ : ∀ {x y xs} -> y ∈ (x ∷ xs) -> y ≢ x -> y ∈ xs
+reduce∈ (here px) p2 = ⊥-elim (p2 px)
+reduce∈ (there p1) p2 = p1 
+
+insertPreserves∈ : ∀ {x y zs}
+  -> All (λ t → x ≡ t → ⊥) zs -> (y == x) ≡ false -> All (λ t → x ≡ t → ⊥) (insert y zs)
+insertPreserves∈ {x} {y} {zs} [] p2 = (λ t → axiom2 y x p2 (sym t)) ∷ [] --{!sym (axiom2 y x p2)!} ∷ {!!}
+insertPreserves∈ {x} {y} {z ∷ zs} (p1 ∷ p1s) p2 with y == z in eq
+...| true = p1 ∷ p1s
+...| false = p1 ∷ (insertPreserves∈ p1s p2)
+
+insertPreservesUniqueness : ∀ {y xs}
+  -> Unique xs -> Unique (insert y xs)
+insertPreservesUniqueness [] = [] ∷ []
+insertPreservesUniqueness {y} {x ∷ xs} (p ∷ ps) with y == x in eq
+...| true = p ∷ ps
+...| false = insertPreserves∈ p eq ∷ insertPreservesUniqueness ps
+
+
+------------------------------------------------
+--Unnecessary
+{-
+
+length-filterᵇ : ∀ (xs : List A) (f : A → Bool) → length (filterᵇ f xs) ≤ length xs
 length-filterᵇ [] f = z≤n
 length-filterᵇ (x ∷ xs) f with f x
 ...| true = s≤s (length-filterᵇ xs f)
@@ -315,21 +419,22 @@ asdd {x} {y} {xs} (p ∷ ps) with y == x in eq
 asdd {x} {y} {[]} (p ∷ ps) | false = z≤n
 asdd {x} {y} {x' ∷ xs} ((px ∷ p) ∷ ps) | false with x == x' in eq2
 ...| true rewrite axiom1 x x' eq2 = ⊥-elim (All¬⇒¬Any (px ∷ p) (here refl))
-{-rewrite axiom1 x x' eq2 | filter-lem' {x'} {nub xs} (∉nub-lem (All¬⇒¬Any p')) |
-                   filter-lem' {x'} {nub xs} (∉nub-lem (All¬⇒¬Any p')) = s≤s {!asdd!}-}
 ...| false rewrite filter-lem' {x} {(filterᵇ (λ x₁ → not (x' == x₁)) (deduplicateᵇ _==_ xs))}
                    (∉filter-lem (∉nub-lem (All¬⇒¬Any p))) = s≤s (asdd ps)
 
+-}
 
-double-filter : ∀ (x : A) (zs : List A) ->
-       (filterᵇ (λ y → not (x == y)) (filterᵇ (λ z → not (x == z)) zs)) ≡
-       (filterᵇ (λ y → not (x == y)) zs)
-double-filter x [] = refl
-double-filter x (z ∷ zs) with x == z in eq
-...| true = double-filter x zs
-...| false rewrite eq = cong (z ∷_ ) (double-filter x zs)
+------------------------------------------------
+--Failures
 
---defilter : ∀ {x : A} (zs ts : List A) ->  (filterᵇ (λ y → not (x == y)) zs
+--(nubLength-lem {ys = ys} ps)
+{-
+
+nubLength-sublem : ∀ (xs ys : List A) -> length (nub (ys ++ xs)) ≡ length (nub (xs ++ ys))
+nubLength-sublem [] [] = refl
+nubLength-sublem [] (x ∷ ys) rewrite ++-identityʳ ys = refl
+nubLength-sublem (x ∷ xs) [] rewrite ++-identityʳ xs = refl 
+nubLength-sublem (x ∷ xs) (y ∷ ys) = {!!}
 
 asff : ∀ {x : A} (xs ys : List A) -> Unique xs
   → length (filterᵇ (λ z → not (x == z)) (nub (xs))) ≤ length (filterᵇ (λ z → not (x == z)) (nub (ys ++ xs)))
@@ -338,12 +443,14 @@ asff {x} xs (y ∷ ys) p with x == y in eq
 ...| true rewrite axiom1 x y eq | double-filter y (deduplicateᵇ _==_ (ys ++ xs)) = asff xs ys p
 ...| false = {!!}
 
-nubLength-lem : ∀ {xs ys} → Unique xs -> length (nub (ys ++ xs)) ≥ length xs
 nubLength-lem {[]} {ys} p = z≤n
 nubLength-lem {x ∷ xs} {[]} (p ∷ ps) rewrite nubUnique-lem ps | filter-lem' λ y → All¬⇒¬Any p y = s≤s ≤-refl
 --rewrite nubUnique-lem p = {!!}
 nubLength-lem {x ∷ xs} {y ∷ ys} (p ∷ ps) = s≤s {!!} --(≤-trans {!!} {!!} ) --(nubLength-lem {ys = ys} ps) )
-
+-}
+{-
+nubLength-lem' : ∀ {xs ys} → Unique xs -> length (nub (xs ++ ys)) ≥ length xs
+nubLength-lem' {xs} {ys} p = {!!}-}
 --other way around???
 
 {-

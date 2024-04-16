@@ -49,7 +49,7 @@ query pkh (x ∷ l') = (x == pkh) || query pkh l'
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
 insert pkh (x ∷ l') = if (pkh == x)
-  then (pkh ∷ l')
+  then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
 --interesting complication if using "x == pkh -> x :: l'" instead
