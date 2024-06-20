@@ -341,7 +341,7 @@ insert-lem1 : (x : PubKeyHash)(l : List PubKeyHash) -> x ∈ insert x l
 insert-lem1 x [] = here refl
 insert-lem1 x (y ∷ l) with x == y in eq
 ... | false = there (insert-lem1 x l) 
-... | true = here refl
+... | true rewrite ==ito≡ x y eq = here refl
 
 insert-lem2 : (x y : PubKeyHash)(l : List PubKeyHash) -> x ∈ l -> x ∈ insert y l
 insert-lem2 x y [] pf = there pf
