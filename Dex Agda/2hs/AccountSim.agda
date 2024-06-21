@@ -1,4 +1,4 @@
-module DoubleSpend where
+module AccountSim where
 
 open import Haskell.Prelude
 
@@ -10,9 +10,6 @@ ThreadToken = Placeholder
 
 PubKeyHash = Integer
 Value = Integer
-Deadline = Nat
-
-{-# COMPILE AGDA2HS Deadline #-}
 
 Label = List (PubKeyHash × Value)
 
@@ -24,7 +21,6 @@ record ScriptContext : Set where
         inputVal    : Integer
         outputVal   : Integer
         outputLabel : Label
-        time        : Deadline
         payTo       : PubKeyHash
         payAmt      : Value
         signature   : PubKeyHash
@@ -134,9 +130,6 @@ checkTransfer from to val lab ctx = case (lookup from lab , lookup to lab) of λ
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 
-expired : Deadline -> ScriptContext -> Bool
-expired d ctx = (time ctx) > d
-
 
 
 agdaValidator : Label -> Input -> ScriptContext -> Bool
@@ -146,11 +139,11 @@ agdaValidator lab inp ctx = case inp of λ where
                   newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
 
     (Close pkh) -> checkSigned pkh ctx && checkEmpty pkh lab &&
-                   newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
+                   newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
 
     (Withdraw pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
-                          checkWithdraw pkh val lab ctx && newValue ctx + val == oldValue ctx
-
+                          checkWithdraw pkh val lab ctx && newValue ctx + val == oldValue ctx &&
+                          checkPayment pkh val ctx
 
     (Deposit pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
                          checkDeposit pkh val lab ctx && newValue ctx == oldValue ctx + val
