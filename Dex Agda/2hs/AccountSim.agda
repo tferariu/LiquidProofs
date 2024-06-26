@@ -53,33 +53,6 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 
-{-if (pkh == x)
-  then (Just y)
-  otherwise (lookup' pkh xs)-}
-
-{-
-lookup' : PubKeyHash -> Label -> Maybe Value
-lookup' pkh [] = Nothing
-lookup' pkh ((x , y) ∷ xs) = if (pkh == x)
-  then (Just y)
-  else (lookup' pkh xs)
-
-query : PubKeyHash -> List PubKeyHash -> Bool
-query pkh [] = False
-query pkh (x ∷ l') = (x == pkh) || query pkh l'
-
-insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
-insert pkh [] = (pkh ∷ [])
-insert pkh (x ∷ l') = if (pkh == x)
-  then (x ∷ l')
-  else (x ∷ (insert pkh l'))
-
---interesting complication if using "x == pkh -> x :: l'" instead
-
-{-# COMPILE AGDA2HS query #-}
-{-# COMPILE AGDA2HS insert #-}
--}
-
 newLabel : ScriptContext -> Label
 newLabel ctx = outputLabel ctx
 
@@ -109,21 +82,21 @@ checkMembership pkh lab = case lookup pkh lab of λ where
 checkEmpty : PubKeyHash -> Label -> Bool
 checkEmpty pkh lab = case lookup pkh lab of λ where
   Nothing -> False
-  (Just v) -> v == 0
+  (Just v) -> v == emptyValue
 
 checkWithdraw : PubKeyHash -> Value -> Label -> ScriptContext -> Bool
 checkWithdraw pkh val lab ctx = case lookup pkh lab of λ where
   Nothing -> False
-  (Just v) -> val >= 0 && v >= val && (newLabel ctx == insert pkh (v - val) lab)
+  (Just v) -> geq val emptyValue && geq v val && (newLabel ctx == insert pkh (v - val) lab)
   
 checkDeposit : PubKeyHash -> Value -> Label -> ScriptContext -> Bool
 checkDeposit pkh val lab ctx = case lookup pkh lab of λ where
   Nothing -> False
-  (Just v) -> val >= 0 && (newLabel ctx == insert pkh (v + val) lab)
+  (Just v) -> geq val emptyValue && (newLabel ctx == insert pkh (v + val) lab)
 
 checkTransfer : PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
 checkTransfer from to val lab ctx = case (lookup from lab , lookup to lab) of λ where
-  (Just vF , Just vT) -> vF >= val && val >= 0 && from /= to &&
+  (Just vF , Just vT) -> geq vF val && geq val 0 && from /= to &&
                          newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
   _ -> False
 
@@ -142,7 +115,7 @@ agdaValidator lab inp ctx = case inp of λ where
                    newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
 
     (Withdraw pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
-                          checkWithdraw pkh val lab ctx && newValue ctx + val == oldValue ctx &&
+                          checkWithdraw pkh val lab ctx && newValue ctx == oldValue ctx - val &&
                           checkPayment pkh val ctx
 
     (Deposit pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
@@ -153,23 +126,4 @@ agdaValidator lab inp ctx = case inp of λ where
                               newValue ctx == oldValue ctx
 
 {-# COMPILE AGDA2HS agdaValidator #-}
-
-{-
-
-  Open     : PubKeyHash -> Input
-  Close    : PubKeyHash -> Input
-  Withdraw : PubKeyHash -> Value -> Input
-  Deposit  : PubKeyHash -> Value -> Input
-  Transfer : PubKeyHash -> PubKeyHash -> Value -> Input
-agdaValidator : Value -> Input -> ScriptContext -> Bool
-agdaValidator dat red ctx = case red of λ where
-
-    (Add val) -> checkInputs val ctx && (newLabel ctx) == dat + val
-
-    (Pay val pkh) -> checkPayment pkh val ctx && oldValue ctx == ((newValue ctx) + val)
-                     && val <= dat && (newLabel ctx) + val == dat
-      
-
-{-# COMPILE AGDA2HS agdaValidator #-}
--}
 
