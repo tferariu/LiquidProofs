@@ -5,7 +5,7 @@ open import AccountSim
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
---open import Data.Nat
+import Data.Nat as N
 --open import Data.Nat.Properties
 open import Data.Integer
 open import Data.Integer.Properties
@@ -53,52 +53,52 @@ open State
 data _~[_]~>_ : State -> Input -> State -> Set where
  
   TOpen : ∀ {pkh s s'}
-    -> tsig (context s') ≡ pkh
+    -> pkh ≡ tsig (context s')
     -> lookup pkh (label s) ≡ Nothing
     -> label s' ≡ insert pkh 0 (label s)
-    -> value (context s) ≡ value (context s') 
+    -> value (context s') ≡ value (context s) 
     -------------------
     -> s ~[ (Open pkh) ]~> s'
 
   TClose : ∀ {pkh s s'}
-    -> tsig (context s') ≡ pkh
+    -> pkh ≡ tsig (context s')
     -> lookup pkh (label s) ≡ Just 0
     -> label s' ≡ delete pkh (label s)
-    -> value (context s) ≡ value (context s') 
+    -> value (context s') ≡ value (context s) 
     -------------------
     -> s ~[ (Close pkh) ]~> s'
 
   TWithdraw : ∀ {pkh val s s' v}
-    -> tsig (context s') ≡ pkh
+    -> pkh ≡ tsig (context s')
     -> lookup pkh (label s) ≡ Just v
     -> val ≥ emptyValue
     -> v ≥ val
     -> label s' ≡ (insert pkh (v - val) (label s))
-    -> value (context s) - val ≡ value (context s')
-    -> outVal (context s') ≡ v
-    -> outAdr (context s') ≡ pkh 
+    -> value (context s') ≡ value (context s) - val
+    -> pkh ≡ outAdr (context s') 
+    -> v ≡ outVal (context s') 
     -------------------
     -> s ~[ (Withdraw pkh val) ]~> s'
     
   TDeposit : ∀ {pkh val s s' v}
-    -> tsig (context s') ≡ pkh
+    -> pkh ≡ tsig (context s')
     -> lookup pkh (label s) ≡ Just v
     -> val ≥ emptyValue
     -> label s' ≡ (insert pkh (v + val) (label s))
-    -> value (context s) + val ≡ value (context s')
+    -> value (context s') ≡ value (context s) + val
     -------------------
     -> s ~[ (Deposit pkh val) ]~> s'
 
     
   TTransfer : ∀ {from to val s s' vF vT}
-    -> tsig (context s') ≡ from
+    -> from ≡ tsig (context s')
     -> lookup from (label s) ≡ Just vF
     -> lookup to (label s) ≡ Just vT
     -> val ≥ emptyValue
     -> vF ≥ val
     -> from ≢ to
     -> label s' ≡ (insert from (vF - val) (insert to (vT + val) (label s)))
-    -> value (context s) ≡ value (context s')
+    -> value (context s') ≡ value (context s)
     -------------------
     -> s ~[ (Transfer from to val) ]~> s'
 
@@ -156,8 +156,7 @@ svLemma3 {pkh} {v} {val} (x ∷ l) p with pkh == (fst x) in eq
 
 ==ito≡ : ∀ (a b : Integer) -> (a == b) ≡ true -> a ≡ b
 ==ito≡ (pos n) (pos m) pf = cong pos (==to≡ n m pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf)
-
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (sym (==to≡ m n pf)) 
 
 switchSides : ∀ {a b c : Integer} -> a - b ≡ c -> a ≡ b + c
 switchSides {a} {b} refl rewrite +-comm a (- b) | sym (+-assoc b (- b) a)
@@ -196,15 +195,15 @@ fidelity : ∀ (s s' : State) (i : Input)
          -> s ~[ i ]~> s'
          -> value (context s') ≡ sumVal (label s')
 fidelity s s' .(Open _) pf (TOpen p1 p2 p3 p4)
-         rewrite pf | sym p4 | p3 = svLemma1 (label s) p2
+         rewrite pf | p4 | p3 = svLemma1 (label s) p2
 fidelity s s' .(Close _) pf (TClose p1 p2 p3 p4)
-         rewrite pf | sym p4 | p3 = svLemma2 (label s) p2
+         rewrite pf | p4 | p3 = svLemma2 (label s) p2
 fidelity s s' .(Withdraw _ _) pf (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8)
-         rewrite p5 | sym p6 | pf = svLemma3 (label s) p2
+         rewrite p5 | p6 | pf = svLemma3 (label s) p2
 fidelity s s' .(Deposit _ _) pf (TDeposit p1 p2 p3 p4 p5)
-         rewrite sym p5 | pf | p4 = svLemma3 (label s) p2
+         rewrite p5 | pf | p4 = svLemma3 (label s) p2
 fidelity s s' .(Transfer _ _ _) pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
-         rewrite sym p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
+         rewrite p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
 
 
 
@@ -288,6 +287,23 @@ get true pf = refl
 go : ∀ (a : Bool) {b} -> (a && b) ≡ true -> b ≡ true
 go true {b} pf = pf
 
+skip : ∀ {a b : Bool} -> (a && b) ≡ true -> b ≡ true
+skip {true} {true} pf = pf
+
+here : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
+here {true} {true} pf = refl
+
+leqNto≤N : ∀ {a b} -> (ltNat a b || eqNat a b) ≡ true -> a N.≤ b
+leqNto≤N {zero} {zero} pf = N.z≤n
+leqNto≤N {zero} {suc b} pf = N.z≤n
+leqNto≤N {suc a} {suc b} pf = N.s≤s (leqNto≤N pf)
+
+geqto≤ : ∀ {a b} -> geq a b ≡ true -> a ≥ b
+geqto≤ {pos n} {pos m} pf = +≤+ (leqNto≤N pf)
+geqto≤ {pos n} {negsuc m} pf = -≤+
+geqto≤ {negsuc n} {negsuc m} pf = -≤- (leqNto≤N pf)
+
+
 ==pto≡ : ∀ (a b : PubKeyHash × Value) -> (a == b) ≡ true -> a ≡ b
 ==pto≡ (fst1 , snd1) (fst2 , snd2) pf
   rewrite (==ito≡ fst1 fst2 (get (fst1 == fst2) pf))
@@ -298,27 +314,65 @@ go true {b} pf = pf
 ==lto≡ (x ∷ a) (y ∷ b) pf
   rewrite (==pto≡ x y (get (x == y) pf)) = cong (λ x → y ∷ x) ((==lto≡ a b (go (x == y) pf)))
 
+
 &&false : ∀ (a : Bool) -> (a && false) ≡ true -> ⊥
 &&false true ()
 
+
+--why?
+rewriteJust : ∀ {a : Maybe ℤ} {v v'} -> a ≡ Just v -> v ≡ v' -> a ≡ Just v'
+rewriteJust refl refl = refl
+
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {oV oA s} (l : Label) (i : Input) (ctx : ScriptContext)
+validatorImpliesTransition : ∀ {oV oA sig} (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator l i ctx ≡ true)
                            -> record { label = l ; context = record { value = (inputVal ctx) ;
-                              outVal = oV ; outAdr = oA ; tsig = s } }
+                              outVal = oV ; outAdr = oA ; tsig = sig } }
                               ~[ i ]~>
                               record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
                               outVal = payAmt ctx ; outAdr = payTo ctx ; tsig = signature ctx } }
 
-validatorImpliesTransition {oA = o} l (Open x) ctx pf with lookup x l in aux
-...| Nothing = {!!}
-...| Just v = {!!}
-validatorImpliesTransition l (Close x) ctx pf = {!!}
-validatorImpliesTransition l (Withdraw x x₁) ctx pf = {!!}
-validatorImpliesTransition l (Deposit x x₁) ctx pf = {!!}
-validatorImpliesTransition l (Transfer x x₁ x₂) ctx pf = {!!}
-{-
-validatorImpliesTransition [] (Open pkh) ctx pf
+validatorImpliesTransition l (Open pkh) ctx pf with lookup pkh l in eq
+...| Nothing = TOpen (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
+               (==lto≡ (outputLabel ctx) (insert pkh 0 l) (get ((outputLabel ctx) == (insert pkh 0 l))
+               (go (pkh == (signature ctx)) pf))) (==ito≡ (outputVal ctx) (inputVal ctx)
+               (go ((outputLabel ctx) == (insert pkh +0 l)) (go (pkh == (signature ctx)) pf)))
+...| Just _ = ⊥-elim (&&false (pkh == signature ctx) pf)
+validatorImpliesTransition l (Close pkh) ctx pf with lookup pkh l in eq
+...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
+...| Just v = TClose (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf))
+              (rewriteJust eq (==ito≡ v +0 (get (v == +0) (go (pkh == signature ctx) pf))))
+              ((==lto≡ (outputLabel ctx) (delete pkh l) (get ((outputLabel ctx) == (delete pkh l))
+               (go (v == +0) (go (pkh == (signature ctx)) pf))))) (==ito≡ (outputVal ctx) (inputVal ctx)
+               (go ((outputLabel ctx) == (delete pkh l)) (go (v == +0) (go (pkh == (signature ctx)) pf))))
+validatorImpliesTransition l (Withdraw pkh val) ctx pf with lookup pkh l in eq
+...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
+...| Just v = TWithdraw (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
+              (geqto≤ (get (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf))))
+              (geqto≤ (get (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
+              (go (pkh == (signature ctx)) pf)))))
+              {!!}  {!!} {!!} {!!}
+
+--(==lto≡ ( (newLabel ctx)) {! (insert pkh (subInteger v val) l)!} {!!})
+{-(==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
+              (get ((newLabel ctx) == (insert pkh (subInteger v val) l))
+              (go (geq v val) (go (geq val +0) (get {!!} {!!})))))-}
+{-((ltInteger +0 val || eqInteger +0 val) &&
+        (ltInteger val v || eqInteger val v) &&
+        (outputLabel ctx) == (insert pkh (addInteger v (negateInteger val)) l))-}
+--  (geqto≤ (here (here (skip {!!}))))
+-- (geqto≤ (get (geq val +0) (go (pkh == (signature ctx)) {!pf!})))
+validatorImpliesTransition l (Deposit pkh val) ctx pf with lookup pkh l in eq
+...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
+...| Just v = TDeposit {!!} eq {!!} {!!} {!!}
+validatorImpliesTransition l (Transfer from to val) ctx pf with lookup from l in eq1
+validatorImpliesTransition l (Transfer from to val) ctx pf | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF with lookup to l in eq2
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Just vT = TTransfer {!!} eq1 eq2 {!!} {!!} {!!} {!!} {!!}
+
+
+{-validatorImpliesTransition [] (Open pkh) ctx pf
   = TOpen (sym (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf))) refl
     (==lto≡ (outputLabel ctx) ((pkh , +0) ∷ []) (get ((outputLabel ctx) == ((pkh , +0) ∷ []))
     (go (pkh == (signature ctx)) pf))) (sym (==ito≡ (outputVal ctx) (inputVal ctx)
