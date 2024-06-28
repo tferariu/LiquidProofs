@@ -8,6 +8,8 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
+asd = Nat
+
 PubKeyHash = Integer
 Value = Integer
 
@@ -78,13 +80,12 @@ aux : Maybe Value -> Bool
 aux Nothing = False
 aux (Just _) = True
 
---checkMembership : PubKeyHash -> Label -> Bool
---checkMembership pkh lab = aux (lookup pkh lab)
-{-case lookup pkh lab of λ where
+
+checkMembership' : PubKeyHash -> Label -> Bool
+checkMembership' pkh lab = case lookup pkh lab of λ where
   Nothing -> False
   (Just v) -> True
--}
-
+{--}
 
 checkMembership : Maybe Value -> Bool
 checkMembership Nothing = False
@@ -138,3 +139,4 @@ agdaValidator lab inp ctx = case inp of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
+--use function composition?

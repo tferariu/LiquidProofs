@@ -7,7 +7,7 @@ open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 import Data.Nat as N
 --open import Data.Nat.Properties
-open import Data.Integer
+open import Data.Integer --hiding (_+_; _-_)
 open import Data.Integer.Properties
 open import Agda.Builtin.Int
 open import Data.List hiding (lookup)
@@ -20,15 +20,24 @@ open import Data.Sum.Base
 --open import Data.Product
 --open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
 
+{- -}
 open import Haskell.Prim hiding (⊥ ; All)
 open import Haskell.Prim.Integer
+--open import Haskell.Prim.Nat
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
+open import Haskell.Prim.Ord
 open import Haskell.Prim.Maybe
 open import Haskell.Prim.Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup)
+
+--open import Haskell.Prelude
+--open import Haskell.Prim renaming (magic to ⊥-elim)
+--using (lookup)
+
+open import Function.Base using (_∋_)
 
 
 module AccountSimProofs where
@@ -76,7 +85,7 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> label s' ≡ (insert pkh (v - val) (label s))
     -> value (context s') ≡ value (context s) - val
     -> pkh ≡ outAdr (context s') 
-    -> v ≡ outVal (context s') 
+    -> val ≡ outVal (context s') 
     -------------------
     -> s ~[ (Withdraw pkh val) ]~> s'
     
@@ -94,8 +103,8 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> from ≡ tsig (context s')
     -> lookup from (label s) ≡ Just vF
     -> lookup to (label s) ≡ Just vT
-    -> val ≥ emptyValue
     -> vF ≥ val
+    -> val ≥ emptyValue
     -> from ≢ to
     -> label s' ≡ (insert from (vF - val) (insert to (vT + val) (label s)))
     -> value (context s') ≡ value (context s)
@@ -124,6 +133,10 @@ sumVal ((k , v) ∷ xs) =  v + sumVal xs
 maybe⊥ : ∀ {x : Value} -> Nothing ≡ Just x -> ⊥
 maybe⊥ ()
 
+0+a : ∀ (a : Integer) -> +0 + a ≡ a
+0+a (pos n) = refl
+0+a (negsuc n) = refl
+
 svLemma1 : ∀ {pkh} (l : Label) -> lookup pkh l ≡ Nothing -> sumVal l ≡ sumVal (insert pkh +0 l)
 svLemma1 [] p = refl
 svLemma1 {pkh} (x ∷ l) p with pkh == (fst x) in eq
@@ -137,7 +150,59 @@ svLemma2 : ∀ {pkh} (l : Label) -> lookup pkh l ≡ Just +0 -> sumVal l ≡ sum
 svLemma2 [] p = refl
 svLemma2 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 ...| false = cong (λ a → snd x + a) (svLemma2 l p)
-...| true rewrite (maybe≡ p) | +-identityˡ (sumVal l) = refl
+...| true rewrite (maybe≡ p) | 0+a (sumVal l) = refl
+
+
+--subN≡ : ∀ (a b : Integer) -> subNat a b ≡ a ⊖ b
+--subN≡ a b = ?
+
+ni≡ : ∀ (a : Integer) -> negateInteger a ≡ - a
+ni≡ (pos zero) = refl
+ni≡ +[1+ n ] = refl
+ni≡ (negsuc zero) = refl
+ni≡ (negsuc (N.suc n)) = refl
+
+add≡ : ∀ (a b : Integer) -> addInteger a b ≡ a + b
+add≡ (pos zero) (pos zero) = refl
+add≡ (pos zero) +[1+ m ] = refl
+add≡ +[1+ n ] (pos zero) = refl
+add≡ +[1+ n ] +[1+ m ] = refl
+add≡ (pos zero) (negsuc zero) = refl
+add≡ (pos zero) (negsuc (N.suc m)) = refl
+add≡ +[1+ n ] (negsuc zero) = refl
+add≡ +[1+ n ] (negsuc (N.suc m)) with ltNat n (N.suc m)
+...| True = ni≡ (pos (monusNat (N.suc m) n))
+...| False = refl 
+add≡ (negsuc zero) (pos zero) = refl
+add≡ (negsuc zero) +[1+ m ] = refl
+add≡ (negsuc (N.suc n)) (pos zero) = refl
+add≡ (negsuc (N.suc n)) +[1+ m ] with ltNat m (N.suc n)
+...| True = ni≡ (pos (monusNat (N.suc n) m))
+...| False = refl
+add≡ (negsuc zero) (negsuc zero) = refl
+add≡ (negsuc zero) (negsuc (N.suc m)) = refl
+add≡ (negsuc (N.suc n)) (negsuc zero) = refl
+add≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
+
+sub≡ : ∀ (a b : Integer) -> subInteger a b ≡ a - b
+sub≡ (pos zero) (pos zero) = refl
+sub≡ (pos zero) +[1+ m ] = refl
+sub≡ +[1+ n ] (pos zero) = refl
+sub≡ +[1+ n ] +[1+ m ] = sub≡ (negsuc m) (negsuc n)
+sub≡ (pos zero) (negsuc zero) = refl
+sub≡ (pos zero) (negsuc (N.suc m)) = refl
+sub≡ +[1+ n ] (negsuc zero) = refl
+sub≡ +[1+ n ] (negsuc (N.suc m)) = refl
+sub≡ (negsuc zero) (pos zero) = refl
+sub≡ (negsuc zero) +[1+ m ] = refl
+sub≡ (negsuc (N.suc n)) (pos zero) = refl
+sub≡ (negsuc (N.suc n)) +[1+ m ] = refl
+sub≡ (negsuc zero) (negsuc zero) = refl
+sub≡ (negsuc zero) (negsuc (N.suc m)) = refl
+sub≡ (negsuc (N.suc n)) (negsuc zero) = refl
+sub≡ (negsuc (N.suc n)) (negsuc (N.suc m)) with ltNat m n
+...| True = ni≡ (pos (monusNat n m))
+...| False = refl
 
 svLemma3 : ∀ {pkh v val} (l : Label) -> lookup pkh l ≡ Just v
            -> sumVal l + val ≡ sumVal (insert pkh (v + val) l)
@@ -205,6 +270,21 @@ fidelity s s' .(Deposit _ _) pf (TDeposit p1 p2 p3 p4 p5)
 fidelity s s' .(Transfer _ _ _) pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
 
+{-
+foo : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not (( (Maybe ℤ -> Bool) ∋ (λ { Nothing → false ; (Just v) → true })) w) ≡ true) →
+    a ≡ b
+foo x w p pf = {!!}
+
+
+
+aux2 : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
+    a ≡ b
+aux2 x w p pf = {!!}
+-}
 
 
 --sub-lemmas and helper functions for validator returning true implies transition
@@ -314,6 +394,26 @@ geqto≤ {negsuc n} {negsuc m} pf = -≤- (leqNto≤N pf)
 ==lto≡ (x ∷ a) (y ∷ b) pf
   rewrite (==pto≡ x y (get (x == y) pf)) = cong (λ x → y ∷ x) ((==lto≡ a b (go (x == y) pf)))
 
+get⊥ : ∀ (n : Nat) -> not (eqNat n n) ≡ true -> ⊥
+get⊥ (N.suc n) p = get⊥ n p
+
+/=to≢ : ∀ (a b : PubKeyHash) -> (a /= b) ≡ true -> a ≢ b
+/=to≢ (pos n) (pos m) pf = λ {refl → get⊥ n pf}
+/=to≢ (pos n) (negsuc m) pf = λ ()
+/=to≢ (negsuc n) (pos m) pf = λ ()
+/=to≢ (negsuc n) (negsuc m) pf = λ {refl → get⊥ n pf}
+
+{-
+get⊥ : true ≡ false -> ⊥
+get⊥ ()
+
+v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
+v=v zero = refl
+v=v (suc v) = v=v v
+
+=/=ito≢ : ∀ {a b : Int} -> (a == b) ≡ false -> a ≢ b
+=/=ito≢ {pos n} {pos .n} pf refl rewrite v=v n = get⊥ pf
+=/=ito≢ {negsuc n} {negsuc .n} pf refl rewrite v=v n = get⊥ pf-}
 
 &&false : ∀ (a : Bool) -> (a && false) ≡ true -> ⊥
 &&false true ()
@@ -322,6 +422,25 @@ geqto≤ {negsuc n} {negsuc m} pf = -≤- (leqNto≤N pf)
 --why?
 rewriteJust : ∀ {a : Maybe ℤ} {v v'} -> a ≡ Just v -> v ≡ v' -> a ≡ Just v'
 rewriteJust refl refl = refl
+
+rewriteSubL : ∀ {l1 : Label} (l2 : Label) (pkh : PubKeyHash) (v1 v2 : Value) ->
+             l1 ≡ insert pkh (subInteger v1 v2) l2 -> l1 ≡ insert pkh (v1 - v2) l2
+rewriteSubL l2 pkh v1 v2 p rewrite sub≡ v1 v2 = p
+
+rewriteAddL : ∀ {l1 : Label} (l2 : Label) (pkh : PubKeyHash) (v1 v2 : Value) ->
+             l1 ≡ insert pkh (addInteger v1 v2) l2 -> l1 ≡ insert pkh (v1 + v2) l2
+rewriteAddL l2 pkh v1 v2 p rewrite add≡ v1 v2 = p
+
+doubleRewrite : ∀ {l1 : Label} (l2 : Label) (from to : PubKeyHash) (vF vT val : Value) ->
+             l1 ≡ insert from (subInteger vF val) (insert to (addInteger vT val) l2) ->
+             l1 ≡ insert from (vF - val) (insert to (vT + val) l2)
+doubleRewrite l2 from to vF vT val p rewrite add≡ vT val | sub≡ vF val = p
+
+rewriteSub : ∀ {a} (b c : Value) -> a ≡ subInteger b c -> a ≡ b - c
+rewriteSub b c p rewrite sub≡ b c = p
+
+rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
+rewriteAdd b c p rewrite add≡ b c = p
 
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {oV oA sig} (l : Label) (i : Input) (ctx : ScriptContext)
@@ -338,20 +457,59 @@ validatorImpliesTransition l (Open pkh) ctx pf with lookup pkh l in eq
                (go (pkh == (signature ctx)) pf))) (==ito≡ (outputVal ctx) (inputVal ctx)
                (go ((outputLabel ctx) == (insert pkh +0 l)) (go (pkh == (signature ctx)) pf)))
 ...| Just _ = ⊥-elim (&&false (pkh == signature ctx) pf)
+
 validatorImpliesTransition l (Close pkh) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
 ...| Just v = TClose (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf))
               (rewriteJust eq (==ito≡ v +0 (get (v == +0) (go (pkh == signature ctx) pf))))
-              ((==lto≡ (outputLabel ctx) (delete pkh l) (get ((outputLabel ctx) == (delete pkh l))
+              ((==lto≡ (outputLabel ctx) (delete pkh l) (here --get ((outputLabel ctx) == (delete pkh l))
                (go (v == +0) (go (pkh == (signature ctx)) pf))))) (==ito≡ (outputVal ctx) (inputVal ctx)
                (go ((outputLabel ctx) == (delete pkh l)) (go (v == +0) (go (pkh == (signature ctx)) pf))))
+               
 validatorImpliesTransition l (Withdraw pkh val) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
 ...| Just v = TWithdraw (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
               (geqto≤ (get (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf))))
               (geqto≤ (get (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
               (go (pkh == (signature ctx)) pf)))))
-              {!!}  {!!} {!!} {!!}
+              (rewriteSubL l pkh v val (==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
+              (go (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
+              (go (pkh == signature ctx) pf))))))
+              (rewriteSub (inputVal ctx) val (==ito≡ (outputVal ctx) (subInteger (inputVal ctx) val)
+              (here (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
+              (==ito≡ pkh (payTo ctx) (here (go (outputVal ctx == subInteger (inputVal ctx) val)
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
+              (==ito≡ val (payAmt ctx) (go (pkh == payTo ctx) (go (outputVal ctx == subInteger (inputVal ctx) val)
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf))))) 
+
+validatorImpliesTransition l (Deposit pkh val) ctx pf with lookup pkh l in eq
+...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
+...| Just v = TDeposit (==ito≡ pkh (signature ctx) (here pf)) eq
+              (geqto≤ (here (here (go (pkh == signature ctx) pf))))
+              (rewriteAddL l pkh v val (==lto≡ (outputLabel ctx) (insert pkh (addInteger v val) l)
+              (go (geq val +0) (here (go (pkh == signature ctx) pf)))))
+              (rewriteAdd (inputVal ctx) val (==ito≡ (outputVal ctx) (addInteger (inputVal ctx) val)
+              (go (checkDeposit (Just v) pkh val l ctx) (go (pkh == signature ctx) pf))))
+              
+validatorImpliesTransition l (Transfer from to val) ctx pf with lookup from l in eq1
+validatorImpliesTransition l (Transfer from to val) ctx pf | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF with lookup to l in eq2
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Just vT = TTransfer
+  (==ito≡ from (signature ctx) (here pf)) eq1 eq2
+  (geqto≤ (here (here (go (from == signature ctx) pf))))
+  (geqto≤ (here (go (geq vF val) (here (go (from == signature ctx) pf)))))
+  (/=to≢ from to (here (go (geq val +0) (go (geq vF val) (here (go (from == signature ctx) pf))))))
+  (doubleRewrite l from to vF vT val (==lto≡ (outputLabel ctx)  (insert from (subInteger vF val) (insert to (addInteger vT val) l))
+  (go (from /= to) (go (geq val +0) (go (geq vF val) (here (go (from == signature ctx) pf)))))))
+  (==ito≡ (outputVal ctx) (inputVal ctx) (go (checkTransfer (Just vF) (Just vT) from to val l ctx)
+  (go (from == signature ctx) pf)))
+
+
+{-
+ (rewriteSub l pkh v val (==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
+              (go (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
+              (go (pkh == signature ctx) pf))))))-}
 
 --(==lto≡ ( (newLabel ctx)) {! (insert pkh (subInteger v val) l)!} {!!})
 {-(==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
@@ -362,14 +520,6 @@ validatorImpliesTransition l (Withdraw pkh val) ctx pf with lookup pkh l in eq
         (outputLabel ctx) == (insert pkh (addInteger v (negateInteger val)) l))-}
 --  (geqto≤ (here (here (skip {!!}))))
 -- (geqto≤ (get (geq val +0) (go (pkh == (signature ctx)) {!pf!})))
-validatorImpliesTransition l (Deposit pkh val) ctx pf with lookup pkh l in eq
-...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
-...| Just v = TDeposit {!!} eq {!!} {!!} {!!}
-validatorImpliesTransition l (Transfer from to val) ctx pf with lookup from l in eq1
-validatorImpliesTransition l (Transfer from to val) ctx pf | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
-validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF with lookup to l in eq2
-validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
-validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Just vT = TTransfer {!!} eq1 eq2 {!!} {!!} {!!} {!!} {!!}
 
 
 {-validatorImpliesTransition [] (Open pkh) ctx pf
@@ -944,16 +1094,7 @@ sameSigs : ∀ {v v' pkh pkh' d d' sigs sigs'}
   -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> sigs ≡ sigs'
 sameSigs refl = refl
 
-get⊥ : true ≡ false -> ⊥
-get⊥ ()
 
-v=v : ∀ (v : Value) -> (v ≡ᵇ v) ≡ true
-v=v zero = refl
-v=v (suc v) = v=v v
-
-=/=ito≢ : ∀ {a b : Int} -> (a == b) ≡ false -> a ≢ b
-=/=ito≢ {pos n} {pos .n} pf refl rewrite v=v n = get⊥ pf
-=/=ito≢ {negsuc n} {negsuc .n} pf refl rewrite v=v n = get⊥ pf
 
 
 reduce∈ : ∀ {A : Set} {x y : A} {xs} -> y ∈ (x ∷ xs) -> y ≢ x -> y ∈ xs
