@@ -154,8 +154,6 @@ svLemma2 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 ...| true rewrite (maybe≡ p) | 0+a (sumVal l) = refl
 
 
---subN≡ : ∀ (a b : Integer) -> subNat a b ≡ a ⊖ b
---subN≡ a b = ?
 
 ni≡ : ∀ (a : Integer) -> negateInteger a ≡ - a
 ni≡ (pos zero) = refl
@@ -418,19 +416,6 @@ i=i (negsuc (suc n)) = i=i (pos n)
 l=l : ∀ (l : Label) -> (l == l) ≡ true
 l=l [] = refl
 l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
-
---sub≡ : ∀ (a b : Integer) -> subInteger a b ≡ a - b
---add≡ : ∀ (a b : Integer) -> addInteger a b ≡ a + b
-{-
-≡to≡ᵇ : ∀ {a b} -> a ≡ b -> (a ≡ᵇ b) ≡ true
-≡to≡ᵇ {zero} refl = refl
-≡to≡ᵇ {suc a} refl = ≡to≡ᵇ {a} refl
-
-
-
-<to<ᵇ : ∀ {a b} -> a < b -> (a <ᵇ b) ≡ true
-<to<ᵇ {zero} (s≤s pf) = refl
-<to<ᵇ {suc a} (s≤s pf) = <to<ᵇ pf-}
 
 
 ≤NtoLeqN : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true

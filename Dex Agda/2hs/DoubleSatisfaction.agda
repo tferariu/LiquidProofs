@@ -4,6 +4,8 @@ module DoubleSatisfaction where
 open import Haskell.Prelude
 
 
+open import Haskell.Prelude
+
 Placeholder = String
 POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
@@ -75,54 +77,65 @@ emptyValue = 0
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned pkh ctx = pkh == signature ctx
 
-checkMembership : PubKeyHash -> Label -> Bool
-checkMembership pkh lab = case lookup pkh lab of λ where
-  Nothing -> False
-  (Just _) -> True
+aux : Maybe Value -> Bool
+aux Nothing = False
+aux (Just _) = True
 
-checkEmpty : PubKeyHash -> Label -> Bool
-checkEmpty pkh lab = case lookup pkh lab of λ where
-  Nothing -> False
-  (Just v) -> v == emptyValue
 
-checkWithdraw : PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkWithdraw pkh val lab ctx = case lookup pkh lab of λ where
+checkMembership' : PubKeyHash -> Label -> Bool
+checkMembership' pkh lab = case lookup pkh lab of λ where
   Nothing -> False
-  (Just v) -> geq val emptyValue && geq v val && (newLabel ctx == insert pkh (v - val) lab)
-  
-checkDeposit : PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkDeposit pkh val lab ctx = case lookup pkh lab of λ where
-  Nothing -> False
-  (Just v) -> geq val emptyValue && (newLabel ctx == insert pkh (v + val) lab)
+  (Just v) -> True
+{--}
 
-checkTransfer : PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkTransfer from to val lab ctx = case (lookup from lab , lookup to lab) of λ where
-  (Just vF , Just vT) -> geq vF val && geq val 0 && from /= to &&
+checkMembership : Maybe Value -> Bool
+checkMembership Nothing = False
+checkMembership (Just v) = True
+
+checkEmpty : Maybe Value -> Bool
+checkEmpty Nothing = False
+checkEmpty (Just v) = v == emptyValue
+
+checkWithdraw : Maybe Value -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
+checkWithdraw Nothing _ _ _ _ = False
+checkWithdraw (Just v) pkh val lab ctx = geq val emptyValue && geq v val --&& (newLabel ctx == insert pkh (v - val) lab)
+
+checkDeposit : Maybe Value -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
+checkDeposit Nothing _ _ _ _ = False
+checkDeposit (Just v) pkh val lab ctx = geq val emptyValue && (newLabel ctx == insert pkh (v + val) lab)
+
+checkTransfer : Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
+checkTransfer Nothing _ _ _ _ _ _ = False
+checkTransfer (Just vF) Nothing _ _ _ _ _ = False
+checkTransfer (Just vF) (Just vT) from to val lab ctx = geq vF val && geq val 0 && from /= to &&
                          newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
-  _ -> False
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 
-
+{-# COMPILE AGDA2HS checkMembership #-}
+{-# COMPILE AGDA2HS checkEmpty #-}
+{-# COMPILE AGDA2HS checkWithdraw #-}
+{-# COMPILE AGDA2HS checkDeposit #-}
+{-# COMPILE AGDA2HS checkTransfer #-}
+{-# COMPILE AGDA2HS checkPayment #-}
 
 agdaValidator : Label -> Input -> ScriptContext -> Bool
 agdaValidator lab inp ctx = case inp of λ where
 
-    (Open pkh) -> checkSigned pkh ctx && not (checkMembership pkh lab) &&
+    (Open pkh) -> checkSigned pkh ctx && not (checkMembership (lookup pkh lab)) &&
                   newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
 
-    (Close pkh) -> checkSigned pkh ctx && checkEmpty pkh lab &&
+    (Close pkh) -> checkSigned pkh ctx && checkEmpty (lookup pkh lab) &&
                    newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
 
-    (Withdraw pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
-                          checkWithdraw pkh val lab ctx && checkPayment pkh val ctx
+    (Withdraw pkh val) -> checkSigned pkh ctx && checkWithdraw (lookup pkh lab) pkh val lab ctx &&
+                          newValue ctx == oldValue ctx - val && checkPayment pkh val ctx
 
-    (Deposit pkh val) -> checkSigned pkh ctx && checkMembership pkh lab &&
-                         checkDeposit pkh val lab ctx && newValue ctx == oldValue ctx + val
+    (Deposit pkh val) -> checkSigned pkh ctx && checkDeposit (lookup pkh lab) pkh val lab ctx &&
+                         newValue ctx == oldValue ctx + val
 
-    (Transfer from to val) -> checkSigned from ctx && checkMembership from lab &&
-                              checkMembership to lab && checkTransfer from to val lab ctx &&
+    (Transfer from to val) -> checkSigned from ctx && checkTransfer (lookup from lab) (lookup to lab) from to val lab ctx &&
                               newValue ctx == oldValue ctx
 
 {-# COMPILE AGDA2HS agdaValidator #-}

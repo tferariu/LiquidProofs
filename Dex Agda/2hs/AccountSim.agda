@@ -2,13 +2,10 @@ module AccountSim where
 
 open import Haskell.Prelude
 
-
 Placeholder = String
 POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
-
-asd = Nat
 
 PubKeyHash = Integer
 Value = Integer

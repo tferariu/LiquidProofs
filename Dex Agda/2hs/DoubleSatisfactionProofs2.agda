@@ -26,8 +26,10 @@ open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup)
 
+open import Data.Product using ( ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩; _×_ to _xx_)
 
-module DoubleSatisfactionProofs where
+
+module DoubleSatisfactionProofs2 where
 
 --open import ListInsertLib (PubKeyHash) (==ito≡) (=/=ito≢)
 
@@ -69,7 +71,7 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> lookup pkh (label s) ≡ Just v
     -> val ≥ emptyValue
     -> v ≥ val
-    -> label s' ≡ (insert pkh (v - val) (label s))
+ --   -> label s' ≡ (insert pkh (v - val) (label s))
     -> value (context s') ≡ value (context s) - val
     -> pkh ≡ outAdr (context s') 
     -> val ≡ outVal (context s') 
@@ -246,14 +248,35 @@ fidelity s s' .(Open _) pf (TOpen p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma1 (label s) p2
 fidelity s s' .(Close _) pf (TClose p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma2 (label s) p2
-fidelity s s' .(Withdraw _ _) pf (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8)
-         rewrite p5 | p6 | pf = svLemma3 (label s) p2
+fidelity s s' .(Withdraw _ _) pf (TWithdraw p1 p2 p3 p4 p5 p6 p7)
+         rewrite p5 | p6 | pf = {!!} --svLemma3 (label s) p2
 fidelity s s' .(Deposit _ _) pf (TDeposit p1 p2 p3 p4 p5)
          rewrite p5 | pf | p4 = svLemma3 (label s) p2
 fidelity s s' .(Transfer _ _ _) pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
 
+{-
+liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
+          -> ValidS s -> ValidP par
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )-}
 
+
+
+{-
+record Context : Set where
+  field
+    value         : Value  
+    outVal        : Value
+    outAdr        : PubKeyHash
+    tsig          : PubKeyHash
+open Context
+
+record State : Set where
+  field
+    label         : Label
+    context       : Context
+open State
+-}
 
 get : ∀ (a : Bool) {b} -> (a && b) ≡ true -> a ≡ true
 get true pf = refl
@@ -351,21 +374,15 @@ validatorImpliesTransition l (Close pkh) ctx pf with lookup pkh l in eq
                
 validatorImpliesTransition l (Withdraw pkh val) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
-...| Just v = TWithdraw {!!} eq {!!} {!!} {!!} {!!} {!!} {!!}
-
-{-TWithdraw (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
+...| Just v = TWithdraw (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
               (geqto≤ (get (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf))))
-              (geqto≤ (get (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
-              (go (pkh == (signature ctx)) pf)))))
-              (rewriteSubL l pkh v val (==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
-              (go (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
-              (go (pkh == signature ctx) pf))))))
-              (rewriteSub (inputVal ctx) val (==ito≡ (outputVal ctx) (subInteger (inputVal ctx) val)
-              (here (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) {!!})))))
+              (geqto≤ (go (geq val +0) (here (go (pkh == (signature ctx)) pf))))
+              ((rewriteSub (inputVal ctx) val (==ito≡ (outputVal ctx) (subInteger (inputVal ctx) val)
+              (here (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf))))))
               (==ito≡ pkh (payTo ctx) (here (go (outputVal ctx == subInteger (inputVal ctx) val)
-              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) {!!})))))
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
               (==ito≡ val (payAmt ctx) (go (pkh == payTo ctx) (go (outputVal ctx == subInteger (inputVal ctx) val)
-              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) {!!}))))) -}
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf))))) 
 
 validatorImpliesTransition l (Deposit pkh val) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
@@ -435,10 +452,10 @@ transitionImpliesValidator l (Open pkh) ctx (TOpen p1 p2 p3 p4)
   rewrite p1 | p2 | sym p3 | p4 | i=i (signature ctx) | l=l (outputLabel ctx) | i=i (inputVal ctx) = refl
 transitionImpliesValidator l (Close pkh) ctx (TClose p1 p2 p3 p4)
   rewrite p1 | p2 | sym p3 | p4 | i=i (signature ctx) | l=l (outputLabel ctx) | i=i (inputVal ctx) = refl
-transitionImpliesValidator l (Withdraw pkh val) ctx (TWithdraw {v = v} p1 p2 p3 p4 p5 p6 p7 p8)
-  rewrite p1 | p2 | p7 | p8 | i=i (payTo ctx) | i=i (payAmt ctx) | ≤toGeq p3 | ≤toGeq p4 |
-  sym (sub≡ (inputVal ctx) (payAmt ctx)) | sym p6 | i=i (outputVal ctx) |
-  sym (sub≡ v (payAmt ctx)) | sym p5 | l=l (outputLabel ctx) = refl
+transitionImpliesValidator l (Withdraw pkh val) ctx (TWithdraw {v = v} p1 p2 p3 p4 p5 p6 p7)
+  rewrite p1 | p2 | p7 | i=i (payTo ctx) | i=i (payAmt ctx) | ≤toGeq p3 | ≤toGeq p4 |
+  sym (sub≡ (inputVal ctx) (payAmt ctx)) | sym p6 | sym (sub≡ v (payAmt ctx)) | sym p5
+  | l=l (outputLabel ctx) | i=i (signature ctx) | i=i (outputVal ctx) = refl
 transitionImpliesValidator l (Deposit pkh val) ctx (TDeposit {v = v} p1 p2 p3 p4 p5)
   rewrite p1 | p2 | i=i (signature ctx) | ≤toGeq p3 | sym (add≡ (inputVal ctx) val) | sym p5 |
   i=i (outputVal ctx) | sym (add≡ v val) | sym p4 | l=l (outputLabel ctx) = refl
@@ -446,3 +463,25 @@ transitionImpliesValidator l (Transfer from to val) ctx (TTransfer {vF = vF} {vT
   rewrite sym p1 | p2 | p3 | p8 | i=i from | i=i (inputVal ctx) | ≤toGeq p4 | ≤toGeq p5 |
   ≢to/= from to p6 | sym (add≡ vT val) | sym (sub≡ vF val) | sym p7 | l=l (outputLabel ctx) = refl
 
+--i≡i : ∀ (i : Integer) -> 
+
+infidelity : ∃[ s ] ∃[ i ] ∃[ s' ] ( (value (context s) ≡ sumVal (label s)) × (s ~[ i ]~> s') × (value (context s') ≢ sumVal (label s')))
+infidelity = ⟨ (record
+                 { label = ((pos zero) , (pos 1000)) ∷ []
+                 ; context =
+                     record
+                     { value = pos 1000
+                     ; outVal = pos zero
+                     ; outAdr = pos zero
+                     ; tsig = pos zero
+                     }
+                 }) , ⟨ (Withdraw (pos zero) (pos 10)) ,
+                 ⟨ (record { label = ((pos zero) , (pos 995)) ∷ []
+                   ; context =  record
+                     { value = pos 990
+                     ; outVal = pos 10
+                     ; outAdr = pos zero
+                     ; tsig = pos zero
+                     } }) , (refl , TWithdraw refl refl (+≤+ N.z≤n) (+≤+ (N.s≤s (N.s≤s (N.s≤s (N.s≤s
+                     (N.s≤s (N.s≤s (N.s≤s (N.s≤s (N.s≤s (N.s≤s N.z≤n)))))))))))
+                     refl refl refl , λ ())⟩ ⟩ ⟩
