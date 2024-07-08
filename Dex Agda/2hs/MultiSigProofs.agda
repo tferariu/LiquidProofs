@@ -18,7 +18,7 @@ open import Data.Empty
 open import Data.Sum.Base
 open import Data.Product
 
-open import Haskell.Prim hiding (⊥ ; All)
+open import Haskell.Prim hiding (⊥ ; All; Any)
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
@@ -101,7 +101,7 @@ data Unique {a : Set} : List a → Set where
 
 ==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
 ==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (sym (≡ᵇto≡ pf))
 
 --Valid State
 data ValidS : State -> Set where
@@ -449,7 +449,7 @@ v≤v zero = z≤n
 v≤v (suc v) = s≤s (v≤v v)
 
 --Liquidity (For any state that is valid and has valid parameters,
---there exists another state and some inputs such that we can transition there and have no value left int he contract)
+--there exists another state and some inputs such that we can transition there and have no value left in the contract)
 liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
           -> ValidS s -> ValidP par
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )
@@ -530,7 +530,7 @@ liquidity' par
 
 
 --sub-lemmas and helper functions for validator returning true implies transition
-≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
+≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || a ≡ᵇ b) ≡ true -> a ≤ b
 ≤ᵇto≤ {zero} {zero} pf = z≤n
 ≤ᵇto≤ {zero} {suc b} pf = z≤n
 ≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
@@ -558,8 +558,8 @@ go true {b} pf = pf
 p1 : ∀ (a b c d e f : Bool) (x y : Value) -> ((x ≡ᵇ y) && a && b && c && d && e && f) ≡ true -> x ≡ y
 p1 a b c d e f x y pf = ≡ᵇto≡ (get (x ≡ᵇ y)  pf)
 
-p2 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && (x <ᵇ y || y ≡ᵇ x) && b && c && d && e && f) ≡ true -> x ≤ y
-p2 a b c d e f x y pf = ≤ᵇto≤ ( get ((x <ᵇ y || y ≡ᵇ x)) (go a pf) )
+p2 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && (x <ᵇ y || x ≡ᵇ y) && b && c && d && e && f) ≡ true -> x ≤ y
+p2 a b c d e f x y pf = ≤ᵇto≤ ( get ((x <ᵇ y || x ≡ᵇ y)) (go a pf) )
 
 p3 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && b && (x <ᵇ y) && c && d && e && f) ≡ true -> x < y
 p3 a b c d e f x y pf = <ᵇto< ( get (x <ᵇ y) (go b (go a pf)) )
@@ -591,13 +591,13 @@ a2 a b c d e f x y pf = ==ito≡ x y ( get (x == y) (go a pf) )
 a3 : ∀ (a b c d e f : Bool) (sig : PubKeyHash) (sigs : List PubKeyHash) -> (a && b && (query sig sigs) && c && d && e && f) ≡ true -> sig ∈ sigs
 a3 a b c d e f sig sigs pf = queryTo∈ ( get (query sig sigs) (go b (go a pf)) )
 
-lengthNatToLength : ∀ (n : ℕ) (l : List PubKeyHash) -> (n <ᵇ lengthNat l || lengthNat l ≡ᵇ n) ≡ true -> n ≤ length l
+lengthNatToLength : ∀ (n : ℕ) (l : List PubKeyHash) -> (n <ᵇ lengthNat l || n ≡ᵇ lengthNat l ) ≡ true -> n ≤ length l
 lengthNatToLength zero [] pf = z≤n
 lengthNatToLength zero (x ∷ l) pf = z≤n
 lengthNatToLength (suc n) (x ∷ l) pf = s≤s (lengthNatToLength n l pf)
 
-y1 : ∀ (a b c : Bool) (n : ℕ) (sigs : List PubKeyHash) -> ((n <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ n) && (a && b) && c) ≡ true -> n ≤ length sigs
-y1 a b c n sigs pf = lengthNatToLength n sigs (get (n <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ n) pf)
+y1 : ∀ (a b c : Bool) (n : ℕ) (sigs : List PubKeyHash) -> ((n <ᵇ lengthNat sigs || n ≡ᵇ lengthNat sigs) && (a && b) && c) ≡ true -> n ≤ length sigs
+y1 a b c n sigs pf = lengthNatToLength n sigs (get (n <ᵇ lengthNat sigs || n ≡ᵇ lengthNat sigs) pf)
 
 y2 : ∀ (a b c : Bool) (x y : PubKeyHash) -> (a && ((x == y) && b) && c) ≡ true -> x ≡ y
 y2 a b c x y pf = ==ito≡ x y (get (x == y) (get ((x == y) && b) (go a pf)))
@@ -632,7 +632,7 @@ validatorImpliesTransition par Holding (Propose v pkh d)
            payTo = payTo ;
            payAmt = payAmt ;
            signature = signature } pf
-  = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) ( (v <ᵇ inputVal || inputVal ≡ᵇ v)) (0 <ᵇ v) pf)
+  = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) ( (v <ᵇ inputVal || v ≡ᵇ inputVal)) (0 <ᵇ v) pf)
 validatorImpliesTransition par Holding (Propose v pkh d)
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -641,13 +641,13 @@ validatorImpliesTransition par Holding (Propose v pkh d)
            payTo = payTo ;
            payAmt = payAmt ;
            signature = signature } pf
-  rewrite p1 (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) outputVal inputVal pf
-  | sym (p4 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (pkh == pkh') (d ≡ᵇ d') (sigs' == []) v v' pf)
-  | p5 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (d ≡ᵇ d') (sigs' == []) pkh pkh' pf
-  | p6 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (sigs' == []) d d' pf
-  | p7 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') sigs' [] pf
+  rewrite p1 (v <ᵇ inputVal || v ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) outputVal inputVal pf
+  | sym (p4 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || v ≡ᵇ inputVal) (0 <ᵇ v) (pkh == pkh') (d ≡ᵇ d') (sigs' == []) v v' pf)
+  | p5 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || v ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (d ≡ᵇ d') (sigs' == []) pkh pkh' pf
+  | p6 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || v ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (sigs' == []) d d' pf
+  | p7 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || v ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') sigs' [] pf
   = TPropose (p2 (outputVal ≡ᵇ inputVal) (0 <ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) v inputVal pf)
-    (p3 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || inputVal ≡ᵇ v) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) 0 v pf) refl refl refl
+    (p3 (outputVal ≡ᵇ inputVal) (v <ᵇ inputVal || v ≡ᵇ inputVal) (v ≡ᵇ v') (pkh == pkh') (d ≡ᵇ d') (sigs' == []) 0 v pf) refl refl refl
 validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -680,10 +680,10 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Pay
            payTo = payTo ;
            payAmt = payAmt ;
            signature = signature } pf
-  = TPay (y4 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (pkh == payTo) (v ≡ᵇ payAmt) inputVal (outputVal + v) pf)
+  = TPay (y4 (nr par <ᵇ lengthNat sigs || nr par ≡ᵇ lengthNat sigs) (pkh == payTo) (v ≡ᵇ payAmt) inputVal (outputVal + v) pf)
     (y1 (eqInteger pkh payTo) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) (nr par) sigs pf) refl refl
-    (sym (y3 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (pkh == payTo) (inputVal ≡ᵇ outputVal + v) v payAmt pf))
-    (sym (y2 (nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) pkh payTo pf))
+    (sym (y3 (nr par <ᵇ lengthNat sigs || nr par ≡ᵇ lengthNat sigs) (pkh == payTo) (inputVal ≡ᵇ outputVal + v) v payAmt pf))
+    (sym (y2 (nr par <ᵇ lengthNat sigs || nr par ≡ᵇ lengthNat sigs) (v ≡ᵇ payAmt) (inputVal ≡ᵇ outputVal + v) pkh payTo pf))
 validatorImpliesTransition par (Collecting v pkh d sigs) Pay
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -692,7 +692,7 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Pay
            payTo = payTo ;
            payAmt = payAmt ;
            signature = signature } pf
-  = ⊥-elim (&&false ((nr par <ᵇ lengthNat sigs || lengthNat sigs ≡ᵇ nr par)) pf) 
+  = ⊥-elim (&&false ((nr par <ᵇ lengthNat sigs || nr par ≡ᵇ lengthNat sigs )) pf) 
 validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -718,7 +718,7 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
 ≡to≡ᵇ {zero} refl = refl
 ≡to≡ᵇ {suc a} refl = ≡to≡ᵇ {a} refl
 
-≤to≤ᵇ : ∀ {a b} -> a ≤ b -> (a <ᵇ b || b ≡ᵇ a) ≡ true
+≤to≤ᵇ : ∀ {a b} -> a ≤ b -> (a <ᵇ b || a ≡ᵇ b) ≡ true
 ≤to≤ᵇ {b = zero} z≤n = refl
 ≤to≤ᵇ {b = suc b} z≤n = refl
 ≤to≤ᵇ (s≤s pf) = ≤to≤ᵇ pf
@@ -747,7 +747,7 @@ l=l (x ∷ l) rewrite i=i x = l=l l
 ∈toQuery {sig} (here refl) rewrite i=i sig = refl
 ∈toQuery (there pf) rewrite ∈toQuery pf = ||true
 
-lengthToLengthNat : ∀ (n : ℕ) (l : List PubKeyHash) -> n ≤ length l -> (n <ᵇ lengthNat l || lengthNat l ≡ᵇ n) ≡ true
+lengthToLengthNat : ∀ (n : ℕ) (l : List PubKeyHash) -> n ≤ length l -> (n <ᵇ lengthNat l || n ≡ᵇ lengthNat l) ≡ true
 lengthToLengthNat zero [] z≤n = refl
 lengthToLengthNat zero (x ∷ l) z≤n = refl
 lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf

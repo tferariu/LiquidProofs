@@ -19,7 +19,8 @@ open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
 --open import Data.Product
---open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
+
+open import Data.Product using ( ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩; _×_ to _xx_)
 
 {- -}
 open import Haskell.Prim hiding (⊥ ; All)
@@ -44,6 +45,11 @@ open import Function.Base using (_∋_)
 module AccountSimProofs where
 
 --open import ListInsertLib (PubKeyHash) (==ito≡) (=/=ito≢)
+
+sumVal : Label -> Integer
+sumVal [] = 0
+sumVal ((k , v) ∷ xs) =  v + sumVal xs
+
 
 record Context : Set where
   field
@@ -127,9 +133,45 @@ data _~[_]~*_ : State -> List Input -> State -> Set where
 
 
 
-sumVal : Label -> Integer
-sumVal [] = 0
-sumVal ((k , v) ∷ xs) =  v + sumVal xs
+{-
+data Valid : State -> Set where
+
+  Always : ∀ {s}
+    -> value (context s) ≡ sumVal (label s)
+    ----------------
+    -> Valid s
+
+
+sub : ∀ {a b c : ℤ} -> a ≡ b -> a ≡ c -> b ≡ c
+sub refl refl = refl
+
+validStateTransition : ∀ {s s' : State} {i}
+  -> Valid s
+  -> s ~[ i ]~> s'
+  -> Valid s'
+validStateTransition {s} {s'} (Always x) (TOpen p1 p2 p3 p4) rewrite x | p3 = Always (sub (sym p4) {!!})
+validStateTransition (Always x) (TClose p1 p2 p3 p4) = {!!}
+validStateTransition (Always x) (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
+validStateTransition (Always x) (TDeposit p1 p2 p3 p4 p5) = {!!}
+validStateTransition (Always x) (TTransfer p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
+-}
+
+{-iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2 root
+validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
+validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5)
+                     rewrite pf1 | sameValue p3 | p5 | sameSigs p3
+                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
+validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
+validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3-}
+
+
+--Multi-Step lemma
+
+
+{-par s .s s'' [] is' root p2 = p2
+lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
+-}
+
 
 maybe⊥ : ∀ {x : Value} -> Nothing ≡ Just x -> ⊥
 maybe⊥ ()
@@ -256,20 +298,30 @@ svLemma4 {from} {to} {vF} {vT} {val} (x ∷ l) p1 p2 p3 | false | false
          = cong (λ a → snd x + a) (svLemma4 l p1 p2 p3)
 
 
-fidelity : ∀ (s s' : State) (i : Input)
+fidelity : ∀ {s s' : State} {i : Input}
          -> value (context s) ≡ sumVal (label s)
          -> s ~[ i ]~> s'
          -> value (context s') ≡ sumVal (label s')
-fidelity s s' .(Open _) pf (TOpen p1 p2 p3 p4)
+fidelity {s} {s'} {Open _} pf (TOpen p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma1 (label s) p2
-fidelity s s' .(Close _) pf (TClose p1 p2 p3 p4)
+fidelity {s} {s'} {Close _} pf (TClose p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma2 (label s) p2
-fidelity s s' .(Withdraw _ _) pf (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8)
+fidelity {s} {s'} {Withdraw _ _} pf (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p5 | p6 | pf = svLemma3 (label s) p2
-fidelity s s' .(Deposit _ _) pf (TDeposit p1 p2 p3 p4 p5)
+fidelity {s} {s'} {Deposit _ _} pf (TDeposit p1 p2 p3 p4 p5)
          rewrite p5 | pf | p4 = svLemma3 (label s) p2
-fidelity s s' .(Transfer _ _ _) pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
+fidelity {s} {s'} {Transfer _ _ _} pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
+
+
+
+
+fidelityMulti : ∀ {s s' : State} {is : List Input}
+  -> value (context s) ≡ sumVal (label s)
+  -> s ~[ is ]~* s'
+  -> value (context s') ≡ sumVal (label s')
+fidelityMulti {s} {s} {[]} p1 root = p1
+fidelityMulti {s} {s'} {(i ∷ is)} p1 (cons {s' = s''} x p2) = fidelityMulti (fidelity p1 x) p2
 
 
 
@@ -474,6 +526,83 @@ transitionImpliesValidator l (Deposit pkh val) ctx (TDeposit {v = v} p1 p2 p3 p4
 transitionImpliesValidator l (Transfer from to val) ctx (TTransfer {vF = vF} {vT = vT} p1 p2 p3 p4 p5 p6 p7 p8)
   rewrite sym p1 | p2 | p3 | p8 | i=i from | i=i (inputVal ctx) | ≤toGeq p4 | ≤toGeq p5 |
   ≢to/= from to p6 | sym (add≡ vT val) | sym (sub≡ vF val) | sym p7 | l=l (outputLabel ctx) = refl
+
+
+lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
+                   -> s  ~[ is  ]~* s'
+                   -> s' ~[ is' ]~* s''
+                   -> s  ~[ is ++ is' ]~* s''
+lemmaMultiStep {s} {.s} {s''} {[]} {is'} root p2 = p2
+lemmaMultiStep {s} {s'} {s''} {i ∷ is} {is'} (cons {s' = s'''} x p1) p2 = cons x (lemmaMultiStep p1 p2)
+
+
+makeIs : Label -> List Input
+makeIs [] = []
+makeIs ((a , b) ∷ l) = (Withdraw a b) ∷ (makeIs l)
+
+lastOutVal : State -> Value
+lastOutVal record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = outVal
+lastOutVal record { label = ((a , b) ∷ []) ; context = context } = a
+lastOutVal record { label = (x ∷ y ∷ label) ; context = context } = lastOutVal ( record { label = (y ∷ label) ; context = context })
+
+lastOutAdr : State -> PubKeyHash
+lastOutAdr record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = outAdr
+lastOutAdr record { label = ((a , b) ∷ []) ; context = context } = b
+lastOutAdr record { label = (x ∷ y ∷ label) ; context = context } = lastOutAdr ( record { label = (y ∷ label) ; context = context })
+
+lastSig : State -> PubKeyHash
+lastSig record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = tsig
+lastSig record { label = ((a , b) ∷ []) ; context = context } = b
+lastSig record { label = (x ∷ y ∷ label) ; context = context } = lastOutAdr ( record { label = (y ∷ label) ; context = context })
+
+{-
+record Context : Set where
+  field
+    value         : Value  
+    outVal        : Value
+    outAdr        : PubKeyHash
+    tsig          : PubKeyHash
+open Context-}
+
+prop1 : ∀ (s s' : State)
+        -> label s' ≡ []
+        -> value (context s') ≡ 0
+        -> outVal (context s') ≡ lastOutVal s
+        -> outAdr (context s') ≡ lastOutAdr s
+        -> tsig (context s') ≡ lastSig s
+        -> value (context s) ≡ sumVal (label s)
+        -> s ~[ (makeIs (label s)) ]~* s'
+prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = root
+prop1 record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = cons {s' = record
+      { label = label₁
+      ; context =
+          record
+          { value = sumVal label₁
+          ; outVal = snd x
+          ; outAdr = fst x
+          ; tsig = fst x
+          }
+      }} (TWithdraw refl {!!} {!!} {!!} {!!} {!!} refl refl) {!!}
+
+--prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7-}
+
+
+liquidity : ∀ (s : State)
+          -> value (context s) ≡ sumVal (label s)
+          -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value (context s') ≡ 0) )
+          
+liquidity record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } refl
+  = ⟨ (record
+        { label = []
+        ; context =
+            record
+            { value = pos zero
+            ; outVal = outVal₁
+            ; outAdr = outAdr₁
+            ; tsig = tsig₁
+            }
+        }) , ⟨ [] , (root , refl) ⟩ ⟩
+liquidity record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } refl = {!!}
 
 
 
