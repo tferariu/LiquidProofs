@@ -133,11 +133,12 @@ data _~[_]~*_ : State -> List Input -> State -> Set where
 
 
 
-{-
+
 data Valid : State -> Set where
 
-  Always : ∀ {s}
+  Always : ∀ {s pkh v}
     -> value (context s) ≡ sumVal (label s)
+    -> (lookup pkh (label s) ≡ Just v -> (geq v emptyValue ≡ true) )
     ----------------
     -> Valid s
 
@@ -149,12 +150,12 @@ validStateTransition : ∀ {s s' : State} {i}
   -> Valid s
   -> s ~[ i ]~> s'
   -> Valid s'
-validStateTransition {s} {s'} (Always x) (TOpen p1 p2 p3 p4) rewrite x | p3 = Always (sub (sym p4) {!!})
-validStateTransition (Always x) (TClose p1 p2 p3 p4) = {!!}
-validStateTransition (Always x) (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
-validStateTransition (Always x) (TDeposit p1 p2 p3 p4 p5) = {!!}
-validStateTransition (Always x) (TTransfer p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
--}
+validStateTransition (Always a1 a2) (TOpen p1 p2 p3 p4) = Always {!!} {!!}
+validStateTransition (Always a1 a2) (TClose p1 p2 p3 p4) = {!!}
+validStateTransition (Always a1 a2) (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
+validStateTransition (Always a1 a2) (TDeposit p1 p2 p3 p4 p5) = {!!}
+validStateTransition (Always a1 a2) (TTransfer p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
+{--}
 
 {-iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2 root
 validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
@@ -573,16 +574,17 @@ prop1 : ∀ (s s' : State)
         -> value (context s) ≡ sumVal (label s)
         -> s ~[ (makeIs (label s)) ]~* s'
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = root
-prop1 record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = x ∷ label₁ ; context = record { value = sumVal (x ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = cons {s' = record
-      { label = label₁
+prop1 record { label = ((fst₁ , snd₁) ∷ label₁) ; context = record { value = .(sumVal ((fst₁ , snd₁) ∷ label₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = (fst₁ , snd₁) ∷ label₁ ; context = record { value = sumVal ((fst₁ , snd₁) ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = (fst₁ , snd₁) ∷ label₁ ; context = record { value = sumVal ((fst₁ , snd₁) ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = (fst₁ , snd₁) ∷ label₁ ; context = record { value = sumVal ((fst₁ , snd₁) ∷ label₁) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl
+  = cons {s' = record
+      { label = (insert fst₁ 0 label₁)
       ; context =
           record
           { value = sumVal label₁
-          ; outVal = snd x
-          ; outAdr = fst x
-          ; tsig = fst x
+          ; outVal = snd₁
+          ; outAdr = fst₁
+          ; tsig = fst₁
           }
-      }} (TWithdraw refl {!!} {!!} {!!} {!!} {!!} refl refl) {!!}
+      }} (TWithdraw refl {!!} {!!} {!!} {!!} {!!} refl refl) {!!} --(prop1 {!!} {!!} refl refl {!!} {!!} {!!} refl)
 
 --prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7-}
 
