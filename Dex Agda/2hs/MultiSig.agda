@@ -30,6 +30,7 @@ record ScriptContext : Set where
         payTo       : PubKeyHash
         payAmt      : Value
         signature   : PubKeyHash
+        stopsCont   : Bool
 open ScriptContext public
 
 
@@ -39,6 +40,7 @@ data Input : Set where
   Add     : PubKeyHash -> Input
   Pay     : Input
   Cancel  : Input
+  Close   : Input
 
 {-# COMPILE AGDA2HS Input #-}
 
@@ -48,7 +50,7 @@ query pkh (x ∷ l') = (x == pkh) || query pkh l'
 
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
-insert pkh (x ∷ l') = if (pkh == x)
+insert pkh (x ∷ l') = if (x == pkh)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
@@ -75,6 +77,9 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
+stops : ScriptContext -> Bool
+stops ctx = stopsCont ctx
+
 geq : Value -> Value -> Bool
 geq val v = val >= v 
 
@@ -83,6 +88,9 @@ gt val v = val > v
 
 emptyValue : Value
 emptyValue = 0
+
+minValue : Value
+minValue = 2
 
 record Params : Set where
     field
@@ -98,12 +106,13 @@ agdaValidator param dat red ctx = case dat of λ where
 
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && gt v emptyValue && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && gt v minValue && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
     (Add _) -> False
     Pay -> False
-    Cancel -> False 
+    Cancel -> False
+    Close -> gt minValue (oldValue ctx) && stopsCont ctx
 
   (Collecting v pkh d sigs) -> case red of λ where
 
@@ -120,6 +129,8 @@ agdaValidator param dat red ctx = case dat of λ where
     Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False)
+
+    Close -> False
   
 
 {-# COMPILE AGDA2HS agdaValidator #-}

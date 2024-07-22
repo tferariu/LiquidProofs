@@ -43,6 +43,7 @@ record State : Set where
   field
     label         : Label
     context       : Context
+    stopped       : Bool
 open State
 
 _∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
@@ -56,10 +57,12 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TPropose : ∀ {v pkh d s s' par} 
     -> value (context s) ≥ v
-    -> v > emptyValue
+    -> v > minValue
     -> label s ≡ Holding
     -> label s' ≡ Collecting v pkh d []
-    -> value (context s) ≡ value (context s') 
+    -> value (context s) ≡ value (context s')
+    -> stopped s ≡ False
+    -> stopped s' ≡ False
     -------------------
     -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
 
@@ -69,6 +72,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Collecting v pkh d (insert sig sigs)
     -> value (context s) ≡ value (context s')
+    -> stopped s ≡ False
+    -> stopped s' ≡ False
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
 
@@ -79,6 +84,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> label s' ≡ Holding
     -> outVal (context s') ≡ v
     -> outAdr (context s') ≡ pkh 
+    -> stopped s ≡ False
+    -> stopped s' ≡ False
     -------------------
     -> par ⊢ s ~[ Pay ]~> s'
 
@@ -86,9 +93,19 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> now (context s') > d
     -> label s ≡ Collecting v pkh d sigs
     -> label s' ≡ Holding  
-    -> value (context s) ≡ value (context s')  
+    -> value (context s) ≡ value (context s') 
+    -> stopped s ≡ False
+    -> stopped s' ≡ False 
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
+
+  TClose : ∀ {par s s'}
+    -> label s ≡ Holding
+    -> minValue ≥ value (context s)
+    -> stopped s ≡ False
+    -> stopped s' ≡ True
+    -------------------
+    -> par ⊢ s ~[ Close ]~> s'
 
 data Unique {a : Set} : List a → Set where
   root : Unique []
@@ -170,11 +187,11 @@ insertPreserves∈ {zs = []} (here px) p2 = ⊥-elim (=/=ito≢ p2 (sym px))
 insertPreserves∈ {x} {y} {z ∷ zs} p1 p2 with y == x in eq1
 ...| true =  ⊥-elim (get⊥ p2)
 ...| false with y == z in eq2
-...| true rewrite ==ito≡ y z eq2 = p1 
+...| true rewrite ==ito≡ y z eq2 = {!!} --p1 
 ...| false with x == z in eq3
 ...| true rewrite ==ito≡ x z eq3 = here refl 
-...| false = there (insertPreserves∈ (reduce∈ p1 (=/=ito≢ eq3)) eq1)
-
+...| false = there (insertPreserves∈ (reduce∈ {!!} (=/=ito≢ eq3)) eq1)
+{- p1
 
 insertPreservesUniqueness : ∀ {sig sigs}
   -> Unique sigs -> Unique (insert sig sigs)
@@ -804,6 +821,14 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
   rewrite v=v inputVal | <to<ᵇ p1 = refl
 
 
+-}
+
+
+
+
+
+
+----------------------------------------------------------
 
 --Leftover code from previous attempts
 {-                             
