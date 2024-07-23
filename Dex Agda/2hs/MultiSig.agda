@@ -50,7 +50,7 @@ query pkh (x ∷ l') = (x == pkh) || query pkh l'
 
 insert : PubKeyHash -> List PubKeyHash -> List PubKeyHash
 insert pkh [] = (pkh ∷ [])
-insert pkh (x ∷ l') = if (x == pkh)
+insert pkh (x ∷ l') = if (pkh == x)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
 
@@ -123,7 +123,7 @@ agdaValidator param dat red ctx = case dat of λ where
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
 
     Pay -> (lengthNat sigs) >= (nr param) && (case (newLabel ctx) of λ where
-      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v)
+      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
       (Collecting _ _ _ _) -> False )
       
     Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
