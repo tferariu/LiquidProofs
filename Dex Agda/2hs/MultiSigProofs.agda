@@ -786,7 +786,8 @@ sigNrLemma {n} {sigs} {is} p1 p2 rewrite sym (sigNrSum (makeIs (take n sigs)) is
 --there and have no value left in the contract)
 liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) (d : Deadline)
           -> ValidS s -> ValidP par -> stopped s ≡ False
-          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × ((value (context s') ≡ 0) × (getSigNr is ≤ nr par) ) )
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') ×
+            ((value (context s') ≡ 0) × (getSigNr is ≤ nr par) ) )
 
 liquidity par s pkh d (Stp p1) valid p2 rewrite p1 = ⊥-elim (get⊥ p2)
 
@@ -868,53 +869,10 @@ liquidity par
                                            tsig = tsig } ;
                       stopped = false }
 
-{-
-liquidity'
-  record { authSigs = authSigs ; nr = nr }
-  s@(record { label = label ;
-              context = record { value = zero ;
-                                 outVal = outVal ;
-                                 outAdr = outAdr ;
-                                 now = now ;
-                                 tsig = tsig } })
-  pkh d (Col p1 p2 p3 p6) (Always p4 p5) pf
-  = ⟨ s , ⟨ [] , ⟨ root , refl ⟩ ⟩ ⟩
-liquidity' par
-  record { label = (Collecting v' pkh' d' sigs') ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
-  pkh d (Col refl p2 p3 p6) (Always p4 p5) pf
-  = ⟨ s''' , ⟨ Cancel ∷ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
-    ⟨ cons (TCancel {s' = s'}
-    (s≤s (v≤v d')) refl refl refl {!!} {!!})
-    (cons (TPropose (s≤s (v≤v value)) (s≤s {!!}) refl refl refl {!!} {!!})
-    (prop2 s'' s''' par (Col refl (s≤s (v≤v value)) {!!} root) refl refl refl refl refl (Always p4 p5) {!!} {!!} {!!})) , refl ⟩ ⟩ ⟩
-      where
-        s''' = record { label = Holding ;
-                       context = record { value = zero ;
-                                          outVal = suc value ;
-                                          outAdr = pkh ;
-                                          now = now ;
-                                          tsig = tsig } }
-        s' = record { label = Holding ;
-                      context = record { value = (suc value) ;
-                                         outVal = outVal ;
-                                         outAdr = outAdr ;
-                                         now = suc d' ;
-                                         tsig = tsig } }
-        s'' = record { label = Collecting (suc value) pkh d [] ;
-                        context = record { value = (suc value) ;
-                                           outVal = outVal ;
-                                           outAdr = outAdr ;
-                                           now = d + 1 ;
-                                           tsig = tsig } }
+   
 
- -}     
-{-
 
 --sub-lemmas and helper functions for validator returning true implies transition
-≤ᵇto≤ : ∀ {a b} -> (a <ᵇ b || a ≡ᵇ b) ≡ true -> a ≤ b
-≤ᵇto≤ {zero} {zero} pf = z≤n
-≤ᵇto≤ {zero} {suc b} pf = z≤n
-≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
 
 <ᵇto< : ∀ {a b} -> (a <ᵇ b) ≡ true -> a < b
 <ᵇto< {zero} {suc b} pf = s≤s z≤n
@@ -1000,10 +958,11 @@ validatorImpliesTransition : ∀ {oV oA t s} (par : Params) (l : Label) (i : Inp
                            -> (pf : agdaValidator par l i ctx ≡ true)
                            -> par ⊢
                            record { label = l ; context = record { value = (inputVal ctx) ;
-                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } }
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } ; stopped = false }
                            ~[ i ]~>
                            record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
-                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } }
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } ;
+                           stopped = stopsCont ctx}
 
 validatorImpliesTransition par Holding (Propose v pkh d)
   record { inputVal = inputVal ;
@@ -1012,8 +971,110 @@ validatorImpliesTransition par Holding (Propose v pkh d)
            time = time ;
            payTo = payTo ;
            payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = ⊥-elim (3&&false (eqNat outputVal inputVal) (ltNat v inputVal || eqNat v inputVal) (ltNat 2 v || eqNat 2 v) pf)
+validatorImpliesTransition par Holding (Propose v pkh d)
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = (Collecting v' pkh' d' sigs') ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = TPropose {!!} {!!} refl {!!} {!!} refl {!!}
+validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = ⊥-elim (3&&false (eqNat outputVal inputVal) (eqInteger sig signature) (query sig (authSigs par)) pf)
+validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = (Collecting v' pkh' d' sigs') ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = {!!}
+validatorImpliesTransition par (Collecting v pkh d sigs) Pay
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = {!!}
+validatorImpliesTransition par (Collecting v pkh d sigs) Pay
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = (Collecting v' pkh' d' sigs') ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = ⊥-elim (&&false (ltNat (nr par) (lengthNat sigs) || eqNat (nr par) (lengthNat sigs)) pf)
+validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = {!!}
+validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = (Collecting v' pkh' d' sigs') ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = stopsCont } pf
+  = ⊥-elim (&&false (eqNat outputVal inputVal) pf)
+validatorImpliesTransition par Holding Close
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = outputLabel ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = false } pf
+  = ⊥-elim (&&false (ltNat inputVal 2) pf)
+validatorImpliesTransition par Holding Close
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = outputLabel ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           stopsCont = true } pf
+  = {!!}
+
+
+{-validatorImpliesTransition par Holding (Propose v pkh d)
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
            signature = signature } pf
-  = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) ( (v <ᵇ inputVal || v ≡ᵇ inputVal)) (0 <ᵇ v) pf)
+  = ⊥-elim (3&&false (outputVal ≡ᵇ inputVal) ( (v <ᵇ inputVal || v ≡ᵇ inputVal)) (0 <ᵇ v) {!!})
 validatorImpliesTransition par Holding (Propose v pkh d)
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -1091,7 +1152,7 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
            payTo = payTo ;
            payAmt = payAmt ;
            signature = signature } pf
-  = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf) 
+  = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf) -}
 
 
 --sub-lemmas for transition implies validation returns true
@@ -1135,14 +1196,20 @@ lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
 
 
 
-transitionImpliesValidator : ∀ {oV oA t s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+transitionImpliesValidator : ∀ {oV oA t s stp} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : par ⊢
                            record { label = l ; context = record { value = (inputVal ctx) ;
-                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } }
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } ; stopped = stp }
                            ~[ i ]~>
                            record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
-                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } })
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } ;
+                           stopped = stopsCont ctx })
                            -> agdaValidator par l i ctx ≡ true
+
+
+transitionImpliesValidator = {!!}
+
+{-
 transitionImpliesValidator par Holding (Propose v pkh d)
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -1497,3 +1564,43 @@ liquidity' par
                                           now = now ;
                                           tsig = tsig } } -}
 
+{-
+liquidity'
+  record { authSigs = authSigs ; nr = nr }
+  s@(record { label = label ;
+              context = record { value = zero ;
+                                 outVal = outVal ;
+                                 outAdr = outAdr ;
+                                 now = now ;
+                                 tsig = tsig } })
+  pkh d (Col p1 p2 p3 p6) (Always p4 p5) pf
+  = ⟨ s , ⟨ [] , ⟨ root , refl ⟩ ⟩ ⟩
+liquidity' par
+  record { label = (Collecting v' pkh' d' sigs') ; context = record { value = (suc value) ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig } }
+  pkh d (Col refl p2 p3 p6) (Always p4 p5) pf
+  = ⟨ s''' , ⟨ Cancel ∷ (Propose (suc value) pkh d) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
+    ⟨ cons (TCancel {s' = s'}
+    (s≤s (v≤v d')) refl refl refl {!!} {!!})
+    (cons (TPropose (s≤s (v≤v value)) (s≤s {!!}) refl refl refl {!!} {!!})
+    (prop2 s'' s''' par (Col refl (s≤s (v≤v value)) {!!} root) refl refl refl refl refl (Always p4 p5) {!!} {!!} {!!})) , refl ⟩ ⟩ ⟩
+      where
+        s''' = record { label = Holding ;
+                       context = record { value = zero ;
+                                          outVal = suc value ;
+                                          outAdr = pkh ;
+                                          now = now ;
+                                          tsig = tsig } }
+        s' = record { label = Holding ;
+                      context = record { value = (suc value) ;
+                                         outVal = outVal ;
+                                         outAdr = outAdr ;
+                                         now = suc d' ;
+                                         tsig = tsig } }
+        s'' = record { label = Collecting (suc value) pkh d [] ;
+                        context = record { value = (suc value) ;
+                                           outVal = outVal ;
+                                           outAdr = outAdr ;
+                                           now = d + 1 ;
+                                           tsig = tsig } }
+
+ -}  

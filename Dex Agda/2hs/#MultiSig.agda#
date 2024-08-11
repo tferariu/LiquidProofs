@@ -103,9 +103,7 @@ open Params public
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param dat red ctx = case dat of λ where
-
   Holding -> case red of λ where
-
     (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
@@ -113,23 +111,17 @@ agdaValidator param dat red ctx = case dat of λ where
     Pay -> False
     Cancel -> False
     Close -> gt minValue (oldValue ctx) && stopsCont ctx
-
   (Collecting v pkh d sigs) -> case red of λ where
-
     (Propose _ _ _) -> False
-
     (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
-
     Pay -> (lengthNat sigs) >= (nr param) && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
-      (Collecting _ _ _ _) -> False )
-      
+      (Collecting _ _ _ _) -> False )  
     Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False)
-
     Close -> False
   
 

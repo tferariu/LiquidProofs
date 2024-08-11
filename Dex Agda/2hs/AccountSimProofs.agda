@@ -314,9 +314,6 @@ fidelity {s} {s'} {Deposit _ _} pf (TDeposit p1 p2 p3 p4 p5)
 fidelity {s} {s'} {Transfer _ _ _} pf (TTransfer p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p8 | pf | p7 = svLemma4 (label s) p2 p3 p6
 
-
-
-
 fidelityMulti : ∀ {s s' : State} {is : List Input}
   -> value (context s) ≡ sumVal (label s)
   -> s ~[ is ]~* s'
