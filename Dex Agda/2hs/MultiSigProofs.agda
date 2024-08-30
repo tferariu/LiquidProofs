@@ -218,7 +218,7 @@ validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5 p6 p7) = ⊥-elim (diffLa
 validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5 p6 p7)
                      rewrite pf1 | sameValue p3 | p5 | sameSigs p3
                      = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
-validStateTransition (Stp pf) (TAdd p1 p2 p3 p4 p5 p6 p7) rewrite pf = ⊥-elim (get⊥ p6)
+validStateTransition {s} (Stp pf) (TAdd p1 p2 p3 p4 p5 p6 p7) rewrite pf = ⊥-elim (get⊥ p6)
 validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9) = Hol p5
 validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6) = Hol p3
 validStateTransition iv (TClose p1 p2 p3 p4) = Stp p4
