@@ -30,9 +30,8 @@ record ScriptContext : Set where
         payTo       : PubKeyHash
         payAmt      : Value
         signature   : PubKeyHash
-        stopsCont   : Bool
+        continues   : Bool
 open ScriptContext public
-
 
 
 data Input : Set where
@@ -43,6 +42,16 @@ data Input : Set where
   Close   : Input
 
 {-# COMPILE AGDA2HS Input #-}
+
+record Params : Set where
+    field
+        authSigs  : List PubKeyHash
+        nr : Nat
+        maxWait : Deadline
+open Params public
+
+
+{-# COMPILE AGDA2HS Params #-}
 
 query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
@@ -68,6 +77,9 @@ checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
 expired : Deadline -> ScriptContext -> Bool
 expired d ctx = (time ctx) > d
 
+notTooLate : Params -> Deadline -> ScriptContext -> Bool
+notTooLate par d ctx = d <= (time ctx) + (maxWait par)
+
 newLabel : ScriptContext -> Label
 newLabel ctx = outputLabel ctx
 
@@ -77,8 +89,8 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
-stops : ScriptContext -> Bool
-stops ctx = stopsCont ctx
+continuing : ScriptContext -> Bool
+continuing ctx = continues ctx
 
 geq : Value -> Value -> Bool
 geq val v = val >= v 
@@ -92,41 +104,32 @@ emptyValue = 0
 minValue : Value
 minValue = 2
 
-record Params : Set where
-    field
-        authSigs  : List PubKeyHash
-        nr : Nat
-open Params public
-
-
-{-# COMPILE AGDA2HS Params #-}
-
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param dat red ctx = case dat of λ where
 
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
     (Add _) -> False
     Pay -> False
     Cancel -> False
-    Close -> gt minValue (oldValue ctx) && stopsCont ctx
+    Close -> gt minValue (oldValue ctx) && not (continuing ctx)
 
   (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
 
-    Pay -> (lengthNat sigs) >= (nr param) && (case (newLabel ctx) of λ where
+    Pay -> (lengthNat sigs) >= (nr param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
       (Collecting _ _ _ _) -> False )
       
-    Cancel -> newValue ctx == oldValue ctx && (case (newLabel ctx) of λ where
+    Cancel -> newValue ctx == oldValue ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False)
 
