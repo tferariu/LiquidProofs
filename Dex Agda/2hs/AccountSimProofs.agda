@@ -1,3 +1,4 @@
+--{-# OPTIONS --inversion-max-depth=500 #-}
 --open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 
 open import AccountSim
@@ -136,9 +137,9 @@ data _~[_]~*_ : State -> List Input -> State -> Set where
 
 data Valid : State -> Set where
 
-  Always : ∀ {s pkh v}
+  Always : ∀ {s}
     -> value (context s) ≡ sumVal (label s)
-    -> (lookup pkh (label s) ≡ Just v -> (geq v emptyValue ≡ true) )
+    -> (∀ {pkh v} -> lookup pkh (label s) ≡ Just v -> (geq v emptyValue ≡ true)) --use ALl
     ----------------
     -> Valid s
 
@@ -146,32 +147,7 @@ data Valid : State -> Set where
 sub : ∀ {a b c : ℤ} -> a ≡ b -> a ≡ c -> b ≡ c
 sub refl refl = refl
 
-validStateTransition : ∀ {s s' : State} {i}
-  -> Valid s
-  -> s ~[ i ]~> s'
-  -> Valid s'
-validStateTransition (Always a1 a2) (TOpen p1 p2 p3 p4) = Always {!!} {!!}
-validStateTransition (Always a1 a2) (TClose p1 p2 p3 p4) = {!!}
-validStateTransition (Always a1 a2) (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
-validStateTransition (Always a1 a2) (TDeposit p1 p2 p3 p4 p5) = {!!}
-validStateTransition (Always a1 a2) (TTransfer p1 p2 p3 p4 p5 p6 p7 p8) = {!!}
-{--}
 
-{-iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2 root
-validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
-validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5)
-                     rewrite pf1 | sameValue p3 | p5 | sameSigs p3
-                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
-validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
-validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3-}
-
-
---Multi-Step lemma
-
-
-{-par s .s s'' [] is' root p2 = p2
-lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
--}
 
 
 maybe⊥ : ∀ {x : Value} -> Nothing ≡ Just x -> ⊥
@@ -322,6 +298,157 @@ fidelityMulti {s} {s} {[]} p1 root = p1
 fidelityMulti {s} {s'} {(i ∷ is)} p1 (cons {s' = s''} x p2) = fidelityMulti (fidelity p1 x) p2
 
 
+i=i : ∀ (i : Value) -> (eqInteger i i) ≡ true
+i=i (pos zero) = refl
+i=i (pos (suc n)) = i=i (pos n)
+i=i (negsuc zero) = refl
+i=i (negsuc (suc n)) = i=i (pos n)
+
+
+{-
+validatorImpliesTransition l (Transfer from to val) ctx pf with lookup from l in eq1
+validatorImpliesTransition l (Transfer from to val) ctx pf | Nothing = ⊥-elim (&&false (from == signature ctx) pf)
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF with lookup to l in eq2
+validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Nothing = ⊥-elim (&&false (from
+-}
+
+make⊥ : true ≡ false -> ⊥
+make⊥ ()
+
+sublem : ∀ (pkh pkh' : PubKeyHash)  (label : Label) (v v' : Value)
+        -> (pkh == pkh') ≡ false
+        -> lookup pkh (insert pkh' v' label) ≡ Just v
+        -> lookup pkh label ≡ Just v
+sublem pkh pkh' [] v v' p1 p2 rewrite p1 = p2
+sublem pkh pkh' (x ∷ label) v v' p1 p2 with pkh' == fst x in eq1
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | true with pkh == fst x in eq2
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | true | true
+  rewrite ==ito≡ pkh' (fst x) eq1 | ==ito≡ pkh (fst x) eq2 | i=i (fst x) = ⊥-elim (make⊥ p1)
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | true | false rewrite p1 = p2
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | false with pkh == fst x in eq2
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | false | true = p2 
+sublem pkh pkh' (x ∷ label) v v' p1 p2 | false | false = sublem pkh pkh' label v v' p1 p2 
+
+
+unjust : ∀ {a b : PubKeyHash} -> Just a ≡ Just b -> a ≡ b
+unjust refl = refl
+
+sublem2 : ∀ (pkh : PubKeyHash)  (label : Label) (v v' : Value)
+         -> lookup pkh (insert pkh v' label) ≡ Just v -> v' ≡ v
+sublem2 pkh [] v v' p rewrite i=i pkh = unjust p 
+sublem2 pkh (x ∷ label) v v' p with pkh == (fst x) in eq
+...| true rewrite i=i pkh = unjust p
+...| false rewrite eq = sublem2 pkh label v v' p
+
+
+n≤n : ∀ (n : Nat) -> (n <= n) ≡ true
+n≤n zero = refl
+n≤n (N.suc n) = n≤n n
+
+rwleq : ∀ (a b c : Value) -> a ≡ b -> (c <= a) ≡ true -> (c <= b) ≡ true
+rwleq a (pos n) c p1 p2 rewrite p1 = p2 --n≤n n
+rwleq a (negsuc n) c p1 p2 rewrite p1 = p2 --n≤n n
+
+lem : ∀ {pkh v} (sig : PubKeyHash) (label : Label) (v' : Value)
+      -> geq v' emptyValue ≡ true 
+      -> (lookup pkh label ≡ Just v -> geq v emptyValue ≡ true)
+      -> (lookup pkh (insert sig v' label) ≡ Just v -> geq v emptyValue ≡ true)
+lem {pkh} {v} sig label v' p1 p2 with pkh == sig in eq
+...| true rewrite ==ito≡ pkh sig eq = λ x → rwleq v' v 0 (sublem2 sig label v v' x) p1
+...| false = λ x → p2 (sublem pkh sig label v v' eq x)
+
+lookDel : ∀ (pkh : PubKeyHash) (label : Label) -> lookup pkh (delete pkh label) ≡ Nothing
+lookDel pkh [] = refl
+lookDel pkh (x ∷ l) with pkh == (fst x) in eq
+...| true = {!!}
+...| false = {!!}
+
+delSub : ∀ (pkh sig : PubKeyHash) (label : Label) (v : Value) -> lookup pkh (delete sig label) ≡ Just v
+       -> lookup pkh label ≡ Just v
+delSub pkh sig label v p = {!!}
+
+delem : ∀ (sig : PubKeyHash) (label : Label)
+      -> (∀ {pkh v} -> (lookup pkh label ≡ Just v -> geq v emptyValue ≡ true))
+      -> (∀ {pkh v} -> (lookup pkh (delete sig label) ≡ Just v -> geq v emptyValue ≡ true))
+delem sig label p1 {pkh} {v} p2 = {!!}
+{-with pkh == sig in eq
+...| true rewrite ==ito≡ pkh sig eq = {!!}
+...| false = {!!}-}
+
+{-with pkh == sig in eq
+...| true rewrite ==ito≡ pkh sig eq = ?
+--λ x → rwleq v' v 0 (sublem2 sig label v v' x) p1
+...| false = ?
+--λ x → p2 (sublem pkh sig label v v' eq x)-}
+
+≤NtoleqN : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true 
+≤NtoleqN {zero} {zero} pf = refl
+≤NtoleqN {zero} {N.suc b} pf = refl
+≤NtoleqN {N.suc a} {N.suc b} (N.s≤s pf) = ≤NtoleqN pf
+
+aaa : ∀ (n m : Nat) -> ltNat n m ≡ true -> (ltNat m n || eqNat m n) ≡ true -> ⊥
+aaa (N.suc n) (N.suc m) p1 p2 = ⊥-elim (aaa n m p1 p2)
+
+monusLemma : ∀ (n m : Nat) -> (0 <= (monusNat n m)) ≡ true
+monusLemma zero zero = refl
+monusLemma zero (N.suc m) = refl
+monusLemma (N.suc n) zero = refl
+monusLemma (N.suc n) (N.suc m) = monusLemma n m
+
+diffSubLemma : ∀ (n m : Nat) -> 0 N.≤ m -> m N.≤ n ->
+             (ltInteger +0 (pos n + - pos m) || eqInteger +0 (pos n + - pos m)) ≡ true
+diffSubLemma zero .zero N.z≤n N.z≤n = refl
+diffSubLemma (N.suc n) .zero N.z≤n N.z≤n = refl
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) with ltNat n m in eq
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | true = ⊥-elim (aaa n m eq (≤NtoleqN p2))
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | false = monusLemma n m
+
+diffLemma : ∀ (v v' : Value) -> v' ≤ v -> emptyValue ≤ v' -> geq (v - v') emptyValue ≡ true
+diffLemma .(negsuc _) .(negsuc _) (-≤- n≤m) ()
+diffLemma .(pos _) .(negsuc _) -≤+ ()
+diffLemma .(pos n) .(pos m) (+≤+ {m} {n} m≤n) (+≤+ m≤n₁) = diffSubLemma n m m≤n₁ m≤n
+
+addNatLemma : ∀ (n m : Nat) -> (0 <= (addNat n m)) ≡ true
+addNatLemma zero zero = refl
+addNatLemma zero (N.suc m) = refl
+addNatLemma (N.suc n) zero = refl
+addNatLemma (N.suc n) (N.suc m) = refl 
+
+sumLemma : ∀ (v v' : Value) -> emptyValue ≤ v' -> geq v emptyValue ≡ true -> geq (v + v') emptyValue ≡ true
+sumLemma (pos n) (pos m) p1 p2 = addNatLemma n m
+
+validStateTransition : ∀ {s s' : State} {i}
+  -> Valid s
+  -> s ~[ i ]~> s'
+  -> Valid s'
+validStateTransition {s}
+  {record { label = .(insert pkh 0 (label s)) ; context = context₁ }}
+  (Always a1 a2) t@(TOpen {pkh} p1 p2 refl p4)
+  = Always (fidelity a1 t) (lem pkh (label s) 0 refl a2)
+validStateTransition {s} {record { label = .(delete pkh (label s)) ; context = context₁ }} (Always a1 a2) t@(TClose {pkh} p1 p2 refl p4) = Always (fidelity a1 t) {!!}
+validStateTransition {s} {record { label = .(insert pkh (v - val) (label s)) ; context = context₁ }} (Always a1 a2) t@(TWithdraw {pkh} {val} {v = v} p1 p2 p3 p4 refl p6 p7 p8) = Always (fidelity a1 t) (lem pkh (label s) (v - val) (diffLemma v val p4 p3) a2)
+validStateTransition {s} {record { label = .(insert pkh (v + val) (label s)) ; context = context₁ }} (Always a1 a2) t@(TDeposit {pkh} {val = val} {v = v} p1 p2 p3 refl p5) = Always (fidelity a1 t) (lem pkh (label s) (v + val) (sumLemma v val p3 (a2 p2)) a2)
+validStateTransition {s} {record { label = .(insert from (vF - val) (insert to (vT + val) (label s))) ; context = context₁ }} (Always a1 a2) t@(TTransfer {from} {to} {val} {vF = vF} {vT} p1 p2 p3 p4 p5 p6 refl p8) = Always (fidelity a1 t) (lem from (insert to (vT + val) (label s)) (vF - val) (diffLemma vF val p4 p5) (lem to (label s) (vT + val) (sumLemma vT val p5 (a2 p3)) a2))
+
+
+{--}
+
+{-iv (TPropose p1 p2 p3 p4 p5) rewrite p5 = Col p4 p1 p2 root
+validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5) = ⊥-elim (diffLabels (label s) pf p3)
+validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5)
+                     rewrite pf1 | sameValue p3 | p5 | sameSigs p3
+                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
+validStateTransition iv (TPay p1 p2 p3 p4 p5 p6) = Hol p4
+validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3-}
+
+
+--Multi-Step lemma
+
+
+{-par s .s s'' [] is' root p2 = p2
+lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
+-}
+
 
 get : ∀ (a : Bool) {b} -> (a && b) ≡ true -> a ≡ true
 get true pf = refl
@@ -459,11 +586,6 @@ validatorImpliesTransition l (Transfer from to val) ctx pf | Just vF | Just vT =
 
 
 
-i=i : ∀ (i : Value) -> (eqInteger i i) ≡ true
-i=i (pos zero) = refl
-i=i (pos (suc n)) = i=i (pos n)
-i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = i=i (pos n)
 
 l=l : ∀ (l : Label) -> (l == l) ≡ true
 l=l [] = refl

@@ -1213,13 +1213,6 @@ transitionImpliesValidator : ∀ {oV oA t s cont} (par : Params) (l : Label) (i 
                            -> agdaValidator par l i ctx ≡ true
 
 
-transitionImpliesValidator par Holding (Propose x x₁ x₂) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x₁₁ x₁₂ x₁₃ x₁₄) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues } (TPropose x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀) = {!!}
-transitionImpliesValidator par Holding Close record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = outputLabel ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = false } (TClose x x₁ x₂ x₃) = {!!}
-transitionImpliesValidator par (Collecting x x₁ x₂ x₃) (Add x₄) record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = (Collecting x₁₂ x₁₃ x₁₄ x₁₅) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues } (TAdd x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁) = {!!}
-transitionImpliesValidator par (Collecting x x₁ x₂ x₃) Pay record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues } (TPay x₄ x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁ x₁₂) = {!!}
-transitionImpliesValidator par (Collecting x x₁ x₂ x₃) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = Holding ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues } (TCancel x₄ x₅ x₆ x₇ x₈ x₉) = {!!}
-
-{-
 transitionImpliesValidator par Holding (Propose v pkh d)
   record { inputVal = inputVal ;
            outputVal = outputVal ;
@@ -1227,19 +1220,32 @@ transitionImpliesValidator par Holding (Propose v pkh d)
            time = time ;
            payTo = payTo ;
            payAmt = payAmt ;
-           signature = signature }
-  (TPropose p1 p2 refl refl p5)
-  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl
+           signature = signature ;
+           continues = continues }
+           (TPropose p1 p2 p3 refl p5 p6 p7 refl)
+  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | ≤to≤ᵇ p2 | ≤to≤ᵇ p6 | v=v v | i=i pkh | v=v d = refl
+transitionImpliesValidator par Holding Close
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = outputLabel ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature ;
+           continues = false }
+           (TClose p1 p2 p3 p4)
+  rewrite <to<ᵇ p2 = refl
 transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig)
   record { inputVal = inputVal ;
-           outputVal = .(inputVal) ;
+           outputVal = outputVal ;
            outputLabel = (Collecting .v .pkh .d .(insert sig sigs)) ;
            time = time ;
            payTo = payTo ;
            payAmt = payAmt ;
-           signature = .sig }
-  (TAdd p1 refl refl refl refl)
-  rewrite v=v inputVal | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
+           signature = .sig ;
+           continues = .true }
+           (TAdd p1 refl refl refl p5 p6 refl)
+  rewrite ≡to≡ᵇ (sym p5) | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
 transitionImpliesValidator par (Collecting v pkh d sigs) Pay
   record { inputVal = .(addNat outputVal v) ;
            outputVal = outputVal ;
@@ -1247,9 +1253,10 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Pay
            time = time ;
            payTo = .pkh ;
            payAmt = .v ;
-           signature = signature }
-  (TPay refl p2 refl refl refl refl)
-  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p2 | v=v (outputVal + v) = refl
+           signature = .pkh ;
+           continues = .true }
+           (TPay refl refl p3 refl refl refl refl p8 refl)
+  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p3 | v=v (outputVal + v) = refl
 transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
   record { inputVal = inputVal ;
            outputVal = .(inputVal) ;
@@ -1257,12 +1264,10 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
            time = time ;
            payTo = payTo ;
            payAmt = payAmt ;
-           signature = signature }
-  (TCancel p1 refl refl refl)
+           signature = signature ;
+           continues = .true }
+           (TCancel p1 refl p3 refl p5 refl)
   rewrite v=v inputVal | <to<ᵇ p1 = refl
-
-
--}
 
 
 
@@ -1703,3 +1708,48 @@ validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
            payAmt = payAmt ;
            signature = signature } pf
   = ⊥-elim (&&false (outputVal ≡ᵇ inputVal) pf) -}
+
+{-
+transitionImpliesValidator par Holding (Propose v pkh d)
+  record { inputVal = inputVal ;
+           outputVal = outputVal ;
+           outputLabel = (Collecting _ _ _ []) ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature }
+  (TPropose p1 p2 refl refl p5)
+  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | <to<ᵇ p2 | v=v v | i=i pkh | v=v d = refl
+transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig)
+  record { inputVal = inputVal ;
+           outputVal = .(inputVal) ;
+           outputLabel = (Collecting .v .pkh .d .(insert sig sigs)) ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = .sig }
+  (TAdd p1 refl refl refl refl)
+  rewrite v=v inputVal | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
+transitionImpliesValidator par (Collecting v pkh d sigs) Pay
+  record { inputVal = .(addNat outputVal v) ;
+           outputVal = outputVal ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = .pkh ;
+           payAmt = .v ;
+           signature = signature }
+  (TPay refl p2 refl refl refl refl)
+  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p2 | v=v (outputVal + v) = refl
+transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
+  record { inputVal = inputVal ;
+           outputVal = .(inputVal) ;
+           outputLabel = Holding ;
+           time = time ;
+           payTo = payTo ;
+           payAmt = payAmt ;
+           signature = signature }
+  (TCancel p1 refl refl refl)
+  rewrite v=v inputVal | <to<ᵇ p1 = refl
+
+
+-}
