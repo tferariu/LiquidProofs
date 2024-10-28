@@ -46,7 +46,7 @@ insert pkh val ((x , y) ∷ xs) = if (pkh == x)
 delete : PubKeyHash -> Label -> Label
 delete pkh [] = []
 delete pkh ((x , y) ∷ xs) = if (pkh == x)
-  then xs
+  then xs --(delete pkh xs)
   else ((x , y) ∷ (delete pkh xs))
 
 {-# COMPILE AGDA2HS insert #-}
