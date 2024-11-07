@@ -602,7 +602,12 @@ lemmaMultiStep {s} {s'} {s''} {i ∷ is} {is'} (cons {s' = s'''} x p1) p2 = cons
 
 makeIs : Label -> List Input
 makeIs [] = []
-makeIs ((a , b) ∷ l) = (Withdraw a b) ∷ (makeIs l)
+makeIs ((a , b) ∷ l) = if (b == emptyValue) then (makeIs l)
+                                            else (Withdraw a b) ∷ (makeIs l)
+
+makeL : Label -> Label
+makeL [] = []
+makeL ((a , b) ∷ l) = (a , emptyValue) ∷ (makeL l)
 
 lastOutVal : State -> Value
 lastOutVal record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = outVal
@@ -633,6 +638,47 @@ open Context-}
 --prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7-}
 
 
+lookupProp1 : ∀ {b : Bool} {a : Set} { x y z : Maybe a }
+            -> b ≡ true
+            -> x ≡ z
+            -> (if b then x else y)≡ z
+lookupProp1 refl refl = refl
+
+
+{-
+        -> (makeIs (label s)) = (is ++ is')
+        -> label s' ≡ is' --makeL (label s)
+-}
+
+--generalized
+prop : ∀ (s s' : State)
+        -> label s' ≡ makeL (label s)
+        -> value (context s') ≡ 0
+        -> outVal (context s') ≡ lastOutVal s
+        -> outAdr (context s') ≡ lastOutAdr s
+        -> tsig (context s') ≡ lastSig s
+        -> value (context s) ≡ sumVal (label s)
+        -> Valid s
+        -> s ~[ (makeIs (label s)) ]~* s'
+prop record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .(makeL []) ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl p7 = root
+prop record { label = (x ∷ label)
+            ; context = context }
+     record { label = label'
+            ; context = context' }
+            p1 p2 p3 p4 p5 p6 p7
+     with (snd x) == emptyValue in eq
+...| True = {!prop!}
+...| False = cons {!!} {!!}
+
+--no liveness
+
+{-cons {s' = record { label = (fst x , emptyValue) ∷ label
+                         ; context = record { value = sumVal label
+                                            ; outVal = snd x
+                                            ; outAdr = fst x
+                                            ; tsig = fst x}}}
+     (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!} refl refl) {!prop!}
+-}
 prop1 : ∀ (s s' : State)
         -> label s' ≡ []
         -> value (context s') ≡ 0
@@ -644,15 +690,14 @@ prop1 : ∀ (s s' : State)
         -> s ~[ (makeIs (label s)) ]~* s'
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = [] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl p = root
 
-prop1 record { label = (x ∷ label) ; context = context } record { label = [] ; context = context' } p1 p2 p3 p4 p5 p6 p7
-  = cons {s' = record
+prop1 record { label = (x ∷ label) ; context = context } record { label = [] ; context = context' } p1 p2 p3 p4 p5 p6 p7  = {!!} {-cons {s' = record
            { label = label
            ; context = record
              { value = sumVal label
              ; outVal = snd x
              ; outAdr = fst x
              ; tsig = fst x
-             }}} (TWithdraw refl {!!} {!!} {!!} {!!} {!!} refl refl) {!prop1!}
+             }}} (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!} refl refl) {!prop1!}-}
 
 {-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = root

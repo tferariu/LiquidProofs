@@ -597,7 +597,10 @@ prop9 s pkh (-[1+_] n) cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s)
 ... | no  _ | no  _ = refl 
 prop9 s pkh +[1+ n ] cur r p1 p2 with cur c=? (curr1 s) | cur c=? (curr2 s) | +[1+ n ] Data.Integer.≤? (query pkh (query r (omap1 s))) | +[1+ n ] Data.Integer.≤? (query pkh (query r (omap2 s)))
 ... | yes x | yes y | _ | _ = ⊥-elim (pf s (eqLemma x y)) 
-... | yes x | no  y | yes z | _ =  ⊥-elim (lemma0 (subst (+[1+ n ] Data.Integer.≤_) p1 z))  --⊥-elim (nonsenseLemma z p1)
+... | yes x | no  y | yes z | _ =  ⊥-elim (lemma0 (subst ( +[1+ n ] Data.Integer.≤_ ) p1 {!!}))
+
+--⊥-elim (nonsenseLemma z p1) - (subst (+[1+ n ] Data.Integer.≤_) p1 z)
+
 ... | yes _ | no  _ | no _ | _  = refl
 ... | no  x | yes y | _ | yes z = ⊥-elim (nonsenseLemma z p2)
 ... | no  _ | yes _ | _ | no _  = refl
