@@ -603,7 +603,7 @@ lemmaMultiStep {s} {s'} {s''} {i ∷ is} {is'} (cons {s' = s'''} x p1) p2 = cons
 makeIs : Label -> List Input
 makeIs [] = []
 makeIs ((a , b) ∷ l) = if (b == emptyValue) then (makeIs l)
-                                            else (Withdraw a b) ∷ (makeIs l)
+                                             else (Withdraw a b) ∷ (makeIs l)
 
 makeL : Label -> Label
 makeL [] = []
@@ -668,7 +668,12 @@ prop record { label = (x ∷ label)
             p1 p2 p3 p4 p5 p6 p7
      with (snd x) == emptyValue in eq
 ...| True = {!prop!}
-...| False = cons {!!} {!!}
+...| False = cons {s' = record { label = (fst x , emptyValue) ∷ label
+                         ; context = record { value = sumVal label
+                                            ; outVal = snd x
+                                            ; outAdr = fst x
+                                            ; tsig = fst x}}}
+             (TWithdraw refl ((lookupProp1 (i=i (fst x)) refl)) {!!} {!!} {!!} {!!} refl refl) {!prop!}
 
 --no liveness
 

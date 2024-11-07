@@ -41,6 +41,8 @@ record Context : Set where
     tsig          : PubKeyHash
 open Context
 
+--raname to somtething appropriate
+
 record State : Set where
   field
     label         : Label
