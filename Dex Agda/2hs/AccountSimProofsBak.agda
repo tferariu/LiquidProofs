@@ -54,9 +54,9 @@ sumVal ((k , v) ∷ xs) =  v + sumVal xs
 
 record Context : Set where
   field
-    value         : Value  {-
+    value         : Value  
     outVal        : Value
-    outAdr        : PubKeyHash -}
+    outAdr        : PubKeyHash
     tsig          : PubKeyHash
 open Context
 
@@ -92,8 +92,8 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> v ≥ val
     -> label s' ≡ (insert pkh (v - val) (label s))
     -> value (context s') ≡ value (context s) - val
-  --  -> pkh ≡ outAdr (context s') 
-  --  -> val ≡ outVal (context s') 
+    -> pkh ≡ outAdr (context s') 
+    -> val ≡ outVal (context s') 
     -------------------
     -> s ~[ (Withdraw pkh val) ]~> s'
     
@@ -295,7 +295,7 @@ fidelity {s} {s'} {Open _} pf (TOpen p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma1 (label s) p2
 fidelity {s} {s'} {Close _} pf (TClose p1 p2 p3 p4)
          rewrite pf | p4 | p3 = svLemma2 (label s) p2
-fidelity {s} {s'} {Withdraw _ _} pf (TWithdraw p1 p2 p3 p4 p5 p6)
+fidelity {s} {s'} {Withdraw _ _} pf (TWithdraw p1 p2 p3 p4 p5 p6 p7 p8)
          rewrite p5 | p6 | pf = svLemma3 (label s) p2
 fidelity {s} {s'} {Deposit _ _} pf (TDeposit p1 p2 p3 p4 p5)
          rewrite p5 | pf | p4 = svLemma3 (label s) p2
@@ -389,7 +389,7 @@ validStateTransition {s}
   (Always a1 a2) t@(TOpen {pkh} p1 p2 refl p4)
   = Always (fidelity a1 t) (lem (label s) 0 refl a2)
 validStateTransition {s} {record { label = .(delete pkh (label s)) ; context = context₁ }} (Always a1 a2) t@(TClose {pkh} p1 p2 refl p4) = Always (fidelity a1 t) (delem (label s) a2)
-validStateTransition {s} {record { label = .(insert pkh (v - val) (label s)) ; context = context₁ }} (Always a1 a2) t@(TWithdraw {pkh} {val} {v = v} p1 p2 p3 p4 refl p6) = Always (fidelity a1 t) (lem (label s) (v - val) (diffLemma v val p4 p3) a2)
+validStateTransition {s} {record { label = .(insert pkh (v - val) (label s)) ; context = context₁ }} (Always a1 a2) t@(TWithdraw {pkh} {val} {v = v} p1 p2 p3 p4 refl p6 p7 p8) = Always (fidelity a1 t) (lem (label s) (v - val) (diffLemma v val p4 p3) a2)
 validStateTransition {s} {record { label = .(insert pkh (v + val) (label s)) ; context = context₁ }} (Always a1 a2) t@(TDeposit {pkh} {val = val} {v = v} p1 p2 p3 refl p5) = Always (fidelity a1 t) (lem (label s) (v + val) (sumLemma v val p3 (geqLem (label s) v a2 p2)) a2)
 validStateTransition {s} {record { label = .(insert from (vF - val) (insert to (vT + val) (label s))) ; context = context₁ }} (Always a1 a2) t@(TTransfer {from} {to} {val} {vF = vF} {vT} p1 p2 p3 p4 p5 p6 refl p8) = Always (fidelity a1 t) (lem (insert to (vT + val) (label s)) (vF - val) (diffLemma vF val p4 p5) (lem (label s) (vT + val) (sumLemma vT val p5 (geqLem (label s) vT a2 p3)) a2)) 
 
@@ -465,12 +465,13 @@ rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
 rewriteAdd b c p rewrite add≡ b c = p
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {sig} (l : Label) (i : Input) (ctx : ScriptContext)
+validatorImpliesTransition : ∀ {oV oA sig} (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator l i ctx ≡ true)
-                           -> record { label = l ; context = record { value = (inputVal ctx) ; tsig = sig } }
+                           -> record { label = l ; context = record { value = (inputVal ctx) ;
+                              outVal = oV ; outAdr = oA ; tsig = sig } }
                               ~[ i ]~>
-                              record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx)
-                              ; tsig = signature ctx } }
+                              record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                              outVal = payAmt ctx ; outAdr = payTo ctx ; tsig = signature ctx } }
 
 validatorImpliesTransition l (Open pkh) ctx pf with lookup pkh l in eq
 ...| Nothing = TOpen (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
@@ -490,14 +491,18 @@ validatorImpliesTransition l (Close pkh) ctx pf with lookup pkh l in eq
 validatorImpliesTransition l (Withdraw pkh val) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
 ...| Just v = TWithdraw (==ito≡ pkh (signature ctx) (get (pkh == (signature ctx)) pf)) eq
-              (geqto≤ (get (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf)) )) 
-              (geqto≤ (get (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf)) ))) -- ()
+              (geqto≤ (get (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == (signature ctx)) pf))))
+              (geqto≤ (get (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
+              (go (pkh == (signature ctx)) pf)))))
               (rewriteSubL l pkh v val (==lto≡ (newLabel ctx) (insert pkh (subInteger v val) l)
-              (go (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))) 
+              (go (geq v val) (go (geq val +0) (get (checkWithdraw (Just v) pkh val l ctx)
+              (go (pkh == signature ctx) pf))))))
               (rewriteSub (inputVal ctx) val (==ito≡ (outputVal ctx) (subInteger (inputVal ctx) val)
-              ( (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
-              
-              
+              (here (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
+              (==ito≡ pkh (payTo ctx) (here (go (outputVal ctx == subInteger (inputVal ctx) val)
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf)))))
+              (==ito≡ val (payAmt ctx) (go (pkh == payTo ctx) (go (outputVal ctx == subInteger (inputVal ctx) val)
+              (go (checkWithdraw (Just v) pkh val l ctx) (go (pkh == signature ctx) pf))))) 
 
 validatorImpliesTransition l (Deposit pkh val) ctx pf with lookup pkh l in eq
 ...| Nothing = ⊥-elim (&&false (pkh == signature ctx) pf)
@@ -564,19 +569,21 @@ l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
 ...| False = refl
 ...| True rewrite ==to≡ m n eq = ⊥-elim (p refl)
 
-transitionImpliesValidator : ∀ { s} (l : Label) (i : Input) (ctx : ScriptContext)
-                           -> (pf : record { label = l ; context = record { value = (inputVal ctx) ; tsig = s } }
+transitionImpliesValidator : ∀ {oV oA s} (l : Label) (i : Input) (ctx : ScriptContext)
+                           -> (pf : record { label = l ; context = record { value = (inputVal ctx) ;
+                              outVal = oV ; outAdr = oA ; tsig = s } }
                               ~[ i ]~>
-                              record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx)
-                              ; tsig = signature ctx } })
+                              record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                              outVal = payAmt ctx ; outAdr = payTo ctx ; tsig = signature ctx } })
                            -> agdaValidator l i ctx ≡ true
 transitionImpliesValidator l (Open pkh) ctx (TOpen p1 p2 p3 p4)
   rewrite p1 | p2 | sym p3 | p4 | i=i (signature ctx) | l=l (outputLabel ctx) | i=i (inputVal ctx) = refl
 transitionImpliesValidator l (Close pkh) ctx (TClose p1 p2 p3 p4)
   rewrite p1 | p2 | sym p3 | p4 | i=i (signature ctx) | l=l (outputLabel ctx) | i=i (inputVal ctx) = refl
-transitionImpliesValidator l (Withdraw pkh val) ctx (TWithdraw {v = v} p1 p2 p3 p4 p5 p6)
-  rewrite sym p1 | i=i pkh | p2 | ≤toGeq p3 | ≤toGeq p4 | sym (sub≡ v val) | sym p5
-  | sym (sub≡ (inputVal ctx) val) | sym p6 | i=i (outputVal ctx) | l=l (outputLabel ctx) = refl 
+transitionImpliesValidator l (Withdraw pkh val) ctx (TWithdraw {v = v} p1 p2 p3 p4 p5 p6 p7 p8)
+  rewrite p1 | p2 | p7 | p8 | i=i (payTo ctx) | i=i (payAmt ctx) | ≤toGeq p3 | ≤toGeq p4 |
+  sym (sub≡ (inputVal ctx) (payAmt ctx)) | sym p6 | i=i (outputVal ctx) |
+  sym (sub≡ v (payAmt ctx)) | sym p5 | l=l (outputLabel ctx) = refl
 transitionImpliesValidator l (Deposit pkh val) ctx (TDeposit {v = v} p1 p2 p3 p4 p5)
   rewrite p1 | p2 | i=i (signature ctx) | ≤toGeq p3 | sym (add≡ (inputVal ctx) val) | sym p5 |
   i=i (outputVal ctx) | sym (add≡ v val) | sym p4 | l=l (outputLabel ctx) = refl
@@ -592,22 +599,16 @@ lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
 lemmaMultiStep {s} {.s} {s''} {[]} {is'} root p2 = p2
 lemmaMultiStep {s} {s'} {s''} {i ∷ is} {is'} (cons {s' = s'''} x p1) p2 = cons x (lemmaMultiStep p1 p2)
 
-{-
+
 makeIs : Label -> List Input
 makeIs [] = []
 makeIs ((a , b) ∷ l) = if (b == emptyValue) then (makeIs l)
                                              else (Withdraw a b) ∷ (makeIs l)
--}
-
-makeIs : Label -> List Input
-makeIs [] = []
-makeIs ((a , b) ∷ l) = (Withdraw a b) ∷ (makeIs l)
 
 makeL : Label -> Label
 makeL [] = []
 makeL ((a , b) ∷ l) = (a , emptyValue) ∷ (makeL l)
 
-{-
 lastOutVal : State -> Value
 lastOutVal record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = outVal
 lastOutVal record { label = ((a , b) ∷ []) ; context = context } = a
@@ -617,11 +618,11 @@ lastOutAdr : State -> PubKeyHash
 lastOutAdr record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = outAdr
 lastOutAdr record { label = ((a , b) ∷ []) ; context = context } = b
 lastOutAdr record { label = (x ∷ y ∷ label) ; context = context } = lastOutAdr ( record { label = (y ∷ label) ; context = context })
--}
+
 lastSig : State -> PubKeyHash
-lastSig record { label = [] ; context = record { value = value ; tsig = tsig } } = tsig
+lastSig record { label = [] ; context = record { value = value ; outVal = outVal ; outAdr = outAdr ; tsig = tsig } } = tsig
 lastSig record { label = ((a , b) ∷ []) ; context = context } = b
-lastSig record { label = (x ∷ y ∷ label) ; context = context } = lastSig ( record { label = (y ∷ label) ; context = context })
+lastSig record { label = (x ∷ y ∷ label) ; context = context } = lastOutAdr ( record { label = (y ∷ label) ; context = context })
 
 {-
 record Context : Set where
@@ -650,24 +651,15 @@ lookupProp1 refl refl = refl
 -}
 
 --generalized
-
-{-
 prop : ∀ (s s' : State)
         -> label s' ≡ makeL (label s)
         -> value (context s') ≡ 0
+        -> outVal (context s') ≡ lastOutVal s
+        -> outAdr (context s') ≡ lastOutAdr s
         -> tsig (context s') ≡ lastSig s
         -> value (context s) ≡ sumVal (label s)
         -> Valid s
         -> s ~[ (makeIs (label s)) ]~* s'
-prop record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .(makeL []) ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
-prop record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 with (snd x) == emptyValue in eq
-...| True = {!prop!}
-...| False = cons {s' = record { label = (fst x , emptyValue) ∷ label
-                         ; context = record { value = sumVal label
-                                            ; tsig = fst x}}}
-             (TWithdraw refl ((lookupProp1 (i=i (fst x)) refl)) {!!} {!!} {!!} {!!} ) ({!prop!})  -}
-
-{-
 prop record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .(makeL []) ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl p7 = root
 prop record { label = (x ∷ label)
             ; context = context }
@@ -682,7 +674,7 @@ prop record { label = (x ∷ label)
                                             ; outAdr = fst x
                                             ; tsig = fst x}}}
              (TWithdraw refl ((lookupProp1 (i=i (fst x)) refl)) {!!} {!!} {!!} {!!} refl refl) {!prop!}
--}
+
 --no liveness
 
 {-cons {s' = record { label = (fst x , emptyValue) ∷ label
@@ -693,23 +685,14 @@ prop record { label = (x ∷ label)
      (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!} refl refl) {!prop!}
 -}
 prop1 : ∀ (s s' : State)
-        -> label s' ≡ makeL (label s)
+        -> label s' ≡ []
         -> value (context s') ≡ 0
+        -> outVal (context s') ≡ lastOutVal s
+        -> outAdr (context s') ≡ lastOutAdr s
         -> tsig (context s') ≡ lastSig s
         -> value (context s) ≡ sumVal (label s)
         -> Valid s
         -> s ~[ (makeIs (label s)) ]~* s'
-prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
-prop1 record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 = cons {s' = record
-           { label = (fst x , emptyValue) ∷ label
-           ; context = record
-             { value = sumVal label
-             ; tsig = fst x
-             }}} (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!}) {!prop1!}
-
--- get a counter for empty values on both labels
-
-{-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = [] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl p = root
 
 prop1 record { label = (x ∷ label) ; context = context } record { label = [] ; context = context' } p1 p2 p3 p4 p5 p6 p7  = {!!} {-cons {s' = record
@@ -720,7 +703,6 @@ prop1 record { label = (x ∷ label) ; context = context } record { label = [] ;
              ; outAdr = fst x
              ; tsig = fst x
              }}} (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!} refl refl) {!prop1!}-}
--}
 
 {-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl = root
@@ -741,16 +723,18 @@ liquidity : ∀ (s : State)
           -> value (context s) ≡ sumVal (label s)
           -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value (context s') ≡ 0) )
           
-liquidity record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } refl
+liquidity record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } refl
   = ⟨ (record
         { label = []
         ; context =
             record
             { value = pos zero
+            ; outVal = outVal₁
+            ; outAdr = outAdr₁
             ; tsig = tsig₁
             }
         }) , ⟨ [] , (root , refl) ⟩ ⟩
-liquidity record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; tsig = tsig₁ } } refl
+liquidity record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } refl
   = ⟨ {!!} , ⟨ {!!} , {!!} ⟩ ⟩
 
 

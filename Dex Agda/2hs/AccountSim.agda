@@ -19,9 +19,9 @@ record ScriptContext : Set where
     field
         inputVal    : Integer
         outputVal   : Integer
-        outputLabel : Label
+        outputLabel : Label {-
         payTo       : PubKeyHash
-        payAmt      : Value
+        payAmt      : Value -}
         signature   : PubKeyHash
 open ScriptContext public
 
@@ -70,6 +70,9 @@ gt val v = val > v
 emptyValue : Value
 emptyValue = 0
 
+minValue : Value
+minValue = 2
+
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned pkh ctx = pkh == signature ctx
 
@@ -77,12 +80,10 @@ aux : Maybe Value -> Bool
 aux Nothing = False
 aux (Just _) = True
 
-
 checkMembership' : PubKeyHash -> Label -> Bool
 checkMembership' pkh lab = case lookup pkh lab of λ where
   Nothing -> False
   (Just v) -> True
-{--}
 
 checkMembership : Maybe Value -> Bool
 checkMembership Nothing = False
@@ -105,16 +106,16 @@ checkTransfer Nothing _ _ _ _ _ _ = False
 checkTransfer (Just vF) Nothing _ _ _ _ _ = False
 checkTransfer (Just vF) (Just vT) from to val lab ctx = geq vF val && geq val 0 && from /= to &&
                          newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
-
+{-
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx
+checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx-}
 
 {-# COMPILE AGDA2HS checkMembership #-}
 {-# COMPILE AGDA2HS checkEmpty #-}
 {-# COMPILE AGDA2HS checkWithdraw #-}
 {-# COMPILE AGDA2HS checkDeposit #-}
 {-# COMPILE AGDA2HS checkTransfer #-}
-{-# COMPILE AGDA2HS checkPayment #-}
+--{-# COMPILE AGDA2HS checkPayment #-}
 
 agdaValidator : Label -> Input -> ScriptContext -> Bool
 agdaValidator lab inp ctx = case inp of λ where
@@ -126,7 +127,7 @@ agdaValidator lab inp ctx = case inp of λ where
                    newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
 
     (Withdraw pkh val) -> checkSigned pkh ctx && checkWithdraw (lookup pkh lab) pkh val lab ctx &&
-                          newValue ctx == oldValue ctx - val && checkPayment pkh val ctx
+                          newValue ctx == oldValue ctx - val -- && checkPayment pkh val ctx
 
     (Deposit pkh val) -> checkSigned pkh ctx && checkDeposit (lookup pkh lab) pkh val lab ctx &&
                          newValue ctx == oldValue ctx + val
