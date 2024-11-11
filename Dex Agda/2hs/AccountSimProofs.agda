@@ -599,9 +599,15 @@ makeIs ((a , b) ∷ l) = if (b == emptyValue) then (makeIs l)
                                              else (Withdraw a b) ∷ (makeIs l)
 -}
 
+{-
 makeIs : Label -> List Input
 makeIs [] = []
 makeIs ((a , b) ∷ l) = (Withdraw a b) ∷ (makeIs l)
+-}
+
+makeIs : Label -> List Input
+makeIs [] = []
+makeIs ((a , b) ∷ l) = (Withdraw a b) ∷ (Close a) ∷ (makeIs l)
 
 makeL : Label -> Label
 makeL [] = []
@@ -618,10 +624,29 @@ lastOutAdr record { label = [] ; context = record { value = value ; outVal = out
 lastOutAdr record { label = ((a , b) ∷ []) ; context = context } = b
 lastOutAdr record { label = (x ∷ y ∷ label) ; context = context } = lastOutAdr ( record { label = (y ∷ label) ; context = context })
 -}
+
+{-
 lastSig : State -> PubKeyHash
 lastSig record { label = [] ; context = record { value = value ; tsig = tsig } } = tsig
-lastSig record { label = ((a , b) ∷ []) ; context = context } = b
-lastSig record { label = (x ∷ y ∷ label) ; context = context } = lastSig ( record { label = (y ∷ label) ; context = context })
+lastSig record { label = ((a , b) ∷ []) ; context = context } = a
+lastSig record { label = (x ∷ y ∷ label) ; context = record { value = value ; tsig = sig } }
+  = lastSig ( record { label = (y ∷ label)
+                     ; context = record { value = value
+                                        ; tsig = fst x } })
+-}
+{-
+lastSig : State -> PubKeyHash
+lastSig record { label = [] ; context = record { value = value ; tsig = tsig } } = tsig
+lastSig record { label = ((fst , snd) ∷ []) ; context = record { value = value ; tsig = tsig } } = fst
+lastSig record { label = ((fst , snd) ∷ y ∷ label) ; context = record { value = value ; tsig = tsig } }
+  = lastSig (record { label = y ∷ label ; context = record { value = value ; tsig = fst } })
+-}
+
+lastSig : State -> PubKeyHash
+lastSig record { label = [] ; context = record { value = value ; tsig = tsig } } = tsig
+lastSig record { label = (x ∷ []) ; context = record { value = value ; tsig = tsig } } = fst x
+lastSig record { label = (x ∷ y ∷ label) ; context = ctx }
+  = lastSig (record { label = y ∷ label ; context = ctx })
 
 {-
 record Context : Set where
@@ -640,9 +665,15 @@ open Context-}
 lookupProp1 : ∀ {b : Bool} {a : Set} { x y z : Maybe a }
             -> b ≡ true
             -> x ≡ z
-            -> (if b then x else y)≡ z
+            -> (if b then x else y) ≡ z
 lookupProp1 refl refl = refl
 
+
+deleteProp1 : ∀ {b : Bool} { x y z : Label }
+            -> b ≡ true
+            -> x ≡ z
+            -> z ≡ (if b then x else y)
+deleteProp1 refl refl = refl
 
 {-
         -> (makeIs (label s)) = (is ++ is')
@@ -692,6 +723,7 @@ prop record { label = (x ∷ label)
                                             ; tsig = fst x}}}
      (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!} refl refl) {!prop!}
 -}
+{-
 prop1 : ∀ (s s' : State)
         -> label s' ≡ makeL (label s)
         -> value (context s') ≡ 0
@@ -701,13 +733,138 @@ prop1 : ∀ (s s' : State)
         -> s ~[ (makeIs (label s)) ]~* s'
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
 prop1 record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 = cons {s' = record
-           { label = (fst x , emptyValue) ∷ label
-           ; context = record
-             { value = sumVal label
-             ; tsig = fst x
-             }}} (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!}) {!prop1!}
+            { label = (fst x , emptyValue) ∷ label
+            ; context = record
+              { value = sumVal label
+              ; tsig = fst x
+              }}} (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!}) {!prop1!}
 
 -- get a counter for empty values on both labels
+-}
+
+n≤n : ∀ (n : Nat) -> n N.≤ n
+n≤n zero = N.z≤n
+n≤n (N.suc n) = N.s≤s (n≤n n)
+
+v≤v : ∀ (v : Value) -> v ≤ v
+v≤v (pos n) = +≤+ (n≤n n)
+v≤v (negsuc n) = -≤- (n≤n n)
+
+{-zero = ? --z≤n
+v≤v (suc v) = ? --s≤s (v≤v v)-}
+
+getGeq : ∀ {s x label context}
+         -> s ≡ record { label = x ∷ label ; context = context }
+         -> Valid s
+         -> snd x ≥ emptyValue
+getGeq refl (Always x (allCons {{i}} {{is}})) = geqto≤ i
+
+ltLem : ∀ (n : Nat) -> ltNat n n ≡ false
+ltLem zero = refl
+ltLem (N.suc n) = ltLem n
+
+monusLem : ∀ (n : Nat) -> monusNat n n ≡ 0
+monusLem zero = refl
+monusLem (N.suc n) = monusLem n
+
+i-i : ∀ (i : Value) -> i - i ≡ emptyValue
+i-i (pos zero) = refl
+i-i +[1+ n ] = i-i (negsuc n)
+i-i (negsuc n) rewrite (ltLem n) | (monusLem n) = refl
+
+rewriteLabel : ∀ (pkh : PubKeyHash) (val : Value) (label : Label)
+               -> (pkh , val - val) ∷ label ≡ (pkh , emptyValue) ∷ label
+rewriteLabel pkh val label rewrite (i-i val) = refl
+
+
+
+minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
+minusLemma .(b + pos n) b (pos n) refl rewrite +-assoc b (pos n) (- (pos n))
+           | [+m]-[+n]≡m⊖n n n | n⊖n≡0 n | +-identityʳ b = refl
+minusLemma .(b + negsuc n) b (negsuc n) refl rewrite +-assoc b (negsuc n) (- (negsuc n))
+           | n⊖n≡0 (N.suc n) | +-identityʳ b = refl
+
+
+sameLastSig' : ∀ {x context context'} (label : Label)
+  -> lastSig (record { label = x ∷ label ; context = context }) ≡
+     lastSig (record { label = x ∷ label ; context = context' })
+sameLastSig' [] = refl --refl
+sameLastSig' (y ∷ label) = sameLastSig' label
+
+sameLastSig : ∀ {x context} (label : Label)
+  -> lastSig (record { label = label ; context = record { value = sumVal label ; tsig = fst x } }) ≡
+     lastSig (record { label = x ∷ label ; context = context })
+sameLastSig [] = refl --refl
+sameLastSig (y ∷ label) = sameLastSig' label
+
+--sameLastSig {!label!}
+     
+
+--rewrite m-n≡m⊖n c c = {!!} --rewrite -m+n≡n⊝m c c = {!!}
+
+{-
+minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
+minusLemma a b (pos zero) p rewrite +-identityʳ a | +-identityʳ b = p
+minusLemma a b +[1+ n ] p = {!!}
+minusLemma a b (negsuc zero) p = {!!}
+minusLemma a b (negsuc (N.suc n)) p = {!!}-}
+
+refactor : ∀ (a b c : Value) -> a ≡ b + c -> c ≡ a - b
+refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p)
+
+subValid : ∀ {x label context}
+  -> Valid (record { label = x ∷ label ; context = context })
+  -> All (λ y → geq (snd y) emptyValue ≡ true) label
+subValid (Always x (allCons {{i}} {{is}})) = is
+
+prop1 : ∀ (s s' : State) {l : Label}
+        -> label s ≡ l
+        -> label s' ≡ []
+        -> value (context s') ≡ 0
+        -> tsig (context s') ≡ lastSig s
+        -> value (context s) ≡ sumVal (label s)
+        -> Valid s
+        -> s ~[ (makeIs (label s)) ]~* s'
+prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } {.[]} refl refl refl refl refl (Always x x₁) = root --root
+prop1 s1@(record { label = (x ∷ label) ; context = context }) s2@(record { label = label' ; context = context' }) {.(x ∷ label)} refl p2 p3 p4 p5 p6 rewrite sym (sameLastSig {x} {context} label) --(Always a b) rewrite i-i
+  = cons {s' = record
+            { label = (fst x , emptyValue) ∷ label
+            ; context = record
+              { value = sumVal label
+              ; tsig = fst x
+              }}}
+            (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) (getGeq refl p6) (v≤v (snd x)) (deleteProp1 (i=i (fst x)) (rewriteLabel (fst x) (snd x) label)) (refactor (value context) (snd x) (sumVal label) p5))
+            (cons {s' = record
+                  { label = label
+                  ; context = record
+                    { value = sumVal label
+                    ; tsig = fst x
+                  }}}
+            (TClose refl (lookupProp1 (i=i (fst x)) refl) (deleteProp1 (i=i (fst x)) refl) refl)
+            (prop1 (record { label = label
+                           ; context = record { value = sumVal label
+                                              ; tsig = fst x}})
+            s2 {label} refl p2 p3 p4 refl (Always refl (subValid p6))))
+
+
+{-
+prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
+prop1 record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 = cons {s' = record
+            { label = (fst x , emptyValue) ∷ label
+            ; context = record
+              { value = sumVal label
+              ; tsig = fst x
+              }}}
+            (TWithdraw refl (lookupProp1 (i=i (fst x)) refl) {!!} {!!} {!!} {!!})
+            (cons {s' = record
+                  { label = label
+                  ; context = record
+                    { value = sumVal label
+                    ; tsig = fst x
+                  }}}
+            (TClose {!!} {!!} {!!} {!!}) (prop1 {!!} {!!} {!!} {!!} {!!} {!!} {!!}))-}
+
+
 
 {-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } } record { label = [] ; context = record { value = .0 ; outVal = .(lastOutVal (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; outAdr = .(lastOutAdr (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; outVal = outVal₁ ; outAdr = outAdr₁ ; tsig = tsig₁ } })) } } refl refl refl refl refl refl p = root
@@ -739,8 +896,15 @@ prop1 record { label = ((fst₁ , snd₁) ∷ label₁) ; context = record { val
 
 liquidity : ∀ (s : State)
           -> value (context s) ≡ sumVal (label s)
+          -> Valid s
           -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value (context s') ≡ 0) )
-          
+
+liquidity s p1 p2 =
+  ⟨ record { label = [] ; context = record { value = 0 ; tsig = lastSig s } } ,
+  ⟨ makeIs (label s) , (prop1 s (record { label = [] ; context = record { value = 0 ; tsig = lastSig s } }) {label s}
+  refl refl refl refl p1 p2 , refl) ⟩ ⟩
+
+{-
 liquidity record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } refl
   = ⟨ (record
         { label = []
@@ -750,10 +914,10 @@ liquidity record { label = [] ; context = record { value = .(sumVal []) ; tsig =
             ; tsig = tsig₁
             }
         }) , ⟨ [] , (root , refl) ⟩ ⟩
-liquidity record { label = (x ∷ label₁) ; context = record { value = .(sumVal (x ∷ label₁)) ; tsig = tsig₁ } } refl
+liquidity record { label = (x ∷ label) ; context = record { value = .(sumVal (x ∷ label)) ; tsig = tsig₁ } } refl
   = ⟨ {!!} , ⟨ {!!} , {!!} ⟩ ⟩
 
-
+-}
 
 --  | sym (rewriteSub (inputVal ctx) (payAmt ctx) p6)
 
