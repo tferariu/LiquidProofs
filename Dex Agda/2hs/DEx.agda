@@ -10,10 +10,10 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
-CurrencySymbol = Integer
-TokenName = Integer
+CurrencySymbol = Nat
+TokenName = Nat
 
-PubKeyHash = Integer --no longer string because of equality issues
+PubKeyHash = Nat --no longer string because of equality issues
 
 
 Value = List (CurrencySymbol × (List (TokenName × Integer))) 
@@ -193,6 +193,8 @@ agdaValidator dat red ctx = case red of λ where
                             && checkValue pkh v cs tn r dat ctx
                             && checkCancel pkh v cs tn r dat ctx
                             && oldValue ctx == newValue ctx <> singleton cs tn v
+
+
 {-
 query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
