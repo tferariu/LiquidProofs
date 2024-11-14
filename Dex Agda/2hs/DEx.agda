@@ -36,13 +36,14 @@ numerator r = num r
 denominator : Rational -> Integer
 denominator r = den r
 
+Cmap = List ((Rational × PubKeyHash) × Integer)
 
 record State : Set where
   field
     c1    : AssetClass
     c2    : AssetClass
-    cmap1 : List ((Rational × PubKeyHash) × Integer)
-    cmap2 : List ((Rational × PubKeyHash) × Integer)
+    cmap1 : Cmap
+    cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
 open State public
 {-# COMPILE AGDA2HS State #-}
 
@@ -106,11 +107,6 @@ instance
   iEqState ._==_ = eqState
 
 
-
-
-
-
-
 record ScriptContext : Set where
     field
         inputVal    : Value
@@ -127,9 +123,9 @@ checkSigned sig ctx = sig == signature ctx
 
 
 data Input : Set where
-  Offer   : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> Input
-  Request : PubKeyHash -> CurrencySymbol -> TokenName -> List ((Rational × PubKeyHash) × Integer) -> Input
-  Cancel  : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> Input
+  Offer   : PubKeyHash -> Integer -> Bool -> Rational -> Input
+  Request : PubKeyHash -> Bool -> List ((Rational × PubKeyHash) × Integer) -> Input
+  Cancel  : PubKeyHash -> Integer -> Bool -> Rational -> Input
 
 {-# COMPILE AGDA2HS Input #-}
 
@@ -144,55 +140,125 @@ newValue ctx = outputVal ctx
 
 
 
-checkOffer : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
-checkOffer pkh val cs tn r st ctx
-  = if ( cs , tn ) == c1 st
-       then newState ctx ==
-            record { c1 = c1 st ; c2 = c2 st ;
-            cmap1 = insert' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
-       else if ( cs , tn ) == c2 st
-            then newState ctx ==
-            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
-            cmap2 = insert' (r , pkh) val (cmap2 st) }
-            else False
+checkOffer : PubKeyHash -> Integer -> Bool -> Rational -> State -> ScriptContext -> Bool
+checkOffer pkh val b r st ctx = case b of λ where
+  True ->  newState ctx == record { c1 = c1 st ; c2 = c2 st ;
+           cmap1 = insert' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st} &&
+           oldValue ctx <> singleton (fst (c1 st)) (snd (c1 st)) val == newValue ctx
+  False -> newState ctx == record { c1 = c1 st ; c2 = c2 st ;
+           cmap1 = cmap1 st ; cmap2 = insert' (r , pkh) val (cmap2 st) } &&
+           oldValue ctx <> singleton (fst (c2 st)) (snd (c2 st)) val == newValue ctx
 
-checkValue : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
-checkValue pkh val cs tn r st ctx
-  = if ( cs , tn ) == c1 st
-       then (case (lookup' (r , pkh) (cmap1 st)) of λ where
-            Nothing -> False
-            (Just val') -> val' >= val)
-       else if ( cs , tn ) == c2 st
-            then (case (lookup' (r , pkh) (cmap1 st)) of λ where
-                 Nothing -> False
-                 (Just val') -> val' >= val)
-            else False
 
-checkCancel : PubKeyHash -> Integer -> CurrencySymbol -> TokenName -> Rational -> State -> ScriptContext -> Bool
-checkCancel pkh val cs tn r st ctx
-  = if ( cs , tn ) == c1 st
-       then newState ctx ==
-            record { c1 = c1 st ; c2 = c2 st ;
-            cmap1 = reduce' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
-       else if ( cs , tn ) == c2 st
-            then newState ctx ==
-            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
-            cmap2 = reduce' (r , pkh) val (cmap2 st) }
-            else False
+{-this was for cancel-}
+checkValue : PubKeyHash -> Integer -> Bool -> TokenName -> Rational -> State -> ScriptContext -> Bool
+checkValue pkh val b tn r st ctx = case b of λ where
+  True ->  (case (lookup' (r , pkh) (cmap1 st)) of λ where
+           Nothing -> False
+           (Just val') -> val' >= val)
+  False -> (case (lookup' (r , pkh) (cmap2 st)) of λ where
+           Nothing -> False
+           (Just val') -> val' >= val)
+
+
+checkCancel : PubKeyHash -> Integer -> Bool -> Rational -> State -> ScriptContext -> Bool
+checkCancel pkh val b r st ctx = case b of λ where
+  True ->  newState ctx == record { c1 = c1 st ; c2 = c2 st ;
+           cmap1 = reduce' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st} &&
+           (case (lookup' (r , pkh) (cmap1 st)) of λ where
+             Nothing -> False
+             (Just val') -> val' >= val) &&
+           oldValue ctx == newValue ctx <> singleton (fst (c1 st)) (snd (c1 st)) val
+  False -> newState ctx == record { c1 = c1 st ; c2 = c2 st ;
+           cmap1 = cmap1 st ; cmap2 = reduce' (r , pkh) val (cmap2 st)} &&
+           (case (lookup' (r , pkh) (cmap2 st)) of λ where
+             Nothing -> False
+             (Just val') -> val' >= val) &&
+           oldValue ctx == newValue ctx <> singleton (fst (c2 st)) (snd (c2 st)) val
+
 
 agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator dat red ctx = case red of λ where
-  (Offer pkh v cs tn r) -> checkSigned pkh ctx && v > 0
-                           && (numerator r * denominator r) > 0
-                           && checkOffer pkh v cs tn r dat ctx
-                           && oldValue ctx <> singleton cs tn v == newValue ctx
+  (Offer pkh v b r) -> checkSigned pkh ctx && v > 0 &&
+                       (numerator r * denominator r) > 0 &&
+                       checkOffer pkh v b r dat ctx
+                       
+  (Request pkh b map) -> True
+
+{-
+(checkSigned pkh)                                                         &&
+(ok (resp map cs tn))                                                     &&
+(checkReqD cs tn st map)                                                  &&
+(checkPayments (pMap (resp map cs tn)) (cOut (resp map cs tn)))           &&
+( (txOutValue ownInput) <> singleton cs tn (tOut (resp map cs tn)) == (txOutValue ownOutput) )
 
 
-  (Request pkh cs tn map) -> True
-  (Cancel pkh v cs tn r) -> checkSigned pkh ctx
-                            && checkValue pkh v cs tn r dat ctx
-                            && checkCancel pkh v cs tn r dat ctx
-                            && oldValue ctx == newValue ctx <> singleton cs tn v
+    processReq :: Cmap -> CurrencySymbol -> TokenName -> State -> Response
+    processReq map cs tn state
+        | ac == c1 state = (preProc map (cmap1 state) def) {cOut = c2 state}
+        | ac == c2 state = (preProc map (cmap2 state) def) {cOut = c1 state}
+        | otherwise = def {ok = False}
+    		where
+    		ac  = assetClass cs tn
+    		def = Response
+    		      { ok   = True
+    		      , tOut = 0 
+    	 	      , cOut = ac 
+    		      , pMap = [] }
+    	      
+    preProc :: [((Rational,PaymentPubKeyHash),Integer)] -> [((Rational,PaymentPubKeyHash),Integer)] -> Response -> Response
+    preProc (((r1,pkh1),amt1):xs) (((r2,pkh2),amt2):ys) resp 
+    	| (r1,pkh1) == (r2,pkh2) = if amt1 == amt2 then preProc xs ys resp
+    	                            else if amt1 > amt2 then resp {ok = False}
+    	                                 else preProc xs ys Response
+    		 					     {  ok   = True
+    							      , tOut = tOut resp - amt2 + amt1
+    	 						      , cOut = cOut resp
+    							      , pMap = insert' pkh1 (compute r2 (amt2 - amt1)) (pMap resp) }
+    	| (r1,pkh1) > (r2,pkh2)  = preProc (((r1,pkh1),amt1):xs) ys Response
+    		 					     	    { ok   = True
+    							  	    , tOut = tOut resp - amt2
+    	 						            , cOut = cOut resp
+    								    , pMap = insert' pkh2 (compute r2 amt2) (pMap resp ) }
+  	| (r1,pkh1) < (r2,pkh2)  = resp {ok = False}	
+    preProc [] (((r2,pkh2),amt2):ys) resp = preProc [] ys Response
+    							    { ok   = True
+    						  	    , tOut = tOut resp - amt2
+    	 					            , cOut = cOut resp
+    						  	    , pMap = insert' pkh2 (compute r2 amt2) (pMap resp) }
+    preProc (x:xs) [] resp = resp {ok = False}
+    preProc [] [] resp = resp	           
+  
+    resp :: [((Rational,PaymentPubKeyHash),Integer)] -> CurrencySymbol -> TokenName -> Response
+    resp map cs tn = processReq map cs tn st    
+    
+    checkReqD ::  CurrencySymbol -> TokenName -> State -> [((Rational,PaymentPubKeyHash),Integer)] -> Bool
+    checkReqD cs tn st map
+        | ac == c1 st = outputDatum == st {cmap1 = map} 
+        | ac == c2 st = outputDatum == st {cmap2 = map}                                
+        | otherwise   = False
+        	where
+        	ac = assetClass cs tn
+		
+    count :: [TxOut] -> AssetClass -> Integer -> Integer
+    count [] ac c = c
+    count (o:os) ac c = count os ac (c+ (getVal o ac))
+    
+    paymentVal :: PaymentPubKeyHash -> AssetClass -> Integer
+    paymentVal pkh ac = case filter (\i -> (txOutAddress i == (Addrs.pubKeyHashAddress (unPaymentPubKeyHash pkh)))) (txInfoOutputs info) of
+        os -> count os ac 0 
+        
+    checkPayments :: [(PaymentPubKeyHash,Integer)] -> AssetClass -> Bool
+    checkPayments [] ac = True
+    checkPayments ((pkh,val):xs) ac = paymentVal pkh ac == val && checkPayments xs ac
+    
+
+
+
+-}
+
+  (Cancel pkh v b r) -> checkSigned pkh ctx &&
+                        checkCancel pkh v b r dat ctx 
 
 
 {-
@@ -291,3 +357,39 @@ appendValue ((x , y) ∷ zs) v = insertSubValue x y (appendValue zs v)
 --  iSemigroupValue ._<>_ = appendValue
 
 -}
+
+
+{-
+  = if ( cs , tn ) == c1 st
+       then (case (lookup' (r , pkh) (cmap1 st)) of λ where
+            Nothing -> False
+            (Just val') -> val' >= val)
+       else if ( cs , tn ) == c2 st
+            then (case (lookup' (r , pkh) (cmap2 st)) of λ where
+                 Nothing -> False
+                 (Just val') -> val' >= val)
+            else False -}
+
+
+
+{-
+  = if ( cs , tn ) == c1 st
+       then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ;
+            cmap1 = insert' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
+       else if ( cs , tn ) == c2 st
+            then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
+            cmap2 = insert' (r , pkh) val (cmap2 st) }
+            else False -}
+
+{-
+  = if ( cs , tn ) == c1 st
+       then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ;
+            cmap1 = reduce' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st}
+       else if ( cs , tn ) == c2 st
+            then newState ctx ==
+            record { c1 = c1 st ; c2 = c2 st ; cmap1 = cmap1 st ;
+            cmap2 = reduce' (r , pkh) val (cmap2 st) }
+            else False -}
