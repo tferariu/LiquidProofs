@@ -16,19 +16,13 @@ TokenName = Nat
 PubKeyHash = Nat --no longer string because of equality issues
 
 
-Value = Integer
---List (CurrencySymbol × (List (TokenName × Integer))) 
+Value = List (CurrencySymbol × (List (TokenName × Integer))) 
 
 
-AssetClass = Nat
-
-{-
---CurrencySymbol × TokenName
+AssetClass = CurrencySymbol × TokenName
 
 assetClass : CurrencySymbol -> TokenName -> AssetClass
 assetClass cs tn = cs , tn
--}
-
 
 record Rational : Set where
     field
@@ -46,11 +40,10 @@ Cmap = List ((Rational × PubKeyHash) × Integer)
 
 record State : Set where
   field
-    sellC  : AssetClass
-    buyC   : AssetClass
-    ratio  : Rational
-    amount : Integer
-    --cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
+    c1    : AssetClass
+    c2    : AssetClass
+    cmap1 : Cmap
+    cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
 open State public
 {-# COMPILE AGDA2HS State #-}
 
@@ -91,12 +84,10 @@ delete' x ( ( x' , y ) ∷ xs ) = if (x == x')
   else delete' x xs
 
 
-{-
+
 singleton : CurrencySymbol -> TokenName -> Integer -> Value
 singleton cs tn v = (cs , ( (tn , v)  ∷ [])) ∷ []
--}
 
-{-
 instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
@@ -114,7 +105,7 @@ eqState b c = (c1 b     == c1 c) &&
 instance
   iEqState : Eq State
   iEqState ._==_ = eqState
--}
+
 
 record ScriptContext : Set where
     field
@@ -123,20 +114,18 @@ record ScriptContext : Set where
         outputState : State
         payTo       : PubKeyHash
         payAmt      : Value
-        buyTo       : PubKeyHash
-        buyAmt      : PubKeyHash
         signature   : PubKeyHash
 open ScriptContext public
-
 
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned sig ctx = sig == signature ctx
 
 
+
 data Input : Set where
-  Update   : Integer -> Rational -> Input
-  Exchange : PubKeyHash -> Bool -> List ((Rational × PubKeyHash) × Integer) -> Input
-  Close    : Input
+  Offer   : PubKeyHash -> Integer -> Bool -> Rational -> Input
+  Request : PubKeyHash -> Bool -> List ((Rational × PubKeyHash) × Integer) -> Input
+  Cancel  : PubKeyHash -> Integer -> Bool -> Rational -> Input
 
 {-# COMPILE AGDA2HS Input #-}
 
