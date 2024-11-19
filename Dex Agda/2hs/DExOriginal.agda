@@ -1,4 +1,4 @@
-module DEx where
+module DExOriginal where
 
 open import Haskell.Prelude
 

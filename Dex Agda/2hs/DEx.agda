@@ -49,7 +49,7 @@ record State : Set where
     sellC  : AssetClass
     buyC   : AssetClass
     ratio  : Rational
-    amount : Integer
+    owner  : PubKeyHash
     --cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
 open State public
 {-# COMPILE AGDA2HS State #-}
@@ -96,7 +96,7 @@ singleton : CurrencySymbol -> TokenName -> Integer -> Value
 singleton cs tn v = (cs , ( (tn , v)  ∷ [])) ∷ []
 -}
 
-{-
+
 instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
@@ -106,15 +106,14 @@ instance
 
 
 eqState : State -> State -> Bool
-eqState b c = (c1 b     == c1 c) &&
-              (c2 b     == c2 c) &&
-              (cmap1 b  == cmap1 c)  &&
-              (cmap2 b  == cmap2 c)
+eqState b c = (sellC b  == sellC c) &&
+              (buyC b   == buyC c)  &&
+              (ratio b  == ratio c) 
 
 instance
   iEqState : Eq State
   iEqState ._==_ = eqState
--}
+{--}
 
 record ScriptContext : Set where
     field
@@ -124,7 +123,7 @@ record ScriptContext : Set where
         payTo       : PubKeyHash
         payAmt      : Value
         buyTo       : PubKeyHash
-        buyAmt      : PubKeyHash
+        buyAmt      : Value
         signature   : PubKeyHash
 open ScriptContext public
 
@@ -135,7 +134,7 @@ checkSigned sig ctx = sig == signature ctx
 
 data Input : Set where
   Update   : Integer -> Rational -> Input
-  Exchange : PubKeyHash -> Bool -> List ((Rational × PubKeyHash) × Integer) -> Input
+  Exchange : Integer -> PubKeyHash -> Input
   Close    : Input
 
 {-# COMPILE AGDA2HS Input #-}
@@ -149,47 +148,28 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
+ratioCompare : Integer -> Integer -> Rational -> Bool
+ratioCompare a b r = a * (num r) == b * (den r)
 
+checkPayment : Integer -> State -> ScriptContext -> Bool
+checkPayment amt st ctx = payTo ctx == owner st &&
+                          ratioCompare amt (payAmt ctx) (ratio st)
 
-checkOffer : PubKeyHash -> Integer -> Bool -> Rational -> State -> ScriptContext -> Bool
-checkOffer pkh val b r st ctx = case b of λ where
-  True ->  newState ctx == record { c1 = c1 st ; c2 = c2 st ;
-           cmap1 = insert' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st} &&
-           oldValue ctx <> singleton (fst (c1 st)) (snd (c1 st)) val == newValue ctx
-  False -> newState ctx == record { c1 = c1 st ; c2 = c2 st ;
-           cmap1 = cmap1 st ; cmap2 = insert' (r , pkh) val (cmap2 st) } &&
-           oldValue ctx <> singleton (fst (c2 st)) (snd (c2 st)) val == newValue ctx
-
-
-{-this was for cancel-}
-checkValue : PubKeyHash -> Integer -> Bool -> TokenName -> Rational -> State -> ScriptContext -> Bool
-checkValue pkh val b tn r st ctx = case b of λ where
-  True ->  (case (lookup' (r , pkh) (cmap1 st)) of λ where
-           Nothing -> False
-           (Just val') -> val' >= val)
-  False -> (case (lookup' (r , pkh) (cmap2 st)) of λ where
-           Nothing -> False
-           (Just val') -> val' >= val)
-
-
-checkCancel : PubKeyHash -> Integer -> Bool -> Rational -> State -> ScriptContext -> Bool
-checkCancel pkh val b r st ctx = case b of λ where
-  True ->  newState ctx == record { c1 = c1 st ; c2 = c2 st ;
-           cmap1 = reduce' (r , pkh) val (cmap1 st) ; cmap2 = cmap2 st} &&
-           (case (lookup' (r , pkh) (cmap1 st)) of λ where
-             Nothing -> False
-             (Just val') -> val' >= val) &&
-           oldValue ctx == newValue ctx <> singleton (fst (c1 st)) (snd (c1 st)) val
-  False -> newState ctx == record { c1 = c1 st ; c2 = c2 st ;
-           cmap1 = cmap1 st ; cmap2 = reduce' (r , pkh) val (cmap2 st)} &&
-           (case (lookup' (r , pkh) (cmap2 st)) of λ where
-             Nothing -> False
-             (Just val') -> val' >= val) &&
-           oldValue ctx == newValue ctx <> singleton (fst (c2 st)) (snd (c2 st)) val
-
+checkBuyer : Integer -> PubKeyHash -> ScriptContext -> Bool
+checkBuyer amt pkh ctx = buyTo ctx == pkh &&
+                         buyAmt ctx == amt
 
 agdaValidator : State -> Input -> ScriptContext -> Bool
-agdaValidator dat red ctx = case red of λ where
+agdaValidator st red ctx = case red of λ where
+  (Update amt r) -> signature ctx == owner st &&
+                    newValue ctx == amt &&
+                    newState ctx == record { sellC = sellC st ; buyC = buyC st ; ratio = r ; owner = owner st}
+  (Exchange amt pkh) -> oldValue ctx == newValue ctx + amt &&
+                        newState ctx == st &&
+                        checkPayment amt st ctx && checkBuyer amt pkh ctx
+  Close -> True
+
+{-case red of λ where
   (Offer pkh v b r) -> checkSigned pkh ctx && v > 0 &&
                        (numerator r * denominator r) > 0 &&
                        checkOffer pkh v b r dat ctx
@@ -271,7 +251,7 @@ agdaValidator dat red ctx = case red of λ where
   (Cancel pkh v b r) -> checkSigned pkh ctx &&
                         checkCancel pkh v b r dat ctx 
 
-
+-}
 {-
 query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
