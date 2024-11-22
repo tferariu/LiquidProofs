@@ -18,7 +18,13 @@ PubKeyHash = Nat --no longer string because of equality issues
 
 Value = Integer
 --List (CurrencySymbol × (List (TokenName × Integer))) 
-
+{-
+record Value : Set where
+    field
+        val : Integer
+        ac  : AssetClass
+open Rational public
+-}
 
 AssetClass = Nat
 
@@ -44,15 +50,13 @@ denominator r = den r
 
 Cmap = List ((Rational × PubKeyHash) × Integer)
 
-record State : Set where
+record Label : Set where
   field
-    sellC  : AssetClass
-    buyC   : AssetClass
     ratio  : Rational
     owner  : PubKeyHash
     --cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
-open State public
-{-# COMPILE AGDA2HS State #-}
+open Label public
+{-# COMPILE AGDA2HS Label #-}
 
 eqRational : Rational -> Rational -> Bool
 eqRational b c = (num b == num c) &&
@@ -105,26 +109,26 @@ instance
   iOrdRational = ordFromLessThan ltRational
 
 
-eqState : State -> State -> Bool
-eqState b c = (sellC b  == sellC c) &&
-              (buyC b   == buyC c)  &&
-              (ratio b  == ratio c) 
+eqLabel : Label -> Label -> Bool
+eqLabel b c = (ratio b == ratio c) &&
+              (owner b == owner c)
 
 instance
-  iEqState : Eq State
-  iEqState ._==_ = eqState
+  iEqLabel : Eq Label
+  iEqLabel ._==_ = eqLabel
 {--}
 
 record ScriptContext : Set where
     field
         inputVal    : Value
         outputVal   : Value
-        outputState : State
+        outputLabel : Label
         payTo       : PubKeyHash
         payAmt      : Value
         buyTo       : PubKeyHash
         buyAmt      : Value
         signature   : PubKeyHash
+        continues   : Bool
 open ScriptContext public
 
 
@@ -139,8 +143,16 @@ data Input : Set where
 
 {-# COMPILE AGDA2HS Input #-}
 
-newState : ScriptContext -> State
-newState ctx = outputState ctx
+record Params : Set where
+    field
+            sellC  : AssetClass
+            buyC   : AssetClass
+open Params public
+
+{-# COMPILE AGDA2HS Params #-}
+
+newLabel : ScriptContext -> Label
+newLabel ctx = outputLabel ctx
 
 oldValue : ScriptContext -> Value
 oldValue ctx = inputVal ctx
@@ -148,26 +160,38 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
+continuing : ScriptContext -> Bool
+continuing ctx = continues ctx
+
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) == b * (den r)
 
-checkPayment : Integer -> State -> ScriptContext -> Bool
-checkPayment amt st ctx = payTo ctx == owner st &&
+checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
+checkPayment par amt st ctx = payTo ctx == owner st &&
                           ratioCompare amt (payAmt ctx) (ratio st)
 
-checkBuyer : Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer amt pkh ctx = buyTo ctx == pkh &&
+checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
+checkBuyer par amt pkh ctx = buyTo ctx == pkh &&
                          buyAmt ctx == amt
 
-agdaValidator : State -> Input -> ScriptContext -> Bool
-agdaValidator st red ctx = case red of λ where
-  (Update amt r) -> signature ctx == owner st &&
+checkClose : Params -> Label -> ScriptContext -> Bool
+checkClose par st ctx = payTo ctx == owner st &&
+                    payAmt ctx == oldValue ctx
+
+
+agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator par st red ctx = case red of λ where
+  (Update amt r) -> checkSigned (owner st) ctx &&
                     newValue ctx == amt &&
-                    newState ctx == record { sellC = sellC st ; buyC = buyC st ; ratio = r ; owner = owner st}
+                    newLabel ctx == record {ratio = r ; owner = owner st} &&
+                    continuing ctx
   (Exchange amt pkh) -> oldValue ctx == newValue ctx + amt &&
-                        newState ctx == st &&
-                        checkPayment amt st ctx && checkBuyer amt pkh ctx
-  Close -> True
+                        newLabel ctx == st &&
+                        checkPayment par amt st ctx && checkBuyer par amt pkh ctx &&
+                        continuing ctx
+  Close -> not (continuing ctx) &&
+           checkSigned (owner st) ctx --checkClose par st ctx
+           
 
 {-case red of λ where
   (Offer pkh v b r) -> checkSigned pkh ctx && v > 0 &&
