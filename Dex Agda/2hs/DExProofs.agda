@@ -88,16 +88,17 @@ open State
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TUpdate : ∀ {amt r s s' par} 
-    -> tsig (context s) ≡ owner (label s)
-    -> value (context s) ≡ amt
+    -> tsig (context s') ≡ owner (label s)
+    -> value (context s') ≡ amt
     -> label s' ≡ record { ratio = r ; owner = owner (label s) }
+    -> checkRational r ≡ True
     -> continues s ≡ True
     -> continues s' ≡ True
     -------------------
     -> par ⊢ s ~[ (Update amt r) ]~> s'
 
   TExchange : ∀ {amt pkh s s' par} 
-    -> value (context s) ≡ value (context s') + amt
+    -> value (context s') ≡ value (context s') + amt
     -> label s' ≡ label s
     -> payTo (context s') ≡ owner (label s)
     -> payAmt (context s') * num (ratio (label s)) ≡ amt * den (ratio (label s)) 
@@ -109,53 +110,51 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> par ⊢ s ~[ (Exchange amt pkh) ]~> s'
 
   TClose : ∀ {s s' par} 
-    -> tsig (context s) ≡ owner (label s)
+    -> tsig (context s') ≡ owner (label s)
     -> continues s ≡ True
     -> continues s' ≡ False
     -------------------
     -> par ⊢ s ~[ Close ]~> s'
 
-{-
-  TAdd : ∀ {sig par s s' v pkh d sigs} 
-    -> sig ∈ (authSigs par)
-    -> tsig (context s') ≡ sig
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value (context s) ≡ value (context s')
-    -> continues s ≡ True
-    -> continues s' ≡ True
-    -------------------
-    -> par ⊢ s ~[ (Add sig) ]~> s'
 
-  TPay : ∀ {v pkh d sigs s s' par} 
-    -> tsig (context s') ≡ pkh
-    -> value (context s) ≡ value (context s') + v
-    -> length sigs ≥ nr par
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding
-    -> outVal (context s') ≡ v
-    -> outAdr (context s') ≡ pkh 
-    -> continues s ≡ True
-    -> continues s' ≡ True
-    -------------------
-    -> par ⊢ s ~[ Pay ]~> s'
+--Valid State
+data ValidS : State -> Set where
 
-  TCancel : ∀ {s s' par v pkh d sigs} 
-    -> now (context s') > d
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding  
-    -> value (context s) ≡ value (context s') 
-    -> continues s ≡ True
-    -> continues s' ≡ True 
-    -------------------
-    -> par ⊢ s ~[ Cancel ]~> s'
+  Stp : ∀ {s}
+    -> continues s ≡ False
+    ----------------
+    -> ValidS s
 
-  TClose : ∀ {par s s'}
-    -> label s ≡ Holding
-    -> minValue > value (context s)
-    -> continues s ≡ True
-    -> continues s' ≡ False
-    -------------------
-    -> par ⊢ s ~[ Close ]~> s'
+  Oth : ∀ {s}
+    -> checkRational (ratio (label s)) ≡ True
+    ----------------
+    -> ValidS s
 
--}
+
+--Multi-Step Transition
+data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
+
+  root : ∀ { s par }
+    ------------------
+    -> par ⊢ s ~[ [] ]~* s
+
+  cons : ∀ { par s s' s'' i is }
+    -> par ⊢ s ~[ i ]~> s'
+    -> par ⊢ s' ~[ is ]~* s''
+    -------------------------
+    -> par ⊢ s ~[ (i ∷ is) ]~* s''
+
+
+get⊥ : true ≡ false -> ⊥
+get⊥ ()
+
+--State Validity Invariant
+validStateTransition : ∀ {s s' : State} {i par}
+  -> ValidS s
+  -> par ⊢ s ~[ i ]~> s'
+  -> ValidS s'
+validStateTransition iv (TUpdate p1 p2 p3 p4 p5 p6)
+  = Oth (subst (λ x -> checkRational (ratio x) ≡ True) (sym p3) p4)
+validStateTransition (Stp x) (TExchange p1 p2 p3 p4 p5 p6 p7 p8) rewrite x = ⊥-elim (get⊥ (sym p7))
+validStateTransition (Oth x) (TExchange p1 p2 p3 p4 p5 p6 p7 p8) rewrite sym p2 = Oth x
+validStateTransition iv (TClose p1 p2 p3) = Stp p3

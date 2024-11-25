@@ -48,6 +48,9 @@ numerator r = num r
 denominator : Rational -> Integer
 denominator r = den r
 
+checkRational : Rational -> Bool
+checkRational r = (numerator r >= 0) && (denominator r >= 0)
+
 Cmap = List ((Rational × PubKeyHash) × Integer)
 
 record Label : Set where
@@ -182,6 +185,7 @@ checkClose par st ctx = payTo ctx == owner st &&
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par st red ctx = case red of λ where
   (Update amt r) -> checkSigned (owner st) ctx &&
+                    checkRational r &&
                     newValue ctx == amt &&
                     newLabel ctx == record {ratio = r ; owner = owner st} &&
                     continuing ctx
