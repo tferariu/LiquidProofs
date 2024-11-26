@@ -171,15 +171,17 @@ ratioCompare a b r = a * (num r) == b * (den r)
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
 checkPayment par amt st ctx = payTo ctx == owner st &&
-                          ratioCompare amt (payAmt ctx) (ratio st)
+                              ratioCompare amt (payAmt ctx) (ratio st)
+
+
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = buyTo ctx == pkh &&
-                         buyAmt ctx == amt
+                             buyAmt ctx == amt
 
 checkClose : Params -> Label -> ScriptContext -> Bool
 checkClose par st ctx = payTo ctx == owner st &&
-                    payAmt ctx == oldValue ctx
+                        payAmt ctx == oldValue ctx
 
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
