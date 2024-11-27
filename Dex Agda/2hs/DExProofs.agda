@@ -1,57 +1,24 @@
 open import DEx
 
-{-
-open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
-open import Agda.Builtin.Char
-open import Agda.Builtin.Equality
-open import Agda.Builtin.Bool
-open import Data.Nat as N
-open import Data.Nat.Properties
-open import Data.Integer
-open import Data.Integer.Properties
-open import Agda.Builtin.Nat renaming (_==_ to eqNat; _<_ to ltNat; _+_ to addNat; _-_ to monusNat; _*_ to mulNat)
-open import Agda.Builtin.Int
-open import Data.List
-open import Data.List.Properties
-open import Data.List.Relation.Unary.Any
-open import Data.List.Relation.Unary.All as All
-open import Relation.Nullary
-open import Relation.Binary.PropositionalEquality.Core
-open import Data.Empty
-open import Data.Sum.Base
-open import Data.Product
-
-open import Haskell.Prim hiding (⊥ ; All; Any)
-open import Haskell.Prim.Integer
-open import Haskell.Prim.Bool
-open import Haskell.Prim.Eq
-open import Haskell.Prim.Ord using (_<=_ ; _>=_)
-open import Haskell.Prim using (lengthNat) -}
-
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 import Data.Nat as N
---open import Data.Nat.Properties
-open import Data.Integer --hiding (_+_; _-_)
+open import Data.Integer.Base --hiding (_+_; _-_)
 open import Data.Integer.Properties
 open import Agda.Builtin.Int
 open import Agda.Builtin.Nat renaming (_==_ to eqNat; _<_ to ltNat; _+_ to addNat; _-_ to monusNat; _*_ to mulNat)
 open import Data.List hiding (lookup)
---open import Data.List.Relation.Unary.Any hiding (lookup)
---open import Data.List.Relation.Unary.All as All hiding (lookup)
 open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
---open import Data.Product
+import Data.Sign.Base as Sign
 
 open import Data.Product using ( ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩; _×_ to _xx_)
 
-{- -}
 open import Haskell.Prim hiding (⊥) -- ; All)
 open import Haskell.Prim.Integer
---open import Haskell.Prim
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
 open import Haskell.Prim.Ord
@@ -60,7 +27,6 @@ open import Haskell.Prim.Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup)
-
 
 
 module DExProofs where
@@ -75,8 +41,6 @@ record Context : Set where
     buyTo         : PubKeyHash
     tsig          : PubKeyHash
 open Context
-
---raname to somtething appropriate
 
 record State : Set where
   field
@@ -101,7 +65,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> value (context s) ≡ value (context s') + amt
     -> label s' ≡ label s
     -> payTo (context s') ≡ owner (label s)
-    -> amt * num (ratio (label s)) ≡ payAmt (context s') * den (ratio (label s))
+    -> amt * num (ratio (label s)) ≤ payAmt (context s') * den (ratio (label s))
     -> buyTo (context s') ≡ pkh 
     -> buyAmt (context s') ≡ amt
     -> continues s ≡ True
@@ -185,6 +149,32 @@ liquidity par s (Oth x) p2 = ⟨ s' , ⟨  Close ∷ [] , (cons (TClose refl p2 
                              ; tsig = owner (label s)
                              } ;
                   continues = False }
+
+
+
+{-
+liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) 
+          -> ValidS s -> continues s ≡ True
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )
+
+liquidity' par s pkh (Stp x) p2 rewrite p2 = ⊥-elim (get⊥ x)
+liquidity' par s@record { label = record { ratio = ratio ; owner = owner } ;
+             context = record { value = value ; payAmt = payAmt ; payTo = payTo ; buyAmt = buyAmt ; buyTo = buyTo ; tsig = tsig } ;
+             continues = continues } pkh (Oth x) p2
+  = ⟨ s' , ⟨  (Exchange value pkh) ∷ [] , (cons (TExchange (sym (+-identityˡ value)) refl refl {!!} refl refl p2 refl) root , refl) ⟩ ⟩
+--⟨ {!!} , ⟨ {!(Exchange) ∷ []!} , ({!!} , {!!}) ⟩ ⟩
+--⟨ s' , ⟨  Close ∷ [] , (cons (TClose refl p2 refl) root , refl) ⟩ ⟩
+  where
+    s' = record { label = record { ratio = ratio ; owner = owner } ;
+                  context = record
+                             { value = 0
+                             ; payAmt = value * num ratio -- den ratio
+                             ; payTo = owner
+                             ; buyAmt = value
+                             ; buyTo = pkh
+                             ; tsig = owner
+                             } ;
+                  continues = True } -}
 
 
 --get : ∀ (a : Bool) {b} -> (a && b) ≡ true -> a ≡ true
@@ -281,6 +271,51 @@ mul≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
 rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
 rewriteAdd b c p rewrite add≡ b c = p
 
+<=to≤ : ∀ {a b} -> (a N.<ᵇ b || a == b) ≡ true -> a N.≤ b
+<=to≤ {zero} {zero} pf = N.z≤n
+<=to≤ {zero} {suc b} pf = N.z≤n
+<=to≤ {suc a} {suc b} pf = N.s≤s (<=to≤ pf)
+
+{-
+≤to<= : ∀ {a b} -> a N.≤ b -> (a N.<ᵇ b || a == b) ≡ true
+≤to<= {b = zero} N.z≤n = refl
+≤to<= {b = suc b} N.z≤n = refl
+≤to<= (N.s≤s pf) = ≤to<= pf
+-}
+
+≤≡lem : ∀ (a b : Nat) -> ltNat a (N.suc b) ≡ true -> (ltNat a b || eqNat a b) ≡ true
+≤≡lem zero zero pf = refl
+≤≡lem zero (N.suc b) pf = refl
+≤≡lem (N.suc a) (N.suc b) pf = ≤≡lem a b pf
+
+≤≡ : ∀ (a b : Nat) -> (a N.≤ᵇ b) ≡ true -> (ltNat a b || eqNat a b) ≡ true
+≤≡ zero zero pf = refl
+≤≡ zero (N.suc b) pf = refl
+≤≡ (N.suc a) (N.suc b) pf = ≤≡lem a b pf
+
+
+
+--≤≡ {a} {b} {!!}
+{-
+<=ito≤ : ∀ {a b : Integer} -> (a ≤ᵇ b) ≡ true -> a ≤ b
+<=ito≤ {pos n} {pos m} pf = +≤+ (<=to≤ (≤≡ n m pf))
+<=ito≤ {negsuc n} {pos m} pf = -≤+
+<=ito≤ {negsuc n} {negsuc m} pf = -≤- (<=to≤ (≤≡ m n pf))
+-}
+
+<=ito≤ : ∀ {a b : Integer} -> (ltInteger a b || eqInteger a b) ≡ true -> a ≤ b
+<=ito≤ {pos n} {pos m} pf = +≤+ (<=to≤ pf)
+<=ito≤ {negsuc n} {pos m} pf = -≤+
+<=ito≤ {negsuc n} {negsuc m} pf = -≤- (<=to≤ pf)
+
+{--}
+rewriteMulCheck : ∀ (r : Rational) (ctx : ScriptContext) (val) ->
+  ((mulInteger val (num r)) <= (mulInteger (payAmt ctx) (den r))) ≡ True ->
+  (((sign val Sign.* sign (num r)) ◃ mulNat ∣ val ∣ ∣ num r ∣) ≤
+  ((sign (payAmt ctx) Sign.* sign (den r)) ◃ mulNat ∣ payAmt ctx ∣ ∣ den r ∣))
+rewriteMulCheck r ctx val p rewrite mul≡ val (num r) | mul≡ (payAmt ctx) (den r) = <=ito≤ p 
+
+
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator par l i ctx ≡ true)
@@ -303,11 +338,83 @@ validatorImpliesTransition par l (Exchange val pkh) ctx pf
   rewrite add≡ (outputVal ctx) val -- | mul≡ val (num (ratio l)) | mul≡ (payAmt ctx) (den (ratio l))
   = TExchange (==ito≡ (get pf)) (==lto≡ ctx l (get (go (inputVal ctx == outputVal ctx + val) pf)))
   (==to≡ (get (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf)))))
-  (==ito≡ (go (payTo ctx == owner l) (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) {!!})))))
-  (==to≡ (get (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf))))))
-  {!get!} refl {!!}
+  (rewriteMulCheck (ratio l) ctx val ((go (payTo ctx == owner l) (get
+  (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf))))))
+  --(==ito≡ (go (payTo ctx == owner l) (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) {!!})))))
+  (==to≡ (get (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))))
+  (==ito≡ (go (buyTo ctx == pkh) (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf)))))) refl
+  (go (checkBuyer par val pkh ctx) (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))
 validatorImpliesTransition par l Close ctx pf
   = TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
+
+
+{-
+validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+                           -> (pf : agdaValidator par l i ctx ≡ true)
+                           -> par ⊢
+                           record { label = l ; context = record { value = (inputVal ctx) ;
+                           payAmt = pA ; payTo = pT ; buyAmt = bA ; buyTo = bT ; tsig = s } ; continues = True }
+                           ~[ i ]~>
+                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                           payAmt = payAmt ctx ; payTo = payTo ctx ;
+                           buyAmt = buyAmt ctx ; buyTo = buyTo ctx ; tsig = signature ctx } ;
+                           continues = continuing ctx}
+-}
+
+
+≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
+≡to== {zero} refl = refl
+≡to== {suc a} refl = ≡to== {a} refl
+
+n=n : ∀ (n : Nat) -> (n == n) ≡ true
+n=n zero = refl
+n=n (suc n) = n=n n
+
+≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
+≡to==i {pos n} refl = n=n n
+≡to==i {negsuc n} refl = n=n n
+
+i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
+i=i (pos zero) = refl
+i=i (pos (suc n)) = i=i (pos n)
+i=i (negsuc zero) = refl
+i=i (negsuc (suc n)) = i=i (pos n)
+
+≡to==l : ∀ {a b : Label} -> a ≡ b -> (a == b) ≡ true
+≡to==l {record { ratio = ratio ; owner = owner }} refl
+  rewrite i=i (num ratio) | i=i (den ratio) | n=n owner = refl
+
+≤to<= : ∀ {a b : Nat} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true
+≤to<= {b = zero} N.z≤n = refl
+≤to<= {b = N.suc b} N.z≤n = refl
+≤to<= (N.s≤s p) = ≤to<= p
+
+≤ito<= : ∀ {a b : Integer} -> a ≤ b -> (ltInteger a b || eqInteger a b) ≡ true
+≤ito<= (-≤- n≤m) = ≤to<= n≤m
+≤ito<= -≤+ = refl
+≤ito<= (+≤+ m≤n) = ≤to<= m≤n
+
+
+transitionImpliesValidator : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+                           -> (pf : par ⊢
+                           record { label = l ; context = record { value = (inputVal ctx) ;
+                           payAmt = pA ; payTo = pT ; buyAmt = bA ; buyTo = bT ; tsig = s } ; continues = True }
+                           ~[ i ]~>
+                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                           payAmt = payAmt ctx ; payTo = payTo ctx ;
+                           buyAmt = buyAmt ctx ; buyTo = buyTo ctx ; tsig = signature ctx } ;
+                           continues = continuing ctx})
+                           -> agdaValidator par l i ctx ≡ true
+transitionImpliesValidator par l (Update val r) ctx (TUpdate p1 p2 p3 p4 p5 p6)
+  rewrite ≡to== p1 | p4 | ≡to==i p2 | ≡to==l p3 = p6
+transitionImpliesValidator par l (Exchange val pkh) ctx (TExchange p1 p2 p3 p4 p5 p6 p7 p8)
+  rewrite add≡ (outputVal ctx) val | ≡to==i p1 | ≡to==l p2 | ≡to== p3 | mul≡ val (num (ratio l))
+  | mul≡ (payAmt ctx) (den (ratio l)) | ≡to== p5 | ≡to==i p6 | ≤ito<= p4 = p8
+transitionImpliesValidator par l Close ctx (TClose p1 p2 p3) rewrite p3 = ≡to== p1
+
 
 --(go (checkRational r) (go ((owner l) == (signature ctx)) (get {!p!})))
 --(==ito≡ (go (checkRational r) (go ((owner l) == (signature ctx)) {!!})))
@@ -321,3 +428,41 @@ validatorImpliesTransition par l Close ctx pf
         buyAmt      : Value
         signature   : PubKeyHash
         continues   : Bool -}
+
+
+{-
+open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
+open import Agda.Builtin.Char
+open import Agda.Builtin.Equality
+open import Agda.Builtin.Bool
+open import Data.Nat as N
+open import Data.Nat.Properties
+open import Data.Integer
+open import Data.Integer.Properties
+open import Agda.Builtin.Nat renaming (_==_ to eqNat; _<_ to ltNat; _+_ to addNat; _-_ to monusNat; _*_ to mulNat)
+open import Agda.Builtin.Int
+open import Data.List
+open import Data.List.Properties
+open import Data.List.Relation.Unary.Any
+open import Data.List.Relation.Unary.All as All
+open import Relation.Nullary
+open import Relation.Binary.PropositionalEquality.Core
+open import Data.Empty
+open import Data.Sum.Base
+open import Data.Product
+open import Data.Sign.Base -- as Sign
+
+
+open import Haskell.Prim hiding (⊥ ; All; Any)
+open import Haskell.Prim.Integer
+open import Haskell.Prim.Bool
+open import Haskell.Prim.Eq
+open import Haskell.Prim.Ord using (_<=_ ; _>=_)
+open import Haskell.Prim using (lengthNat) -}
+
+
+--open import Data.Nat.Properties
+--open import Data.List.Relation.Unary.Any hiding (lookup)
+--open import Data.List.Relation.Unary.All as All hiding (lookup)
+--open import Data.Product
+--open import Haskell.Prim

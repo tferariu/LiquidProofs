@@ -49,7 +49,7 @@ denominator : Rational -> Integer
 denominator r = den r
 
 checkRational : Rational -> Bool
-checkRational r = (numerator r >= 0) && (denominator r >= 0)
+checkRational r = (numerator r >= 0) && (denominator r > 0)
 
 Cmap = List ((Rational × PubKeyHash) × Integer)
 
@@ -167,7 +167,7 @@ continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
 ratioCompare : Integer -> Integer -> Rational -> Bool
-ratioCompare a b r = a * (num r) == b * (den r)
+ratioCompare a b r = a * (num r) <= b * (den r)
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
 checkPayment par amt st ctx = payTo ctx == owner st &&
