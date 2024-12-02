@@ -13,27 +13,14 @@ ThreadToken = Placeholder
 CurrencySymbol = Nat
 TokenName = Nat
 
-PubKeyHash = Nat --no longer string because of equality issues
+PubKeyHash = Nat 
 
 
 Value = Integer
---List (CurrencySymbol × (List (TokenName × Integer))) 
-{-
-record Value : Set where
-    field
-        val : Integer
-        ac  : AssetClass
-open Rational public
--}
+
 
 AssetClass = Nat
 
-{-
---CurrencySymbol × TokenName
-
-assetClass : CurrencySymbol -> TokenName -> AssetClass
-assetClass cs tn = cs , tn
--}
 
 
 record Rational : Set where
@@ -57,7 +44,6 @@ record Label : Set where
   field
     ratio  : Rational
     owner  : PubKeyHash
-    --cmap2 : Cmap --List ((Rational × PubKeyHash) × Integer)
 open Label public
 {-# COMPILE AGDA2HS Label #-}
 
@@ -68,40 +54,6 @@ eqRational b c = (num b == num c) &&
 
 ltRational : Rational -> Rational -> Bool
 ltRational b c = num b * den c < num c * den b
-
-lookup' : {{Eq k}} -> k -> List (k × v) -> Maybe v
-lookup' x [] = Nothing
-lookup' x ( ( x' , y ) ∷ xs ) = if (x == x')
-  then Just y
-  else lookup' x xs
-
-insert' : {{Ord k}} -> k -> Integer -> List (k × Integer) -> List (k × Integer)
-insert' key val [] = ( key , val ) ∷ []
-insert' key val ( ( k , v ) ∷ xs ) = if (key < k)
-  then ( key , val ) ∷ ( ( k , v ) ∷ xs )
-  else if (key == k)
-       then (key , (v + val)) ∷ xs
-       else (k , v) ∷ (insert' key val xs)
-
-reduce' : {{Ord k}} -> k -> Integer -> List (k × Integer) -> List (k × Integer)
-reduce' key val [] = ( key , val ) ∷ []
-reduce' key val ( ( k , v ) ∷ xs ) = if (key < k)
-  then ( key , val ) ∷ ( ( k , v ) ∷ xs )
-  else if (key == k)
-       then (key , (v - val)) ∷ xs
-       else (k , v) ∷ (reduce' key val xs)
-
-delete' : {{Eq k}} -> k -> List (k × v) -> List (k × v)
-delete' x [] = []
-delete' x ( ( x' , y ) ∷ xs ) = if (x == x')
-  then xs
-  else delete' x xs
-
-
-{-
-singleton : CurrencySymbol -> TokenName -> Integer -> Value
-singleton cs tn v = (cs , ( (tn , v)  ∷ [])) ∷ []
--}
 
 
 instance
@@ -119,7 +71,6 @@ eqLabel b c = (ratio b == ratio c) &&
 instance
   iEqLabel : Eq Label
   iEqLabel ._==_ = eqLabel
-{--}
 
 record ScriptContext : Set where
     field
@@ -198,6 +149,7 @@ agdaValidator par st red ctx = case red of λ where
   Close -> not (continuing ctx) &&
            checkSigned (owner st) ctx --checkClose par st ctx
            
+
 
 {-case red of λ where
   (Offer pkh v b r) -> checkSigned pkh ctx && v > 0 &&

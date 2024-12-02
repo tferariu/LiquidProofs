@@ -277,8 +277,7 @@ validatorImpliesTransition par l (Update val r) ctx pf
     (get (go ((owner l) == (signature ctx)) pf)) refl
     (go (outputLabel ctx == record { ratio = r ; owner = owner l})
     (go (outputVal ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
-validatorImpliesTransition par l (Exchange val pkh) ctx pf
-  rewrite add≡ (outputVal ctx) val -- | mul≡ val (num (ratio l)) | mul≡ (payAmt ctx) (den (ratio l))
+validatorImpliesTransition par l (Exchange val pkh) ctx pf rewrite add≡ (outputVal ctx) val 
   = TExchange (==ito≡ (get pf)) (==lto≡ ctx l (get (go (inputVal ctx == outputVal ctx + val) pf)))
   (==to≡ (get (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf)))))
   (rewriteMulCheck (ratio l) ctx val ((go (payTo ctx == owner l) (get
