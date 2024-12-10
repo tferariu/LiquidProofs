@@ -325,6 +325,7 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ≤ito<= (+≤+ m≤n) = ≤to<= m≤n
 
 
+
 transitionImpliesValidator : ∀ (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : par ∣
                            record { valueIn = (inputVal ctx) ; valueOut = (outputVal ctx);
