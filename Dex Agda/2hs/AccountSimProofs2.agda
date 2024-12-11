@@ -325,7 +325,21 @@ fidelityMulti : ∀ {s s' : State} {is : List Input} {ctxs : List Context}
   -> ctxs ⊢ s ~[ is ]~* s'
   -> valueOut (lastCtx ctxs pf) ≡ sumVal (label s')
 fidelityMulti {s} {s'} {i ∷ .[]} {ctx ∷ []} p1 p2 (cons {ctx} {.[]} {i = i} {.[]} x root) = fidelity p2 x
-fidelityMulti {s} {s'} {i ∷ i' ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = i} {.(i' ∷ is)} x (cons p p3)) = {!!}
+fidelityMulti {s} {s'} {.(Open _) ∷ .(Open _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = .(Open _)} {.(Open _ ∷ is)} (TOpen x x₅ x₆ x₇) (cons p@(TOpen x₁ x₂ x₃ x₄) p3)) = fidelityMulti itsNonEmpty {!!} (cons p p3)
+fidelityMulti {s} {s'} {.(Close _) ∷ .(Open _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = .(Close _)} {.(Open _ ∷ is)} (TClose x x₅ x₆ x₇) (cons p@(TOpen x₁ x₂ x₃ x₄) p3)) = fidelityMulti itsNonEmpty {!!} (cons p p3)
+fidelityMulti {s} {s'} {.(Withdraw _ _) ∷ .(Open _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = .(Withdraw _ _)} {.(Open _ ∷ is)} (TWithdraw x x₅ x₆ x₇ x₈ x₉) (cons p@(TOpen x₁ x₂ x₃ x₄) p3)) = fidelityMulti itsNonEmpty {!!} (cons p p3)
+fidelityMulti {s} {s'} {.(Deposit _ _) ∷ .(Open _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = .(Deposit _ _)} {.(Open _ ∷ is)} (TDeposit x x₅ x₆ x₇ x₈) (cons p@(TOpen x₁ x₂ x₃ x₄) p3)) = fidelityMulti itsNonEmpty {!!} (cons p p3)
+fidelityMulti {s} {s'} {.(Transfer _ _ _) ∷ .(Open _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = .(Transfer _ _ _)} {.(Open _ ∷ is)} (TTransfer x x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁) (cons p@(TOpen x₁ x₂ x₃ x₄) p3)) = fidelityMulti itsNonEmpty {!!} (cons p p3)
+fidelityMulti {s} {s'} {i ∷ .(Close _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = i} {.(Close _ ∷ is)} x (cons p@(TClose x₁ x₂ x₃ x₄) p3))
+  = {!!}
+fidelityMulti {s} {s'} {i ∷ .(Withdraw _ _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = i} {.(Withdraw _ _ ∷ is)} x (cons p@(TWithdraw x₁ x₂ x₃ x₄ x₅ x₆) p3))
+  = {!!}
+fidelityMulti {s} {s'} {i ∷ .(Deposit _ _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = i} {.(Deposit _ _ ∷ is)} x (cons p@(TDeposit x₁ x₂ x₃ x₄ x₅) p3))
+  = {!!}
+fidelityMulti {s} {s'} {i ∷ .(Transfer _ _ _) ∷ is} {ctx ∷ ctx' ∷ ctxs} p1 p2 (cons {ctx} {.(ctx' ∷ ctxs)} {i = i} {.(Transfer _ _ _ ∷ is)} x (cons p@(TTransfer x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈) p3))
+  = {!!}
+
+--fidelityMulti itsNonEmpty {!!} (cons p p3)
 
 --fidelityMulti itsNonEmpty {!!} p3
 
