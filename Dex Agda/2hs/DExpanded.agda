@@ -172,7 +172,12 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
   Nothing -> False
   (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
 
-
+{-
+checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
+checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
+  Nothing -> False
+  (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
+-}
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = case getPaymentOutput pkh ctx of λ where

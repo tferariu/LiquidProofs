@@ -342,13 +342,15 @@ getBuyOutAdr l Close ctx = Nothing
 ==mlto≡ {Nothing} {Nothing} p = refl
 ==mlto≡ {Just a} {Just b} p rewrite ==lto≡ a b p = refl
 
-{-
-==mto≡ : ∀ {a : Set} {{eq a}} {x y : Maybe a} -> (x == y) ≡ true -> x ≡ y
-==mto≡ p = {!!}-}
+unJust : ∀ {a b : Value} -> a ≡ b -> Just a ≡ Just b
+unJust refl = refl
 
-{-
-==mlto≡ {Just record { ratio = ratio ; owner = owner }} {Just record { ratio = ratio' ; owner = owner' }} p
-  rewrite ==rto≡ {ratio} {ratio'} (get p) | ==to≡ {owner} {owner'} (go (ratio == ratio') p) = {!!}-}
+isJust : ∀ {a : Set} -> Maybe a -> Bool
+isJust Nothing = False
+isJust (Just x) = True
+
+aaaa : ∀ {par val l ctx} -> checkPayment par val l ctx ≡ True -> True ≡ isJust (getPaymentOutput (owner l) ctx)
+aaaa {l = l} {ctx = ctx} p = {!!}
 
 
 --Validator returning true implies transition relation is inhabited
@@ -364,9 +366,13 @@ validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i :
                            tsig = signature ctx } ; continues = continuing ctx}
 validatorImpliesTransition par l (Update val r) ctx pf
   = TUpdate refl (==to≡ (get pf)) (==mvto≡ ((get (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
-    (==mlto≡ ((get (go {!!}
-    (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))) {!!} refl {!!}
-validatorImpliesTransition par l (Exchange val pkh) ctx pf = {!!}
+    (==mlto≡ (get (go (newValue ctx == Just val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
+    (get (go ((owner l) == (signature ctx)) pf)) refl (go (newLabel ctx == Just (record {ratio = r ; owner = owner l}))
+    (go (newValue ctx == Just val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+
+validatorImpliesTransition par l (Exchange val pkh) ctx pf -- with getPaymentOutput (owner l) ctx
+  = TExchange (unJust (==ito≡ (get pf))) (==mlto≡ (get (go (oldValue ctx == (maybe+ (newValue ctx) val)) pf))) refl
+    {!get!} {!refl!} {!!} {!!} {!!} refl {!!}
 validatorImpliesTransition par l Close ctx pf = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
 
 --TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
@@ -467,3 +473,98 @@ liquidity' par s@record { label = record { ratio = ratio ; owner = owner } ;
                              ; tsig = owner
                              } ;
                   continues = True } -}
+
+
+
+---------------------------------------------
+{-
+==mto≡ : ∀ {a : Set} {{eq a}} {x y : Maybe a} -> (x == y) ≡ true -> x ≡ y
+==mto≡ p = {!!}-}
+
+{-
+==mlto≡ {Just record { ratio = ratio ; owner = owner }} {Just record { ratio = ratio' ; owner = owner' }} p
+  rewrite ==rto≡ {ratio} {ratio'} (get p) | ==to≡ {owner} {owner'} (go (ratio == ratio') p) = {!!}-}
+{-
+bbbb : ∀ {ctx tx} -> continuing ctx ≡ true -> getContinuingOutput (purpose ctx) (txOutputs ctx) ≡ Just tx
+bbbb {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = txOutDatum } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} p = {!refl!}
+bbbb {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = txOutDatum } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} p = {!!}
+bbbb {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = txOutDatum } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} p = {!!}
+
+aaaa : ∀ {par val l ctx tx} -> checkPayment par val l ctx ≡ True -> getPaymentOutput (owner l) (purpose ctx) (txOutputs ctx) ≡ Just tx
+aaaa {ctx = record { txOutputs = record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = Payment x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} p = {!!}
+aaaa {par} {val} {l} {record { txOutputs = record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {tx} p = aaaa {par} {val} {l} {record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {tx} p
+aaaa {ctx = record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Minting x }} ()
+
+asdf : ∀ {par val l ctx pkh} -> checkPayment par val l ctx ≡ True -> getPayOutAdr l (Exchange val pkh) ctx ≡ Just (owner l)
+asdf {par} {val} {record { ratio = ratio ; owner = owner }} {record { txOutputs = record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = Payment x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {pkh} p = {!!}
+{-with eqNat y x
+...| True = ?
+...| False = {!!}-}
+asdf {par} {val} l@{record { ratio = ratio ; owner = owner }} {record { txOutputs = record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {pkh} p = asdf {par} {val} {l} {record { txOutputs =  txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {pkh} p
+asdf {par} {val} {record { ratio = ratio ; owner = owner }} {record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = Minting x }} {pkh} ()
+asdf {par} {val} {record { ratio = ratio ; owner = owner }} {record { txOutputs = x₁ ∷ txOutputs₁ ; inputVal = inputVal ; signature = signature ; purpose = Minting x }} {pkh} ()
+
+{-with getPaymentOutput (owner l) ctx
+...| Nothing = ?
+...| Just tx = {!!} -}
+
+bingle : ∀ (a b : Nat) -> (eqNat a b && False) ≡ False
+bingle zero zero = refl
+bingle zero (N.suc b) = refl
+bingle (N.suc a) zero = refl
+bingle (N.suc a) (N.suc b) = bingle a b
+
+bingle2 : ∀ (b : Bool) -> (b && False) ≡ False
+bingle2 false = refl
+bingle2 true = refl
+
+asdd : ∀ {l val pkh ctx aux} -> getPayOutAdr l (Exchange val pkh) ctx ≡ Just aux -> aux ≡ pkh
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {.0} refl = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending zero }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment zero } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Payment (N.suc x) } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending (N.suc y) }} {aux} p = {!!}
+asdd {record { ratio = ratio ; owner = owner }} {val} {pkh} {record { txOutputs = record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} p = {!!}
+{-with eqNat owner txOutAddress
+...| True = ?
+...| False = {!!} -}
+asdd {l} {val} {pkh} {record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = Minting x }} {aux} ()
+asdd {l} {val} {pkh} {record { txOutputs = x₁ ∷ txOutputs₁ ; inputVal = inputVal ; signature = signature ; purpose = Minting x }} {aux} ()
+
+{-
+asdd l@{record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} p = asdd {l} {val} {pkh} {record
+              { txOutputs = txOutputs
+              ; inputVal = inputVal
+              ; signature = signature
+              ; purpose = Spending y
+              }} {aux} p
+-- ∀ {l val pkh ctx aux} ->  getPayOutAdr l (Exchange val pkh) ctx ≡ Just aux -> aux ≡ pkh
+asdd l@{record { ratio = ratio ; owner = zero }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress₁ ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} p = asdd {l} {val} {pkh} {record
+              { txOutputs = txOutputs
+              ; inputVal = inputVal
+              ; signature = signature
+              ; purpose = Spending y
+              }} {aux} p
+asdd l@{record { ratio = ratio ; owner = N.suc owner₁ }} {val} {pkh} {record { txOutputs = record { txOutAddress = zero ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} p = asdd {l} {val} {pkh} {record
+              { txOutputs = txOutputs
+              ; inputVal = inputVal
+              ; signature = signature
+              ; purpose = Spending y
+              }} {aux} p
+asdd {record { ratio = ratio ; owner = N.suc owner }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} p
+  = asdd {record { ratio = ratio ; owner = owner }} {val} {pkh} {record { txOutputs = record { txOutAddress = N.suc txOutAddress ; txOutValue = txOutValue ; txOutDatum = Script x } ∷ txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending y }} {aux} {!p!}
+{-with eqNat owner txOutAddress
+...| True = ?
+...| False = {!!} -}-}
+-}
