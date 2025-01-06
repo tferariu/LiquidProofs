@@ -168,9 +168,19 @@ getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; sign
 
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
-  Nothing -> False
-  (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
+checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ {
+  Nothing -> False ;
+  (Just tx) -> ratioCompare amt (txOutValue tx) (ratio st) }
+
+
+{-# COMPILE AGDA2HS checkPayment #-}
+
+{-
+aux2 : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
+    a ≡ b
+aux2 x w p pf = {!!} -}
 
 {-
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
@@ -183,6 +193,9 @@ checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = case getPaymentOutput pkh ctx of λ where
   Nothing -> False
   (Just txO) -> (txOutValue txO) == amt
+
+
+{-# COMPILE AGDA2HS checkBuyer #-}
                              
 
 checkClose : Params -> Label -> ScriptContext -> Bool
@@ -207,6 +220,9 @@ agdaValidator par st red ctx = case red of λ where
                         checkPayment par amt st ctx && checkBuyer par amt pkh ctx &&
                         continuing ctx
   Close -> not (continuing ctx) &&
-           checkSigned (owner st) ctx --checkClose par st ctx 
+           checkSigned (owner st) ctx --checkClose par st ctx
+
+
+{-# COMPILE AGDA2HS agdaValidator #-}
            
 

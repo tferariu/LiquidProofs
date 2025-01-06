@@ -351,7 +351,40 @@ isJust (Just x) = True
 
 aaaa : ∀ {par val l ctx} -> checkPayment par val l ctx ≡ True -> True ≡ isJust (getPaymentOutput (owner l) ctx)
 aaaa {l = l} {ctx = ctx} p = {!!}
+{-with getPaymentOutput (owner l) ctx
+...| Nothing = ?
+...| Just tx = {!!}
+-}
 
+aux2 : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
+    a ≡ b
+aux2 x w p pf = {!!}
+
+bbbb : ∀ {val : Value} { l ctx} {x w : Maybe TxOut} ->
+     (getPaymentOutput (owner l) ctx) ≡ w ->
+     (pf : (case w of λ { Nothing → false ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l)
+         })  ≡ true) -> True ≡ isJust (getPaymentOutput (owner l) ctx)
+bbbb {val} {l} {ctx} eq p rewrite sym eq with getPaymentOutput (owner l) ctx
+...| Nothing = sym p
+...| Just tx = refl
+
+bbb : ∀ {l : Label} {ctx : ScriptContext} (w : Maybe TxOut) {val : ℤ} ->
+     (getPaymentOutput (owner l) ctx) ≡ w -> (p : (case w of λ { Nothing → false
+      ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l)
+      }) ≡ true) → true ≡ isJust w
+bbb {l} {ctx} w {val} eq p rewrite sym eq with getPaymentOutput (owner l) ctx
+...| Nothing = sym p
+...| Just tx = refl --= {!!}
+
+bb : ∀ {l : Label} {ctx : ScriptContext} {val : ℤ}
+     -> (p : (case  (getPaymentOutput (owner l) ctx) of λ { Nothing → false
+      ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l)
+      }) ≡ true) → true ≡ isJust  (getPaymentOutput (owner l) ctx)
+bb {l} {ctx} {val} p = {!!} {-with getPaymentOutput (owner l) ctx
+...| Nothing = ?
+...| Just tx = {!!}-}
 
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
