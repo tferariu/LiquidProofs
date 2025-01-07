@@ -306,14 +306,15 @@ getPayOutAmt l Close ctx = case getPaymentOutput (owner l) ctx of λ where
   Nothing -> Nothing
   (Just x) -> Just (txOutValue x)
 
+getAddress : Maybe TxOut -> Maybe Address
+getAddress tx = case tx of λ where
+  Nothing -> Nothing
+  (Just x) -> Just (txOutAddress x)
+
 getPayOutAdr : Label -> Input -> ScriptContext -> Maybe Address
 getPayOutAdr l (Update r amt) ctx = Nothing
-getPayOutAdr l (Exchange amt pkh) ctx = case getPaymentOutput (owner l) ctx of λ where
-  Nothing -> Nothing
-  (Just x) -> Just (txOutAddress x)
-getPayOutAdr l Close ctx = case getPaymentOutput (owner l) ctx of λ where
-  Nothing -> Nothing
-  (Just x) -> Just (txOutAddress x)
+getPayOutAdr l (Exchange amt pkh) ctx = getAddress (getPaymentOutput (owner l) ctx)
+getPayOutAdr l Close ctx = getAddress (getPaymentOutput (owner l) ctx)
 
 getBuyOutAmt : Label -> Input -> ScriptContext -> Maybe Value
 getBuyOutAmt l (Update r amt) ctx = Nothing
@@ -370,13 +371,43 @@ bbbb {val} {l} {ctx} eq p rewrite sym eq with getPaymentOutput (owner l) ctx
 ...| Nothing = sym p
 ...| Just tx = refl
 
-bbb : ∀ {l : Label} {ctx : ScriptContext} (w : Maybe TxOut) {val : ℤ} ->
+
+gener : ∀ {l : Label} {ctx : ScriptContext} {val : ℤ} {w : Maybe TxOut} {b : Bool}
+     -> (p : (case w of λ { Nothing → false
+      ; (Just tx) → b
+      }) ≡ true) → true ≡ isJust w
+gener {l} {ctx} {val} {Just x} {b} p = refl
+
+
+spec : ∀ {l ctx w} -> (getPaymentOutput (owner l) ctx) ≡ w -> isJust w ≡ true
+       -> getAddress w ≡ Just (owner l)
+spec = {!!}
+
+{-
+subst2 : Just (txOutAddress x) ≡ Just (owner l)
+       -> isJust (getPaymentOutput (owner l) ctx) ≡ True
+       ->  (λ { Nothing → Nothing ; (Just x) → Just (txOutAddress x) }) (getPaymentOutput (owner l) ctx) ≡ Just (owner l)-}
+
+bbb : ∀ {l : Label} {ctx : ScriptContext} {w : Maybe TxOut} {val : ℤ} ->
      (getPaymentOutput (owner l) ctx) ≡ w -> (p : (case w of λ { Nothing → false
       ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l)
       }) ≡ true) → true ≡ isJust w
-bbb {l} {ctx} w {val} eq p rewrite sym eq with getPaymentOutput (owner l) ctx
+bbb {l} {ctx} {.(getPaymentOutput (owner l) ctx)} {val} refl p with getPaymentOutput (owner l) ctx
 ...| Nothing = sym p
-...| Just tx = refl --= {!!}
+...| Just tx = refl --= {!!}-}
+
+--Fording
+
+-- $ -dependant application $' -nondependent application
+
+{-
+bba : ∀ {l : Label} {ctx : ScriptContext} {w : Maybe TxOut} {val : ℤ} ->
+     (getPaymentOutput (owner l) ctx) ≡ w -> (p : (λ { Nothing → false
+      ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l) }) w ≡ true) → true ≡ isJust w
+bba {l} {ctx} {w} {val} eq p rewrite sym eq with getPaymentOutput (owner l) ctx
+...| Nothing = sym p
+...| Just tx = refl --= {!!} -}
+
 
 bb : ∀ {l : Label} {ctx : ScriptContext} {val : ℤ}
      -> (p : (case  (getPaymentOutput (owner l) ctx) of λ { Nothing → false
@@ -385,6 +416,19 @@ bb : ∀ {l : Label} {ctx : ScriptContext} {val : ℤ}
 bb {l} {ctx} {val} p = {!!} {-with getPaymentOutput (owner l) ctx
 ...| Nothing = ?
 ...| Just tx = {!!}-}
+
+
+
+bbbc : ∀ {l : Label} {ctx : ScriptContext} (w : Maybe TxOut) {val : ℤ} ->
+     (getPaymentOutput (owner l) ctx) ≡ w -> (p : (case w of λ { Nothing → false
+      ; (Just tx) → ratioCompare val (txOutValue tx) (ratio l)
+      }) ≡ true) → (case w of λ { Nothing → Nothing ; (Just x) → Just (txOutAddress x) })
+      ≡ Just (owner l)
+bbbc {l} {ctx} w {val} eq p rewrite sym eq with getPaymentOutput (owner l) ctx in prop
+...| Nothing = ⊥-elim (get⊥ (sym p)) --sym p
+...| Just tx = {!!} --refl --= {!!}
+
+
 
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
@@ -405,8 +449,10 @@ validatorImpliesTransition par l (Update val r) ctx pf
 
 validatorImpliesTransition par l (Exchange val pkh) ctx pf -- with getPaymentOutput (owner l) ctx
   = TExchange (unJust (==ito≡ (get pf))) (==mlto≡ (get (go (oldValue ctx == (maybe+ (newValue ctx) val)) pf))) refl
-    {!get!} {!refl!} {!!} {!!} {!!} refl {!!}
+    (spec refl (sym (gener (get (go (newLabel ctx == Just l) (go (oldValue ctx == (maybe+ (newValue ctx) val)) {!pf!})))))) {!refl!} {!!} {!!} {!!} refl {!!}
 validatorImpliesTransition par l Close ctx pf = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
+
+--spec {l = l} {ctx = ctx} {w = getPaymentOutput (owner l) ctx} refl ?
 
 --TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
 {-

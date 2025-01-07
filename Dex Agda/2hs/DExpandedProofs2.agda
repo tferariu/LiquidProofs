@@ -378,14 +378,18 @@ with getPaymentOutput (owner l) ctx
 -}
 
 
-
+{-
 aux2 : (x w : Maybe ℤ) →
     x ≡ w → {a b : ℤ}
     (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
     a ≡ b
-aux2 x w p pf = {!!}
+aux2 x w p pf = {!!}-}
 
 
+bingus : ∀ {par l amt pkh ctx}
+         -> (pf : checkPayment par amt l pkh ctx ≡ true)
+         -> txOutAddress (getPaymentOutput (owner l) ctx) ≡ owner l
+bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (go (ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l)) pf)
 
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
@@ -399,15 +403,15 @@ validatorImpliesTransition : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i :
                            buyAmt = getBuyOutAmt l i ctx ; buyTo = getBuyOutAdr l i ctx ;
                            tsig = signature ctx } ; continues = continuing ctx}
 validatorImpliesTransition par l (Update val r) ctx pf
-  = {!!}
-  {-TUpdate refl (==to≡ (get pf)) (==mvto≡ ((get (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
-    (==mlto≡ (get (go (newValue ctx == Just val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
-    (get (go ((owner l) == (signature ctx)) pf)) refl (go (newLabel ctx == Just (record {ratio = r ; owner = owner l}))
-    (go (newValue ctx == Just val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
--}
+  = TUpdate refl (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+  ((==lto≡ (newLabel ctx) (record { ratio = r ; owner = owner l }) (get (go (newValue ctx == val)
+  (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))))
+  (get (go ((owner l) == (signature ctx)) pf)) refl (go (newLabel ctx == (record {ratio = r ; owner = owner l}))
+    (go (newValue ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
 validatorImpliesTransition par l (Exchange val pkh) ctx pf -- with getPaymentOutput (owner l) ctx 
-  = TExchange  {!!} {!!} refl
-    {!get!} {!refl!} {!!} {!!} {!!} refl {!!}
+  = TExchange (rewriteAdd (newValue ctx)  val (==ito≡ (get pf)))
+    (==lto≡ (newLabel ctx) l (get (go (oldValue ctx == addInteger (newValue ctx) val) pf))) refl
+    {!get!} refl {!!} {!!} {!!} refl {!!}
 validatorImpliesTransition par l Close ctx pf = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
 
 {--}

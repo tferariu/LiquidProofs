@@ -177,8 +177,18 @@ getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; sign
   = record { txOutAddress = 0 ; txOutValue = -1 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
 
 
+{-
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt st ctx = ratioCompare amt (txOutValue (getPaymentOutput (owner st) ctx)) (ratio st) 
+checkPayment par amt l ctx = ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) 
+-}
+
+---!!!!! ASSET CLASS
+
+checkPayment : Params -> Integer -> Label -> PubKeyHash -> ScriptContext -> Bool
+checkPayment par amt l pkh ctx = txOutAddress (getPaymentOutput (owner l) ctx) == owner l &&
+                                 ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) 
+                                 
+{--}
 
 
 {-# COMPILE AGDA2HS checkPayment #-}
@@ -199,7 +209,8 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
 
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx = (txOutValue (getPaymentOutput pkh ctx)) == amt
+checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
+                             (txOutValue (getPaymentOutput pkh ctx)) == amt
 
 
 {-# COMPILE AGDA2HS checkBuyer #-}
@@ -223,7 +234,7 @@ agdaValidator par l red ctx = case red of λ where
                     continuing ctx
   (Exchange amt pkh) -> oldValue ctx == (newValue ctx) + amt &&
                         newLabel ctx == l &&
-                        checkPayment par amt l ctx && checkBuyer par amt pkh ctx &&
+                        checkPayment par amt l pkh ctx && checkBuyer par amt pkh ctx &&
                         continuing ctx
   Close -> not (continuing ctx) &&
            checkSigned (owner l) ctx --checkClose par st ctx

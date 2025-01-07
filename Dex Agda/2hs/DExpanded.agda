@@ -173,7 +173,15 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ {
   (Just tx) -> ratioCompare amt (txOutValue tx) (ratio st) }
 
 
+checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
+checkBuyer par amt pkh ctx = case getPaymentOutput pkh ctx of λ where
+  Nothing -> False
+  (Just txO) -> (txOutValue txO) == amt
+
 {-# COMPILE AGDA2HS checkPayment #-}
+
+{-# COMPILE AGDA2HS checkBuyer #-}
+                             
 
 {-
 aux2 : (x w : Maybe ℤ) →
@@ -189,14 +197,9 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
   (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
 -}
 
-checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx = case getPaymentOutput pkh ctx of λ where
-  Nothing -> False
-  (Just txO) -> (txOutValue txO) == amt
 
 
-{-# COMPILE AGDA2HS checkBuyer #-}
-                             
+
 
 checkClose : Params -> Label -> ScriptContext -> Bool
 checkClose par st ctx = case getPaymentOutput (owner st) ctx of λ where
