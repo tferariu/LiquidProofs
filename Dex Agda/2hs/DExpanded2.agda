@@ -15,12 +15,51 @@ TokenName = Nat
 PubKeyHash = Nat 
 Address = Nat
 
-Value = Integer
-
 
 AssetClass = Nat
 
 
+
+Value = Integer
+
+{-
+addValue : Value -> Value -> Value
+addValue a b = ?
+
+subValue : Value -> Value -> Value
+subValue a b = ?
+
+mulValue : Value -> Value -> Value
+mulValue a b = ?
+
+negateValue : Value -> Value
+negateValue a = ?
+
+absValue : Value -> Value
+absValue a = ?
+
+
+signValue : Value -> Value
+signValue a = ?
+
+instance
+  iNumValue : Num Value
+  iNumValue .MinusOK _ _ = ⊤
+  iNumValue .NegateOK _          = ⊤
+  iNumValue .Num.FromIntegerOK _ = ⊤
+  iNumValue ._+_ x y             = addValue x y
+  iNumValue ._-_ x y             = subValue x y
+  iNumValue ._*_ x y             = mulValue x y
+  iNumValue .negate x            = negateValue x
+  iNumValue .abs x               = absValue x
+  iNumValue .signum x            = signValue x
+  iNumValue .fromInteger n       = ?
+  -}
+
+{-
+  iOrdRational : Ord Rational
+  iOrdRational = ordFromLessThan ltRational
+-}
 
 record Rational : Set where
     field
@@ -96,6 +135,7 @@ record TxOut : Set where
   field
     txOutAddress : Address
     txOutValue : Value
+    txOutAc    : AssetClass
     txOutDatum : OutputDatum
 
 open TxOut public
@@ -105,6 +145,7 @@ record ScriptContext : Set where
     field
         txOutputs   : List TxOut
         inputVal    : Value
+        inputAc     : AssetClass
         signature   : PubKeyHash
         purpose     : ScriptPurpose
         
@@ -132,18 +173,24 @@ open Params public
 {-# COMPILE AGDA2HS Params #-}
 
 getContinuingOutputs : ScriptContext -> List TxOut
-getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) } = []
-getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) }
+getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending x) } = []
+getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending adr) }
   = if adr == txOutAddress txO
-       then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending adr })
-       else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = Spending adr })
-getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) } = []
+       then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending adr })
+       else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending adr })
+getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Minting x) } = []
 
+--postulate err : {a : Set} -> a
 
 ownOutput : ScriptContext -> TxOut
 ownOutput ctx = case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
-  _ -> record { txOutAddress = 0 ; txOutValue = -1 ; txOutDatum = Payment 0 }
+  _ -> record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Payment 0 }
+
+--err 
+
+--
+
 
 oldValue : ScriptContext -> Value
 oldValue ctx = inputVal ctx
@@ -168,13 +215,13 @@ ratioCompare a b r = a * (num r) <= b * (den r)
 
 getPaymentOutput : Address -> ScriptContext -> TxOut
 getPaymentOutput adr record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) }
-  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
-getPaymentOutput adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) }
+  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+getPaymentOutput adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending x) }
   = if adr == txOutAddress txO && (Payment x) == txOutDatum txO
        then txO
-       else getPaymentOutput adr (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) })
-getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) }
-  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+       else getPaymentOutput adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending x) })
+getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Minting x) }
+  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
 
 
 {-
@@ -186,7 +233,8 @@ checkPayment par amt l ctx = ratioCompare amt (txOutValue (getPaymentOutput (own
 
 checkPayment : Params -> Integer -> Label -> PubKeyHash -> ScriptContext -> Bool
 checkPayment par amt l pkh ctx = txOutAddress (getPaymentOutput (owner l) ctx) == owner l &&
-                                 ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) 
+                                 ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) &&
+                                 txOutAc (getPaymentOutput (owner l) ctx) == buyC par
                                  
 {--}
 
@@ -210,26 +258,25 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
-                             (txOutValue (getPaymentOutput pkh ctx)) == amt
+                             (txOutValue (getPaymentOutput pkh ctx)) == amt &&
+                             txOutAc (getPaymentOutput pkh ctx) == sellC par
 
 
 {-# COMPILE AGDA2HS checkBuyer #-}
                              
 
 checkClose : Params -> Label -> ScriptContext -> Bool
-checkClose par st ctx = (txOutValue (getPaymentOutput (owner st) ctx)) == oldValue ctx
+checkClose par l ctx = (txOutValue (getPaymentOutput (owner l) ctx)) == oldValue ctx &&
+                        txOutAc (getPaymentOutput (owner l) ctx) == sellC par
 
 
-maybe+ : Maybe Value -> Value -> Value
-maybe+ Nothing v = v
-maybe+ (Just x) v = x + v
 
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par l red ctx = case red of λ where
   (Update amt r) -> checkSigned (owner l) ctx &&
                     checkRational r &&
-                    newValue ctx == amt &&
+                    newValue ctx == amt && --do currency check!!
                     newLabel ctx == (record {ratio = r ; owner = owner l}) &&
                     continuing ctx
   (Exchange amt pkh) -> oldValue ctx == (newValue ctx) + amt &&
