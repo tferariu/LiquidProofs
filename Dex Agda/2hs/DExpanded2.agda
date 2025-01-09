@@ -20,27 +20,52 @@ AssetClass = Nat
 
 
 
-Value = Integer
+--Value = (Integer × AssetClass)
 
+record Value : Set where
+    field
+            amount   : Integer
+            currency : AssetClass
+open Value public
+
+
+addValue : Value -> Value -> Value
+addValue a b = case currency a == currency b of λ where
+  True -> record { amount = amount a + amount b ; currency = currency a }
+  False -> a
+
+
+eqValue : Value -> Value -> Bool
+eqValue a b = (amount a == amount b) &&
+              (currency a == currency b) 
+
+instance
+  iEqValue : Eq Value
+  iEqValue ._==_ = eqValue
+  
+  iSemigroupValue : Semigroup Value
+  iSemigroupValue ._<>_ = addValue
+
+  
 {-
 addValue : Value -> Value -> Value
-addValue a b = ?
+addValue a b = {!!}
 
 subValue : Value -> Value -> Value
-subValue a b = ?
+subValue a b = {!!}
 
 mulValue : Value -> Value -> Value
-mulValue a b = ?
+mulValue a b = {!!}
 
 negateValue : Value -> Value
-negateValue a = ?
+negateValue a = {!!}
 
 absValue : Value -> Value
-absValue a = ?
+absValue a = {!!}
 
 
 signValue : Value -> Value
-signValue a = ?
+signValue a = {!!}
 
 instance
   iNumValue : Num Value
@@ -53,8 +78,8 @@ instance
   iNumValue .negate x            = negateValue x
   iNumValue .abs x               = absValue x
   iNumValue .signum x            = signValue x
-  iNumValue .fromInteger n       = ?
-  -}
+  iNumValue .fromInteger n       = {!!}
+-}
 
 {-
   iOrdRational : Ord Rational
@@ -106,6 +131,8 @@ eqLabel : Label -> Label -> Bool
 eqLabel b c = (ratio b == ratio c) &&
               (owner b == owner c)
 
+
+
 instance
   iEqLabel : Eq Label
   iEqLabel ._==_ = eqLabel
@@ -135,7 +162,7 @@ record TxOut : Set where
   field
     txOutAddress : Address
     txOutValue : Value
-    txOutAc    : AssetClass
+    --txOutAc    : AssetClass
     txOutDatum : OutputDatum
 
 open TxOut public
@@ -185,7 +212,7 @@ getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; inpu
 ownOutput : ScriptContext -> TxOut
 ownOutput ctx = case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
-  _ -> record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Payment 0 }
+  _ -> record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Payment 0 }
 
 --err 
 
@@ -215,13 +242,13 @@ ratioCompare a b r = a * (num r) <= b * (den r)
 
 getPaymentOutput : Address -> ScriptContext -> TxOut
 getPaymentOutput adr record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) }
-  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+  = record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
 getPaymentOutput adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending x) }
   = if adr == txOutAddress txO && (Payment x) == txOutDatum txO
        then txO
        else getPaymentOutput adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Spending x) })
 getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Minting x) }
-  = record { txOutAddress = 0 ; txOutValue = -1 ; txOutAc = 0 ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+  = record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
 
 
 {-
@@ -233,8 +260,9 @@ checkPayment par amt l ctx = ratioCompare amt (txOutValue (getPaymentOutput (own
 
 checkPayment : Params -> Integer -> Label -> PubKeyHash -> ScriptContext -> Bool
 checkPayment par amt l pkh ctx = txOutAddress (getPaymentOutput (owner l) ctx) == owner l &&
-                                 ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) &&
-                                 txOutAc (getPaymentOutput (owner l) ctx) == buyC par
+                                 ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l) &&
+                                 currency (txOutValue (getPaymentOutput (owner l) ctx)) == buyC par
+                                 --txOutAc (getPaymentOutput (owner l) ctx) == buyC par
                                  
 {--}
 
@@ -258,16 +286,17 @@ checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
-                             (txOutValue (getPaymentOutput pkh ctx)) == amt &&
-                             txOutAc (getPaymentOutput pkh ctx) == sellC par
+                             (txOutValue (getPaymentOutput pkh ctx)) ==
+                             record { amount = amt ; currency = sellC par }  
+                             --txOutAc (getPaymentOutput pkh ctx) == sellC par
 
 
 {-# COMPILE AGDA2HS checkBuyer #-}
                              
 
 checkClose : Params -> Label -> ScriptContext -> Bool
-checkClose par l ctx = (txOutValue (getPaymentOutput (owner l) ctx)) == oldValue ctx &&
-                        txOutAc (getPaymentOutput (owner l) ctx) == sellC par
+checkClose par l ctx = (txOutValue (getPaymentOutput (owner l) ctx)) == oldValue ctx 
+                        --txOutAc (getPaymentOutput (owner l) ctx) == sellC par
 
 
 
@@ -276,10 +305,10 @@ agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par l red ctx = case red of λ where
   (Update amt r) -> checkSigned (owner l) ctx &&
                     checkRational r &&
-                    newValue ctx == amt && --do currency check!!
+                    newValue ctx == record { amount = amt ; currency = sellC par } && --do currency check!! amt
                     newLabel ctx == (record {ratio = r ; owner = owner l}) &&
                     continuing ctx
-  (Exchange amt pkh) -> oldValue ctx == (newValue ctx) + amt &&
+  (Exchange amt pkh) -> oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par } && --amt
                         newLabel ctx == l &&
                         checkPayment par amt l pkh ctx && checkBuyer par amt pkh ctx &&
                         continuing ctx
@@ -289,4 +318,16 @@ agdaValidator par l red ctx = case red of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-} 
            
+{-
+postulate err : {a : Set} -> a
+postulate impossible : {a : Bool} -> err ≡ True -> ⊥ --True ≡ False
 
+func : Nat -> Bool
+func zero = err
+func (suc x) = True
+
+validator : Nat -> String -> Bool
+validator n str = func n && str == "foo"
+
+bar : {n : Nat} {str : String} -> n ≡ zero -> validator n str ≡ False
+bar {.zero} {str = str} refl = err -}
