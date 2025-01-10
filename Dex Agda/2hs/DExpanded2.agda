@@ -318,16 +318,23 @@ agdaValidator par l red ctx = case red of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-} 
            
-{-
 postulate err : {a : Set} -> a
+{-
+postulate reduceErr : {f : Set -> Set} -> f err ≡ err
 postulate impossible : {a : Bool} -> err ≡ True -> ⊥ --True ≡ False
+-}
 
-func : Nat -> Bool
-func zero = err
-func (suc x) = True
+postulate impossible : {n : Nat} -> (err == n) ≡ False
 
-validator : Nat -> String -> Bool
-validator n str = func n && str == "foo"
+foo : List Nat -> Nat
+foo [] = err
+foo (x ∷ []) = x
+foo (x ∷ y ∷ l) = err
 
-bar : {n : Nat} {str : String} -> n ≡ zero -> validator n str ≡ False
-bar {.zero} {str = str} refl = err -}
+validator : List Nat -> String -> Bool
+validator ns str = foo ns == 5 && str == "foo"
+
+bar : {n : List Nat} {str : String} -> n ≡ [] -> validator n str ≡ False
+bar {.[]} {str = str} refl rewrite impossible {5} = refl
+{-
+ -}

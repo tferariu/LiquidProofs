@@ -93,13 +93,12 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> par ⊢ s ~[ (Update amt r) ]~> s'
 
   TExchange : ∀ {amt pkh s s' par lab}
-  
     -> value (context s) ≡ (value (context s')) <> record { amount = amt ; currency = sellC par }
     -> label s' ≡ label s
     -> label s ≡ lab
     -> payTo (context s') ≡ (owner lab)
-    -> amt * num (ratio lab) ≤ (amount (payVal (context s))) * den (ratio lab)
-    -> currency (payVal (context s)) ≡ buyC par
+    -> amt * num (ratio lab) ≤ (amount (payVal (context s'))) * den (ratio lab)
+    -> currency (payVal (context s')) ≡ buyC par
     -> buyTo (context s') ≡ pkh 
     -> buyVal (context s') ≡ record { amount = amt ; currency = sellC par }
     -> continues s ≡ True
@@ -370,7 +369,7 @@ getBuyOutAdr l Close ctx = 0
 ==mvto≡ : ∀ {a b : Maybe Value} -> (a == b) ≡ true -> a ≡ b
 ==mvto≡ {Nothing} {Nothing} p = refl
 ==mvto≡ {Just a} {Just b} p rewrite ==ito≡ {a} {b} p = refl
- -}
+
 ==mlto≡ : ∀ {a b : Maybe Label} -> (a == b) ≡ true -> a ≡ b
 ==mlto≡ {Nothing} {Nothing} p = refl
 ==mlto≡ {Just a} {Just b} p rewrite ==lto≡ a b p = refl
@@ -381,7 +380,7 @@ unJust refl = refl
 isJust : ∀ {a : Set} -> Maybe a -> Bool
 isJust Nothing = False
 isJust (Just x) = True
-
+ -}
 {-
 aaaa : ∀ {par val l ctx} -> checkPayment par val l ctx ≡ True -> True ≡ isJust (getPaymentOutput (owner l) ctx)
 aaaa {l = l} {ctx = ctx} p = {!!}
@@ -408,13 +407,30 @@ bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (get pf)
 
 --(ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l))
 
-{-
+==vto≡ : {a b : Value} -> (a == b) ≡ true -> a ≡ b
+==vto≡ {record { amount = a1 ; currency = c1 }} {record { amount = a2 ; currency = c2 }} p
+  rewrite (==ito≡ {a1} {a2} (get p)) | (==to≡ {c1} {c2} (go (a1 == a2) p)) = refl
+
 rewriteMulCheck : ∀ (l : Label) (ctx : ScriptContext) (val) ->
-  ((mulInteger val (num (ratio l))) <= (mulInteger (txOutValue (getPaymentOutput (owner l) ctx)) (den (ratio l)))) ≡ True ->
+  ((mulInteger val (num (ratio l))) <= (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx))) (den (ratio l)))) ≡ True ->
   (((sign val Sign.* sign (num (ratio l))) ◃ mulNat ∣ val ∣ ∣ num (ratio l) ∣) ≤
-  ((sign (txOutValue (getPaymentOutput (owner l) ctx)) Sign.* sign (den (ratio l))) ◃
-  mulNat ∣ (txOutValue (getPaymentOutput (owner l) ctx)) ∣ ∣ den (ratio l) ∣))
-rewriteMulCheck l ctx val p rewrite mul≡ val (num (ratio l)) | mul≡ (txOutValue (getPaymentOutput (owner l) ctx)) (den (ratio l)) = <=ito≤ p -}
+  ((sign (amount (txOutValue (getPaymentOutput (owner l) ctx))) Sign.* sign (den (ratio l))) ◃
+  mulNat ∣ (amount (txOutValue (getPaymentOutput (owner l) ctx))) ∣ ∣ den (ratio l) ∣))
+rewriteMulCheck l ctx val p rewrite mul≡ val (num (ratio l)) | mul≡ (amount (txOutValue (getPaymentOutput (owner l) ctx))) (den (ratio l)) = <=ito≤ p
+
+{-
+(eqNat (txOutAddress (getPaymentOutput (owner l) ctx)) (owner l) &&
+        (ltInteger (mulInteger val (num (ratio l)))
+         (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+          (den (ratio l)))
+         ||
+         eqInteger (mulInteger val (num (ratio l)))
+         (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+          (den (ratio l))))
+        &&
+        eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
+        (buyC par))
+-}
 
 
 --Validator returning true implies transition relation is inhabited
@@ -428,62 +444,34 @@ validatorImpliesTransition : ∀ {pV pT bV bT s} (par : Params) (l : Label) (i :
                            payVal = getPayOutVal l ctx ; payTo = getPayOutAdr l ctx ;
                            buyVal = getBuyOutVal l i ctx ; buyTo = getBuyOutAdr l i ctx ;
                            tsig = signature ctx } ; continues = continuing ctx}
-validatorImpliesTransition par l (Update val r) ctx pf = {!!}
-validatorImpliesTransition par l (Exchange val pkh) ctx pf = {!!}
-validatorImpliesTransition par l Close ctx pf = {!!}
-{-
-  = TUpdate refl (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
-  ((==lto≡ (newLabel ctx) (record { ratio = r ; owner = owner l }) (get (go (newValue ctx == val)
+validatorImpliesTransition par l (Update val r) ctx pf
+  = TUpdate refl (==to≡ (get pf)) (==vto≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+  ((==lto≡ (newLabel ctx) (record { ratio = r ; owner = owner l }) (get (go
+  (newValue ctx == record { amount = val ; currency = sellC par })
   (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))))
   (get (go ((owner l) == (signature ctx)) pf)) refl (go (newLabel ctx == (record {ratio = r ; owner = owner l}))
-    (go (newValue ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
-validatorImpliesTransition par l (Exchange val pkh) ctx pf -- with getPaymentOutput (owner l) ctx 
-  = TExchange (rewriteAdd (newValue ctx)  val (==ito≡ (get pf)))
-    (==lto≡ (newLabel ctx) l (get (go (oldValue ctx == addInteger (newValue ctx) val) pf))) refl
-    (==to≡ (get (get (go (newLabel ctx == l) (go (oldValue ctx == addInteger (newValue ctx) val) pf))))) refl
-    (rewriteMulCheck l ctx val (go ((txOutAddress (getPaymentOutput (owner l) ctx)) == (owner l))
-    (get (go (newLabel ctx == l) (go (oldValue ctx == addInteger (newValue ctx) val) pf)))))
-    (==to≡ (get (get (go (checkPayment par val l pkh ctx) (go (newLabel ctx == l)
-    (go (oldValue ctx == addInteger (newValue ctx) val) pf))))))
-    {!!} refl {!!}
-validatorImpliesTransition par l Close ctx pf = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
--}
-
-{-
-(eqNat (txOutAddress (getPaymentOutput (owner l) ctx)) (owner l) &&
-        (ltInteger (mulInteger val (num (ratio l)))
-         (mulInteger (txOutValue (getPaymentOutput (owner l) ctx))
-          (den (ratio l)))
-         ||
-         eqInteger (mulInteger val (num (ratio l)))
-         (mulInteger (txOutValue (getPaymentOutput (owner l) ctx))
-          (den (ratio l)))))
--}
-
-
-
---TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
-{-
-validatorImpliesTransition par l (Update val r) ctx pf
-  = TUpdate (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
-    (==lto≡ ctx (record { ratio = r ; owner = owner l }) (get (go (outputVal ctx == val)
-    (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
-    (get (go ((owner l) == (signature ctx)) pf)) refl
-    (go (outputLabel ctx == record { ratio = r ; owner = owner l})
-    (go (outputVal ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
-validatorImpliesTransition par l (Exchange val pkh) ctx pf rewrite add≡ (outputVal ctx) val 
-  = TExchange (==ito≡ (get pf)) (==lto≡ ctx l (get (go (inputVal ctx == outputVal ctx + val) pf)))
-  (==to≡ (get (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf)))))
-  (rewriteMulCheck (ratio l) ctx val ((go (payTo ctx == owner l) (get
-  (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf))))))
-  (==to≡ (get (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
-  (go (inputVal ctx == outputVal ctx + val) pf))))))
-  (==ito≡ (go (buyTo ctx == pkh) (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
-  (go (inputVal ctx == outputVal ctx + val) pf)))))) refl
-  (go (checkBuyer par val pkh ctx) (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
-  (go (inputVal ctx == outputVal ctx + val) pf))))
+  (go (newValue ctx == record { amount = val ; currency = sellC par }) (go (checkRational r)
+  (go ((owner l) == (signature ctx)) pf))))
+validatorImpliesTransition par l (Exchange amt pkh) ctx pf
+  = TExchange (==vto≡ (get pf)) (==lto≡ (newLabel ctx) l
+  (get (go (oldValue ctx == (newValue ctx) <> val) pf))) refl
+  (==to≡ (get (get (go (newLabel ctx == l) (go (oldValue ctx == (newValue ctx) <> val) pf)))))
+  (rewriteMulCheck l ctx amt (get (go ((txOutAddress (getPaymentOutput (owner l) ctx)) == (owner l))
+  (get (go (newLabel ctx == l) ((go (oldValue ctx == (newValue ctx) <> val) pf)))))))
+  (==to≡ ((go (ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l))
+  (go ((txOutAddress (getPaymentOutput (owner l) ctx)) == (owner l))
+  (get (go (newLabel ctx == l) ((go (oldValue ctx == (newValue ctx) <> val) pf))))))))
+  (==to≡ (get (get (go (checkPayment par amt l pkh ctx) (go (newLabel ctx == l)
+  (go (oldValue ctx == (newValue ctx) <> val) pf))))))
+  (==vto≡ (go (txOutAddress (getPaymentOutput pkh ctx) == pkh)
+  (get (go (checkPayment par amt l pkh ctx) (go (newLabel ctx == l)
+  (go (oldValue ctx == (newValue ctx) <> val) pf)))))) refl
+  (go (checkBuyer par amt pkh ctx) (go (checkPayment par amt l pkh ctx) (go (newLabel ctx == l)
+  (go (oldValue ctx == (newValue ctx) <> val) pf))))
+    where
+      val = record { amount = amt ; currency = sellC par }
 validatorImpliesTransition par l Close ctx pf
-  = TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
+  = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
 
 
 ≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
@@ -508,6 +496,10 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ≡to==l {record { ratio = ratio ; owner = owner }} refl
   rewrite i=i (num ratio) | i=i (den ratio) | n=n owner = refl
 
+
+≡to==v : ∀ {a b : Value} -> a ≡ b -> (a == b) ≡ true
+≡to==v {a} {.a} refl rewrite i=i (amount a) | n=n (currency a) = refl
+
 ≤to<= : ∀ {a b : Nat} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true
 ≤to<= {b = zero} N.z≤n = refl
 ≤to<= {b = N.suc b} N.z≤n = refl
@@ -518,25 +510,45 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ≤ito<= -≤+ = refl
 ≤ito<= (+≤+ m≤n) = ≤to<= m≤n
 
+getPayOutVal1 : Label -> ScriptContext -> Value
+getPayOutVal1 l ctx = (txOutValue (getPaymentOutput (owner l) ctx))
 
-transitionImpliesValidator : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+getPayOutAdr1 : Label -> ScriptContext -> Address
+getPayOutAdr1 l ctx = (txOutAddress (getPaymentOutput (owner l) ctx))
+
+getBuyOutVal1 : Label -> Input -> ScriptContext -> Value
+getBuyOutVal1 l (Update r amt) ctx = record { amount = -1 ; currency = 0 }
+getBuyOutVal1 l (Exchange amt pkh) ctx = (txOutValue (getPaymentOutput pkh ctx))
+getBuyOutVal1 l Close ctx = record { amount = -1 ; currency = 0 }
+
+getBuyOutAdr1 : Label -> Input -> ScriptContext -> Address
+getBuyOutAdr1 l (Update r amt) ctx = 0
+getBuyOutAdr1 l (Exchange amt pkh) ctx = (txOutAddress (getPaymentOutput pkh ctx))
+getBuyOutAdr1 l Close ctx = 0
+
+transitionImpliesValidator : ∀ {pV pT bV bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : par ⊢
                            record { label = l ; context = record { value = (inputVal ctx) ;
-                           payAmt = pA ; payTo = pT ; buyAmt = bA ; buyTo = bT ; tsig = s } ; continues = True }
+                           payVal = pV ; payTo = pT ; buyVal = bV ; buyTo = bT ; tsig = s } ; continues = True }
                            ~[ i ]~>
-                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
-                           payAmt = payAmt ctx ; payTo = payTo ctx ;
-                           buyAmt = buyAmt ctx ; buyTo = buyTo ctx ; tsig = signature ctx } ;
-                           continues = continuing ctx})
+                           record { label = (newLabel ctx) ; context = record { value = (newValue ctx) ;
+                           payVal = getPayOutVal l ctx ; payTo = getPayOutAdr l ctx ;
+                           buyVal = getBuyOutVal l i ctx ; buyTo = getBuyOutAdr l i ctx ;
+                           tsig = signature ctx } ; continues = continuing ctx})
                            -> agdaValidator par l i ctx ≡ true
-transitionImpliesValidator par l (Update val r) ctx (TUpdate p1 p2 p3 p4 p5 p6)
-  rewrite ≡to== p1 | p4 | ≡to==i p2 | ≡to==l p3 = p6
-transitionImpliesValidator par l (Exchange val pkh) ctx (TExchange p1 p2 p3 p4 p5 p6 p7 p8)
-  rewrite add≡ (outputVal ctx) val | ≡to==i p1 | ≡to==l p2 | ≡to== p3 | mul≡ val (num (ratio l))
-  | mul≡ (payAmt ctx) (den (ratio l)) | ≡to== p5 | ≡to==i p6 | ≤ito<= p4 = p8
-transitionImpliesValidator par l Close ctx (TClose p1 p2 p3) rewrite p3 = ≡to== p1
+transitionImpliesValidator par l (Update amt r) ctx (TUpdate refl p2 p3 p4 p5 p6 p7)
+  rewrite ≡to== p2 | p5 | ≡to==v p3 | ≡to==l p4 = p7
+transitionImpliesValidator par l (Exchange amt pkh) ctx (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10)
+  rewrite ≡to==v p1 | ≡to==l p2 | sym p3 | ≡to== p4 | mul≡ amt (num (ratio l)) |
+  mul≡ (amount (txOutValue (getPaymentOutput (owner l) ctx))) (den (ratio l)) |
+  ≤ito<= p5 | ≡to== p6 | ≡to== p7 | ≡to==v p8 = p10
+--  rewrite add≡ (outputVal ctx) val | ≡to==i p1 | ≡to==l p2 | ≡to== p3 | mul≡ val (num (ratio l))
+--  | mul≡ (payAmt ctx) (den (ratio l)) | ≡to== p5 | ≡to==i p6 | ≤ito<= p4 = p8
+transitionImpliesValidator par l Close ctx (TClose p1 p2 p3 p4) rewrite p4 | p1 = ≡to== p2
 
--}
+
+
+{--}
 {-
 liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) 
           -> ValidS s -> continues s ≡ True
@@ -655,3 +667,60 @@ asdd {record { ratio = ratio ; owner = N.suc owner }} {val} {pkh} {record { txOu
 ...| True = ?
 ...| False = {!!} -}-}
 -}
+
+
+{-
+ (go (oldValue ctx == (newValue ctx) <> val) pf)
+validatorImpliesTransition par l (Exchange val pkh) ctx pf -- with getPaymentOutput (owner l) ctx 
+  = TExchange (rewriteAdd (newValue ctx)  val (==ito≡ (get pf)))
+    (==lto≡ (newLabel ctx) l (get (go (oldValue ctx == addInteger (newValue ctx) val) pf))) refl
+    (==to≡ (get (get (go (newLabel ctx == l) (go (oldValue ctx == addInteger (newValue ctx) val) pf))))) refl
+    (rewriteMulCheck l ctx val (go ((txOutAddress (getPaymentOutput (owner l) ctx)) == (owner l))
+    (get (go (newLabel ctx == l) (go (oldValue ctx == addInteger (newValue ctx) val) pf)))))
+    (==to≡ (get (get (go (checkPayment par val l pkh ctx) (go (newLabel ctx == l)
+    (go (oldValue ctx == addInteger (newValue ctx) val) pf))))))
+    {!!} refl {!!}
+
+ = TUpdate refl (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+  ((==lto≡ (newLabel ctx) (record { ratio = r ; owner = owner l }) (get (go (newValue ctx == val)
+  (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))))
+  (get (go ((owner l) == (signature ctx)) pf)) refl (go (newLabel ctx == (record {ratio = r ; owner = owner l}))
+    (go (newValue ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+validatorImpliesTransition par l Close ctx pf = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
+-}
+
+{-
+(eqNat (txOutAddress (getPaymentOutput (owner l) ctx)) (owner l) &&
+        (ltInteger (mulInteger val (num (ratio l)))
+         (mulInteger (txOutValue (getPaymentOutput (owner l) ctx))
+          (den (ratio l)))
+         ||
+         eqInteger (mulInteger val (num (ratio l)))
+         (mulInteger (txOutValue (getPaymentOutput (owner l) ctx))
+          (den (ratio l)))))
+-}
+
+
+
+--TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
+{-
+validatorImpliesTransition par l (Update val r) ctx pf
+  = TUpdate (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+    (==lto≡ ctx (record { ratio = r ; owner = owner l }) (get (go (outputVal ctx == val)
+    (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
+    (get (go ((owner l) == (signature ctx)) pf)) refl
+    (go (outputLabel ctx == record { ratio = r ; owner = owner l})
+    (go (outputVal ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+validatorImpliesTransition par l (Exchange val pkh) ctx pf rewrite add≡ (outputVal ctx) val 
+  = TExchange (==ito≡ (get pf)) (==lto≡ ctx l (get (go (inputVal ctx == outputVal ctx + val) pf)))
+  (==to≡ (get (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf)))))
+  (rewriteMulCheck (ratio l) ctx val ((go (payTo ctx == owner l) (get
+  (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf))))))
+  (==to≡ (get (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))))
+  (==ito≡ (go (buyTo ctx == pkh) (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf)))))) refl
+  (go (checkBuyer par val pkh ctx) (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))
+validatorImpliesTransition par l Close ctx pf
+  = TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf)) -}
