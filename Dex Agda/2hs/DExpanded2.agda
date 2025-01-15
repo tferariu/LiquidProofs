@@ -231,10 +231,19 @@ newLabel ctx = case txOutDatum (ownOutput ctx) of λ where
 newValue : ScriptContext -> Value
 newValue ctx = txOutValue (ownOutput ctx)
 
+aux : List TxOut -> Bool
+aux txs = case txs of λ {
+  (o ∷ []) -> True ;
+  _ -> False }
+
 continuing : ScriptContext -> Bool
-continuing ctx = case (getContinuingOutputs ctx) of λ where
-  (o ∷ []) -> True
-  _ -> False
+continuing ctx = aux (getContinuingOutputs ctx)
+
+{-
+continuing : ScriptContext -> Bool
+continuing ctx = case (getContinuingOutputs ctx) of λ {
+  (o ∷ []) -> True ;
+  _ -> False }-}
   
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)

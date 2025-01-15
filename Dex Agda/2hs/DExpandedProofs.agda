@@ -381,7 +381,7 @@ gener {l} {ctx} {val} {Just x} {b} p = refl
 
 spec : ∀ {l ctx w} -> (getPaymentOutput (owner l) ctx) ≡ w -> isJust w ≡ true
        -> getAddress w ≡ Just (owner l)
-spec = {!!}
+spec p1 p2 = {!!}
 
 {-
 subst2 : Just (txOutAddress x) ≡ Just (owner l)

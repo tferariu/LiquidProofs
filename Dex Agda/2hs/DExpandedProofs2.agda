@@ -547,6 +547,49 @@ transitionImpliesValidator par l (Exchange amt pkh) ctx (TExchange p1 p2 p3 p4 p
 transitionImpliesValidator par l Close ctx (TClose p1 p2 p3 p4) rewrite p4 | p1 = ≡to== p2
 
 
+getf : ∀ {b : Bool} -> (b && false) ≡ False
+getf {false} = refl
+getf {true} = refl
+
+hurr : ∀ {a b : Bool} -> (a && b && False) ≡ False
+hurr = {!!}
+
+5&&false : ∀ {a b c d e : Bool} -> e ≡ False -> (a && b && c && d && e) ≡ False
+5&&false {false} {b} {c} {d} refl = refl
+5&&false {true} {false} {c} {d} refl = refl
+5&&false {true} {true} {false} {d} refl = refl
+5&&false {true} {true} {true} {false} refl = refl
+5&&false {true} {true} {true} {true} refl = refl
+
+asd : {ctx : ScriptContext} {lhs : List TxOut} →
+      lhs ≡ [] → (case lhs of λ { (o ∷ []) → true ; _ → false }) ≡ false
+asd pf rewrite pf = refl --refl
+
+rewriteContinuing : ∀ {ctx} -> getContinuingOutputs ctx ≡ [] -> continuing ctx ≡ False
+rewriteContinuing p rewrite p = refl
+{-
+rewriteContinuing {record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending x }} p = refl
+rewriteContinuing {record { txOutputs = x ∷ txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending y }} p = {!!}
+rewriteContinuing {record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting x }} p = refl
+rewriteContinuing {record { txOutputs = x₁ ∷ txOutputs₁ ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting x }} p = refl
+-}
+
+prop1 : ∀ {par l i ctx} -> getContinuingOutputs ctx ≡ [] -> i ≢ Close -> agdaValidator par l i ctx ≡ False
+prop1 {par} {l} {Update amt r} {ctx} p1 p2 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing {ctx} p1)
+prop1 {par} {l} {Exchange amt pkh} {ctx} p1 p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing {ctx} p1)
+prop1 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
+
+rewriteContinuing' : ∀ {ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs)  -> continuing ctx ≡ False
+rewriteContinuing' p rewrite p = refl --refl
+
+--fix
+prop2 : ∀ {par l i ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs)  -> agdaValidator par l i ctx ≡ False
+prop2 {par} {l} {Update amt r} {ctx} {tx1} {tx2} {txs} p1 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
+prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
+prop2 {par} {l} {Close} {ctx} p1 = {!!} --⊥-elim (p2 refl)
+
+--agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+
 
 {--}
 {-
