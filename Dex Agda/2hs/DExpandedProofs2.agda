@@ -125,7 +125,7 @@ data ValidS : State -> Set where
 
   Oth : ∀ {s lab}
     -> label s ≡ lab
-    -> checkRational (ratio lab) ≡ True
+    -> checkRational (ratio lab) ≡ True -- label s fix
     ----------------
     -> ValidS s
 
@@ -551,9 +551,10 @@ getf : ∀ {b : Bool} -> (b && false) ≡ False
 getf {false} = refl
 getf {true} = refl
 
+{-
 hurr : ∀ {a b : Bool} -> (a && b && False) ≡ False
 hurr = {!!}
-
+-}
 5&&false : ∀ {a b c d e : Bool} -> e ≡ False -> (a && b && c && d && e) ≡ False
 5&&false {false} {b} {c} {d} refl = refl
 5&&false {true} {false} {c} {d} refl = refl
@@ -582,11 +583,17 @@ prop1 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
 rewriteContinuing' : ∀ {ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs)  -> continuing ctx ≡ False
 rewriteContinuing' p rewrite p = refl --refl
 
---fix
-prop2 : ∀ {par l i ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs)  -> agdaValidator par l i ctx ≡ False
-prop2 {par} {l} {Update amt r} {ctx} {tx1} {tx2} {txs} p1 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
-prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
-prop2 {par} {l} {Close} {ctx} p1 = {!!} --⊥-elim (p2 refl)
+
+prop2 : ∀ {par l i ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs) -> i ≢ Close -> agdaValidator par l i ctx ≡ False
+prop2 {par} {l} {Update amt r} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
+prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
+prop2 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
+
+
+
+--do validS validP
+
+
 
 --agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 
