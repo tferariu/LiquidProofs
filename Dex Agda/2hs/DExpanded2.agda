@@ -18,8 +18,6 @@ Address = Nat
 
 AssetClass = Nat
 
-
-
 --Value = (Integer × AssetClass)
 
 record Value : Set where
@@ -47,44 +45,6 @@ instance
   iSemigroupValue ._<>_ = addValue
 
   
-{-
-addValue : Value -> Value -> Value
-addValue a b = {!!}
-
-subValue : Value -> Value -> Value
-subValue a b = {!!}
-
-mulValue : Value -> Value -> Value
-mulValue a b = {!!}
-
-negateValue : Value -> Value
-negateValue a = {!!}
-
-absValue : Value -> Value
-absValue a = {!!}
-
-
-signValue : Value -> Value
-signValue a = {!!}
-
-instance
-  iNumValue : Num Value
-  iNumValue .MinusOK _ _ = ⊤
-  iNumValue .NegateOK _          = ⊤
-  iNumValue .Num.FromIntegerOK _ = ⊤
-  iNumValue ._+_ x y             = addValue x y
-  iNumValue ._-_ x y             = subValue x y
-  iNumValue ._*_ x y             = mulValue x y
-  iNumValue .negate x            = negateValue x
-  iNumValue .abs x               = absValue x
-  iNumValue .signum x            = signValue x
-  iNumValue .fromInteger n       = {!!}
--}
-
-{-
-  iOrdRational : Ord Rational
-  iOrdRational = ordFromLessThan ltRational
--}
 
 record Rational : Set where
     field
@@ -214,9 +174,7 @@ ownOutput ctx = case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
   _ -> record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Payment 0 }
 
---err 
 
---
 
 
 oldValue : ScriptContext -> Value
@@ -265,38 +223,33 @@ checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
 checkPayment par amt l ctx = ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) 
 -}
 
----!!!!! ASSET CLASS
+{--}
+aux' : ScriptPurpose -> Address
+aux' p = case p of λ where
+  (Minting cs) -> 0
+  (Spending adr) -> adr
+
+getSelf : ScriptContext -> Address
+getSelf ctx = aux' (purpose ctx) 
 
 checkPayment : Params -> Integer -> Label -> PubKeyHash -> ScriptContext -> Bool
 checkPayment par amt l pkh ctx = txOutAddress (getPaymentOutput (owner l) ctx) == owner l &&
                                  ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l) &&
-                                 currency (txOutValue (getPaymentOutput (owner l) ctx)) == buyC par
+                                 currency (txOutValue (getPaymentOutput (owner l) ctx)) == buyC par &&
+                                 txOutDatum (getPaymentOutput (owner l) ctx) == Payment (getSelf ctx)
                                  --txOutAc (getPaymentOutput (owner l) ctx) == buyC par
                                  
-{--}
 
 
 {-# COMPILE AGDA2HS checkPayment #-}
 
-{-
-aux2 : (x w : Maybe ℤ) →
-    x ≡ w → {a b : ℤ}
-    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
-    a ≡ b
-aux2 x w p pf = {!!} -}
-
-{-
-checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
-  Nothing -> False
-  (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
--}
 
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
                              (txOutValue (getPaymentOutput pkh ctx)) ==
-                             record { amount = amt ; currency = sellC par }  
+                             record { amount = amt ; currency = sellC par }  &&
+                             txOutDatum (getPaymentOutput pkh ctx) == Payment (getSelf ctx)
                              --txOutAc (getPaymentOutput pkh ctx) == sellC par
 
 
@@ -352,5 +305,71 @@ validator ns str = foo ns == 5 && str == "foo"
 
 bar : {n : List Nat} {str : String} -> n ≡ [] -> validator n str ≡ False
 bar {.[]} {str = str} refl rewrite impossible {5} = refl
+
+
 {-
- -}
+addValue : Value -> Value -> Value
+addValue a b = {!!}
+
+subValue : Value -> Value -> Value
+subValue a b = {!!}
+
+mulValue : Value -> Value -> Value
+mulValue a b = {!!}
+
+negateValue : Value -> Value
+negateValue a = {!!}
+
+absValue : Value -> Value
+absValue a = {!!}
+
+
+signValue : Value -> Value
+signValue a = {!!}
+
+instance
+  iNumValue : Num Value
+  iNumValue .MinusOK _ _ = ⊤
+  iNumValue .NegateOK _          = ⊤
+  iNumValue .Num.FromIntegerOK _ = ⊤
+  iNumValue ._+_ x y             = addValue x y
+  iNumValue ._-_ x y             = subValue x y
+  iNumValue ._*_ x y             = mulValue x y
+  iNumValue .negate x            = negateValue x
+  iNumValue .abs x               = absValue x
+  iNumValue .signum x            = signValue x
+  iNumValue .fromInteger n       = {!!}
+-}
+
+{-
+  iOrdRational : Ord Rational
+  iOrdRational = ordFromLessThan ltRational
+-}
+
+{-
+aux2 : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
+    a ≡ b
+aux2 x w p pf = {!!} -}
+
+{-
+checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
+checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
+  Nothing -> False
+  (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
+-}
+
+{-
+aux2 : (x w : Maybe ℤ) →
+    x ≡ w → {a b : ℤ}
+    (pf : not ((case w of λ { Nothing → false ; (Just v) → true })) ≡ true) →
+    a ≡ b
+aux2 x w p pf = {!!} -}
+
+{-
+checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
+checkPayment par amt st ctx = case getPaymentOutput (owner st) ctx of λ where
+  Nothing -> False
+  (Just txO) -> ratioCompare amt (txOutValue txO) (ratio st)
+-}
