@@ -46,8 +46,6 @@ record Context : Set where
 open Context
 
 
-
-
 record State : Set where
   field
     label         : Label
@@ -126,6 +124,22 @@ get⊥ : true ≡ false -> ⊥
 get⊥ ()
 
 
+selfContinuing : ∀ {s s' : State} {i par}
+  -> i ≢ Close
+  -> par ⊢ s ~[ i ]~> s'
+  -> continues s' ≡ True
+selfContinuing pf (TUpdate p1 p2 p3 p4 p5 p6 p7) = p7
+selfContinuing pf (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = p12
+selfContinuing pf (TClose p1 p2 p3 p4) = ⊥-elim (pf refl)
+
+
+outputFidelity : ∀ {s s' : State} {i par amt pkh}
+  -> i ≡ Exchange amt pkh
+  -> par ⊢ s ~[ i ]~> s'
+  -> (payDat (context s') ≡ Payment (self (context s')) × buyDat (context s') ≡ Payment (self (context s')))
+outputFidelity refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)
+
+
 --State Validity Invariant
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
@@ -193,10 +207,6 @@ unNot {false} pf = refl
        -> (l == l') ≡ True
        -> l ≡ l' 
 ==lto≡ record { ratio = ratio ; owner = owner } record { ratio = ratio' ; owner = owner' } pf rewrite ==rto≡ {ratio} {ratio'} (get pf) | ==to≡ {owner} {owner'} (go (ratio == ratio') pf) = refl
-
-{-record { inputVal = inputVal ; outputVal = outputVal ; outputLabel = record { ratio = ratio ; owner = owner } ; payTo = payTo ; payAmt = payAmt ; buyTo = buyTo ; buyAmt = buyAmt ; signature = signature ; continues = continues } record { ratio = ratio' ; owner = owner' } pf
-  rewrite ==rto≡ {ratio} {ratio'} (get pf) | ==to≡ {owner} {owner'} (go (ratio == ratio') pf) = refl-}
-
 
 neg≡ : ∀ (a : Integer) -> negateInteger a ≡ - a
 neg≡ (pos zero) = refl
@@ -272,8 +282,6 @@ rewriteAdd b c p rewrite add≡ b c = p
 
 
 
-
-
 getPayOutVal : Label -> ScriptContext -> Value
 getPayOutVal l ctx = (txOutValue (getPaymentOutput (owner l) ctx))
 
@@ -298,25 +306,6 @@ getBuyOutDat l (Update r amt) ctx = Payment 0
 getBuyOutDat l (Exchange amt pkh) ctx = (txOutDatum (getPaymentOutput pkh ctx))
 getBuyOutDat l Close ctx = Payment 0
 
-{-
-aux' : ScriptPurpose -> Address
-aux' p = case p of λ where
-  (Minting cs) -> 0
-  (Spending adr) -> adr
-
-getSelf : ScriptContext -> Address
-getSelf ctx = aux' (purpose ctx) 
--}
-
-dingus : ∀ (f : Nat -> Nat) (n : Nat) -> Nat
-dingus f n = f $ n
-
-bingus : ∀ {par l amt pkh ctx}
-         -> (pf : checkPayment par amt l pkh ctx ≡ true)
-         -> txOutAddress (getPaymentOutput (owner l) ctx) ≡ owner l
-bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (get pf)
-
---(ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l))
 
 ==vto≡ : {a b : Value} -> (a == b) ≡ true -> a ≡ b
 ==vto≡ {record { amount = a1 ; currency = c1 }} {record { amount = a2 ; currency = c2 }} p
@@ -329,19 +318,6 @@ rewriteMulCheck : ∀ (l : Label) (ctx : ScriptContext) (val) ->
   mulNat ∣ (amount (txOutValue (getPaymentOutput (owner l) ctx))) ∣ ∣ den (ratio l) ∣))
 rewriteMulCheck l ctx val p rewrite mul≡ val (num (ratio l)) | mul≡ (amount (txOutValue (getPaymentOutput (owner l) ctx))) (den (ratio l)) = <=ito≤ p
 
-{-
-(eqNat (txOutAddress (getPaymentOutput (owner l) ctx)) (owner l) &&
-        (ltInteger (mulInteger val (num (ratio l)))
-         (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
-          (den (ratio l)))
-         ||
-         eqInteger (mulInteger val (num (ratio l)))
-         (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
-          (den (ratio l))))
-        &&
-        eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
-        (buyC par))
--}
 
 5&&false : ∀ {a b c d e : Bool} -> e ≡ False -> (a && b && c && d && e) ≡ False
 5&&false {false} {b} {c} {d} refl = refl
@@ -365,18 +341,9 @@ prop {par} {l} {i} {ctx} p1 p2 with (purpose ctx) in eq
 ...| Spending adr' = ⟨ adr' , refl ⟩
 ...| Minting cs = ⊥-elim (contradict p1 (prop0 eq p2)) --(get⊥ {!!})
 
-
 prop0' : ∀ {par l amt pkh ctx cs } -> purpose ctx ≡ Minting cs -> agdaValidator par l (Exchange amt pkh) ctx ≡ False
 prop0' {par} {l} {amt} {pkh} ctx@{ctx = record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting x }} p = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} refl
 prop0' {par} {l} {amt} {pkh} ctx@{ctx = record { txOutputs = x ∷ txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting y }} p = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} refl
-
-{-{par} {l} {Update amt r} ctx@{record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = .(Minting _) }} refl p2 = ?
-
--- 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} refl
-prop0' {par} {l} {Update amt r} ctx@{record { txOutputs = x ∷ txOutputs₁ ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = .(Minting _) }} refl p2 =  5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} refl
-prop0' {par} {l} {Exchange amt pkh} ctx@{record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = .(Minting _) }} refl p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} refl5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} refl
-prop0' {par} {l} {Exchange amt pkh} ctx@{record { txOutputs = x ∷ txOutputs₁ ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = .(Minting _) }} refl p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} refl
-prop0' {i = Close} p1 p2 = ? -- ⊥-elim (p2 refl) -}
 
 ==dto≡ : {a b : OutputDatum} -> (a == b) ≡ True -> a ≡ b
 ==dto≡ {Payment x} {Payment y} p rewrite ==to≡ {x} {y} p = refl
@@ -390,16 +357,6 @@ prop'' : ∀ {par l amt pkh ctx} -> agdaValidator par l (Exchange amt pkh) ctx �
 prop'' {par} {l} {amt} {pkh} ctx@{record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending adr }} p = ⟨ adr , (refl , ==dto≡ (go ( (txOutValue (getPaymentOutput pkh ctx)) == record { amount = amt ; currency = sellC par }) (go (txOutAddress (getPaymentOutput pkh ctx) == pkh) (get (go (checkPayment par amt l pkh ctx) (go (newLabel ctx == l) (go (oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }) p))))))) ⟩
 prop'' {par} {l} {amt} {pkh} ctx@{record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting cs }} p = ⊥-elim (contradict p (prop0' {par} {l} {amt} {pkh} {ctx} {cs} refl))
 
-
-{-with (purpose ctx) in eq
-...| Spending adr' = ⟨ adr' , (refl , {!!}) ⟩ -- ⟨ adr' , refl ⟩
-...| Minting cs rewrite (sym eq) = ⊥-elim (contradict p (prop0' {par} {l} {amt} {pkh} {{!ctx!}} {cs} {!!}))-}
-
---⊥-elim (contradict p (prop0 {i = Exchange amt pkh} eq λ { ()}))
-
---⊥-elim (contradict p (prop0 {par} {l} {Exchange amt pkh} {ctx} {cs}  {!!} {!!})) --⊥-elim (contradict p1 (prop0 eq p2))
-
---(prop0 {par} {l} {Exchange amt pkh} {ctx} eq λ { ()})
 
 rewriteDatEq : ∀ {dat ctx} -> ∃[ adr ] (purpose ctx ≡ Spending adr × dat ≡ Payment adr) -> dat ≡ Payment (getSelf ctx)
 rewriteDatEq {dat} {record { txOutputs = txOutputs₁ ; inputVal = inputVal₁ ; inputAc = inputAc₁ ; signature = signature₁ ; purpose = .(Spending adr) }} ⟨ adr , (refl , p2) ⟩ = p2
@@ -510,14 +467,19 @@ transitionImpliesValidator par l (Exchange amt pkh) ctx (TExchange p1 p2 p3 p4 p
 transitionImpliesValidator par l Close ctx (TClose p1 p2 p3 p4) rewrite p4 | p1 = ≡to== p2
 
 
+
+dingus : ∀ (f : Nat -> Nat) (n : Nat) -> Nat
+dingus f n = f $ n
+
+bingus : ∀ {par l amt pkh ctx}
+         -> (pf : checkPayment par amt l pkh ctx ≡ true)
+         -> txOutAddress (getPaymentOutput (owner l) ctx) ≡ owner l
+bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (get pf)
+
+
 getf : ∀ {b : Bool} -> (b && false) ≡ False
 getf {false} = refl
 getf {true} = refl
-
-{-
-hurr : ∀ {a b : Bool} -> (a && b && False) ≡ False
-hurr = {!!}
--}
 
 asd : {ctx : ScriptContext} {lhs : List TxOut} →
       lhs ≡ [] → (case lhs of λ { (o ∷ []) → true ; _ → false }) ≡ false
@@ -525,12 +487,6 @@ asd pf rewrite pf = refl --refl
 
 rewriteContinuing : ∀ {ctx} -> getContinuingOutputs ctx ≡ [] -> continuing ctx ≡ False
 rewriteContinuing p rewrite p = refl
-{-
-rewriteContinuing {record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending x }} p = refl
-rewriteContinuing {record { txOutputs = x ∷ txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending y }} p = {!!}
-rewriteContinuing {record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting x }} p = refl
-rewriteContinuing {record { txOutputs = x₁ ∷ txOutputs₁ ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Minting x }} p = refl
--}
 
 prop1 : ∀ {par l i ctx} -> getContinuingOutputs ctx ≡ [] -> i ≢ Close -> agdaValidator par l i ctx ≡ False
 prop1 {par} {l} {Update amt r} {ctx} p1 p2 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing {ctx} p1)
@@ -538,13 +494,14 @@ prop1 {par} {l} {Exchange amt pkh} {ctx} p1 p2 = 5&&false {oldValue ctx == (newV
 prop1 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
 
 rewriteContinuing' : ∀ {ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs)  -> continuing ctx ≡ False
-rewriteContinuing' p rewrite p = refl --refl
-
+rewriteContinuing' p rewrite p = refl 
 
 prop2 : ∀ {par l i ctx tx1 tx2 txs} -> getContinuingOutputs ctx ≡ (tx1 ∷ tx2 ∷ txs) -> i ≢ Close -> agdaValidator par l i ctx ≡ False
-prop2 {par} {l} {Update amt r} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
-prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) -- (rewriteContinuing {ctx} p1)
+prop2 {par} {l} {Update amt r} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {checkSigned (owner l) ctx} {checkRational r} {newValue ctx == record { amount = amt ; currency = sellC par }} {newLabel ctx == (record {ratio = r ; owner = owner l})} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) 
+prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {oldValue ctx == (newValue ctx) <> record { amount = amt ; currency = sellC par }} {newLabel ctx == l} {checkPayment par amt l pkh ctx} {checkBuyer par amt pkh ctx} (rewriteContinuing' {ctx} {tx1} {tx2} {txs} p1) 
 prop2 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
+
+
 {-
 -}
 

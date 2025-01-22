@@ -167,14 +167,10 @@ getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = input
        else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = Spending adr })
 getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; inputAc = inputAc ; signature = signature ; purpose = (Minting x) } = []
 
---postulate err : {a : Set} -> a
-
 ownOutput : ScriptContext -> TxOut
 ownOutput ctx = case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
   _ -> record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Payment 0 }
-
-
 
 
 oldValue : ScriptContext -> Value
@@ -196,12 +192,6 @@ aux txs = case txs of λ {
 
 continuing : ScriptContext -> Bool
 continuing ctx = aux (getContinuingOutputs ctx)
-
-{-
-continuing : ScriptContext -> Bool
-continuing ctx = case (getContinuingOutputs ctx) of λ {
-  (o ∷ []) -> True ;
-  _ -> False }-}
   
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)
@@ -218,12 +208,6 @@ getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; inpu
   = record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
 
 
-{-
-checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt l ctx = ratioCompare amt (txOutValue (getPaymentOutput (owner l) ctx)) (ratio l) 
--}
-
-{--}
 aux' : ScriptPurpose -> Address
 aux' p = case p of λ where
   (Minting cs) -> 0
@@ -255,21 +239,6 @@ checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
 
 {-# COMPILE AGDA2HS checkBuyer #-}
 
-
-aux2 : List TxOut -> Bool
-aux2 txs = case txs of λ {
-  [] -> True ;
-  _ -> False }
-
-checkClose : ScriptContext -> Bool
-checkClose ctx = aux2 (getContinuingOutputs ctx)
-
-{-(txOutValue (getPaymentOutput (owner l) ctx)) == oldValue ctx 
-                        --txOutAc (getPaymentOutput (owner l) ctx) == sellC par
--}
-
-
-
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par l red ctx = case red of λ where
   (Update amt r) -> checkSigned (owner l) ctx &&
@@ -286,7 +255,19 @@ agdaValidator par l red ctx = case red of λ where
 
 
 {-# COMPILE AGDA2HS agdaValidator #-} 
-           
+
+
+{-
+aux2 : List TxOut -> Bool
+aux2 txs = case txs of λ {
+  [] -> True ;
+  _ -> False }
+
+checkClose : ScriptContext -> Bool
+checkClose ctx = aux2 (getContinuingOutputs ctx) -}
+
+
+
 postulate err : {a : Set} -> a
 {-
 postulate reduceErr : {f : Set -> Set} -> f err ≡ err
