@@ -37,20 +37,21 @@ record Context : Set where
     value         : Value  
     payVal        : Value
     payTo         : PubKeyHash
-    payDat        : OutputDatum
+    payDat        : OutputDatum -- Flat bits we need instead of nested strucutre
     buyVal        : Value
     buyTo         : PubKeyHash
     buyDat        : OutputDatum
-    tsig          : PubKeyHash
+    tsig          : PubKeyHash -- List?
     self          : Address
 open Context
 
+-- More structure? Optional ones?
 
 record State : Set where
   field
-    label         : Label
+    label         : Label    -- datum
     context       : Context
-    continues     : Bool
+    continues     : Bool -- move to Context, because from context
 open State
 
 
@@ -61,21 +62,26 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> owner lab ≡  tsig (context s')
     -> value (context s') ≡ record { amount = amt ; currency = sellC par }
     -> label s' ≡ (record { ratio = r ; owner = owner lab })
-    -> checkRational r ≡ True
+    -> checkRational r ≡ True -- automate this maybe?
     -> continues s ≡ True
     -> continues s' ≡ True
     -------------------
     -> par ⊢ s ~[ (Update amt r) ]~> s'
 
+{-
+ amt - going out to the user in SellC
+ payval - going out to owner in BuyC
+-}
+
   TExchange : ∀ {amt pkh s s' par lab}
     -> value (context s) ≡ (value (context s')) <> record { amount = amt ; currency = sellC par }
     -> label s' ≡ label s
-    -> label s ≡ lab
+    -> label s ≡ lab --??
     -> payTo (context s') ≡ (owner lab)
-    -> amt * num (ratio lab) ≤ (amount (payVal (context s'))) * den (ratio lab)
-    -> currency (payVal (context s')) ≡ buyC par
+    -> amt * num (ratio lab) ≤ (amount (payVal (context s'))) * den (ratio lab) -- >
+    -> currency (payVal (context s')) ≡ buyC par  -- factor these 2 out in 1 function
     -> payDat (context s') ≡ Payment (self (context s'))
-    -> buyTo (context s') ≡ pkh 
+    -> buyTo  (context s') ≡ pkh 
     -> buyVal (context s') ≡ record { amount = amt ; currency = sellC par }
     -> buyDat (context s') ≡ Payment (self (context s'))
     -> continues s ≡ True
@@ -84,7 +90,7 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> par ⊢ s ~[ (Exchange amt pkh) ]~> s'
 
   TClose : ∀ {s s' par lab}
-    -> label s ≡ lab
+    -> label s ≡ lab --??
     -> owner lab ≡ tsig (context s')
     -> continues s ≡ True
     -> continues s' ≡ False
@@ -133,11 +139,11 @@ selfContinuing pf (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = p12
 selfContinuing pf (TClose p1 p2 p3 p4) = ⊥-elim (pf refl)
 
 
-outputFidelity : ∀ {s s' : State} {i par amt pkh}
+noDoubleSatOut : ∀ {s s' : State} {i par amt pkh}
   -> i ≡ Exchange amt pkh
   -> par ⊢ s ~[ i ]~> s'
   -> (payDat (context s') ≡ Payment (self (context s')) × buyDat (context s') ≡ Payment (self (context s')))
-outputFidelity refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)
+noDoubleSatOut refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)
 
 
 --State Validity Invariant
@@ -158,11 +164,18 @@ validStateMulti : ∀ {s s' : State} {is par}
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 
+--include minAda
+--closeLiquidity -> value ≡ 0
+--runtimeLiduqidity -> value ≡ minAda
+
+--valid -> minAda OR closed
+--Value -> (TokenName -> (CurrencyScipt -> Integer) )
+
+--because we learned MinAda problems with previous Liquidity proof
 
 liquidity : ∀ (par : Params) (s : State) --(pkh : PubKeyHash) 
           -> ValidS s -> continues s ≡ True
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (amount (value (context s')) ≡ 0) )
-
 liquidity par s (Stp x) p2 rewrite p2 = ⊥-elim (get⊥ x)
 liquidity par record { label = lab ; context = context ; continues = continues } (Oth y) p2 = ⟨ s' , ⟨  Close ∷ [] , (cons (TClose refl refl p2 refl ) root , refl) ⟩ ⟩
   where
@@ -468,22 +481,7 @@ transitionImpliesValidator par l Close ctx (TClose p1 p2 p3 p4) rewrite p4 | p1 
 
 
 
-dingus : ∀ (f : Nat -> Nat) (n : Nat) -> Nat
-dingus f n = f $ n
 
-bingus : ∀ {par l amt pkh ctx}
-         -> (pf : checkPayment par amt l pkh ctx ≡ true)
-         -> txOutAddress (getPaymentOutput (owner l) ctx) ≡ owner l
-bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (get pf)
-
-
-getf : ∀ {b : Bool} -> (b && false) ≡ False
-getf {false} = refl
-getf {true} = refl
-
-asd : {ctx : ScriptContext} {lhs : List TxOut} →
-      lhs ≡ [] → (case lhs of λ { (o ∷ []) → true ; _ → false }) ≡ false
-asd pf rewrite pf = refl --refl
 
 rewriteContinuing : ∀ {ctx} -> getContinuingOutputs ctx ≡ [] -> continuing ctx ≡ False
 rewriteContinuing p rewrite p = refl
@@ -503,6 +501,159 @@ prop2 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
 
 
 {-
+rwr : ∀ {amt l txo ctx}
+  -> (ltInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue txo))
+        (den (ratio l)))
+       ||
+       eqInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue txo))
+        (den (ratio l)))) ≡ False
+  -> (getPaymentOutput (owner l) ctx) ≡ txo
+  -> (ltInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l)))
+       ||
+       eqInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l)))) ≡ False
+rwr p1 refl = p1
+
+prop3' : ∀ {l amt ctx}
+  -> getPaymentOutput (owner l) ctx ≡ record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 }
+                                      ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+  -> ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l) ≡ False
+  -- -> checkPayment par amt l pkh ctx ≡ False
+prop3' {l} {amt} {ctx} p = rwr {amt} {l} {ctx = ctx} {!!} p
+
+
+rwr' : ∀ {par l amt ctx asdf}
+  -> (eqNat (txOutAddress (getPaymentOutput (owner l) ctx))
+       (owner l)
+       &&
+       asdf
+       &&
+       eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
+       (buyC par)
+       &&
+       eqDatum (txOutDatum (getPaymentOutput (owner l) ctx))
+       (Payment (getSelf ctx)))
+      ≡ false
+  -> (ltInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l)))
+       ||
+       eqInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l))))
+      ≡ asdf
+  -> asdf ≡ False
+  -> (eqNat (txOutAddress (getPaymentOutput (owner l) ctx))
+       (owner l)
+       &&
+       (ltInteger (mulInteger amt (num (ratio l)))
+        (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+         (den (ratio l)))
+        ||
+        eqInteger (mulInteger amt (num (ratio l)))
+        (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+         (den (ratio l))))
+       &&
+       eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
+       (buyC par)
+       &&
+       eqDatum (txOutDatum (getPaymentOutput (owner l) ctx))
+       (Payment (getSelf ctx)))
+      ≡ false
+rwr' p1 p2 refl rewrite p2 = p1
+
+rwr'' : ∀ {par l amt ctx}
+  -> (eqNat (txOutAddress (getPaymentOutput (owner l) ctx))
+       (owner l)
+       &&
+       False
+       &&
+       eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
+       (buyC par)
+       &&
+       eqDatum (txOutDatum (getPaymentOutput (owner l) ctx))
+       (Payment (getSelf ctx)))
+      ≡ false
+  -> (ltInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l)))
+       ||
+       eqInteger (mulInteger amt (num (ratio l)))
+       (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+        (den (ratio l))))
+      ≡ False
+  -> (eqNat (txOutAddress (getPaymentOutput (owner l) ctx))
+       (owner l)
+       &&
+       (ltInteger (mulInteger amt (num (ratio l)))
+        (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+         (den (ratio l)))
+        ||
+        eqInteger (mulInteger amt (num (ratio l)))
+        (mulInteger (amount (txOutValue (getPaymentOutput (owner l) ctx)))
+         (den (ratio l))))
+       &&
+       eqNat (currency (txOutValue (getPaymentOutput (owner l) ctx)))
+       (buyC par)
+       &&
+       eqDatum (txOutDatum (getPaymentOutput (owner l) ctx))
+       (Payment (getSelf ctx)))
+      ≡ false
+rwr'' p1 p2 rewrite p2 = p1
+
+3&&false : ∀ {a b : Bool} -> (a && b && false) ≡ false
+3&&false {false} {b} = refl
+3&&false {true} {false} = refl
+3&&false {true} {true} = refl
+
+2&&false : ∀ {a : Bool} -> (a && false) ≡ false
+2&&false {false} = refl
+2&&false {true} = refl
+
+
+prop3'' : ∀ {par l amt ctx pkh}
+  -> ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l) ≡ False
+  -> checkPayment par amt l pkh ctx ≡ False
+prop3'' {par} {l} {amt} {ctx} {pkh} p = rwr'' {par} {l} {amt} {ctx} (2&&false {eqNat (txOutAddress (getPaymentOutput (owner l) ctx))
+       (owner l)}) p --(3&&false {{!!}} {{!!}}) p
+
+
+
+prop3''' : ∀ {par l amt ctx pkh}
+  -> checkPayment par amt l pkh ctx ≡ False
+  -> agdaValidator par l (Exchange amt pkh) ctx ≡ False
+prop3''' p rewrite p = {!!}
+
+prop3 : ∀ {par l amt pkh ctx}
+  -> getPaymentOutput (owner l) ctx ≡ record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 }
+                                      ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+  -> agdaValidator par l (Exchange amt pkh) ctx ≡ False
+prop3 {par} {l} {amt} {pkh} {ctx} p = {!!}
+
+-}
+
+{-
+dingus : ∀ (f : Nat -> Nat) (n : Nat) -> Nat
+dingus f n = f $ n
+
+bingus : ∀ {par l amt pkh ctx}
+         -> (pf : checkPayment par amt l pkh ctx ≡ true)
+         -> txOutAddress (getPaymentOutput (owner l) ctx) ≡ owner l
+bingus {par} {l} {amt} {pkh} {ctx} pf = ==to≡ (get pf)
+
+
+getf : ∀ {b : Bool} -> (b && false) ≡ False
+getf {false} = refl
+getf {true} = refl
+
+asd : {ctx : ScriptContext} {lhs : List TxOut} →
+      lhs ≡ [] → (case lhs of λ { (o ∷ []) → true ; _ → false }) ≡ false
+asd pf rewrite pf = refl --refl
 -}
 
 --do validS validP
