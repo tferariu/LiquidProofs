@@ -276,24 +276,32 @@ checkClose ctx = aux2 (getContinuingOutputs ctx) -}
 
 
 
-postulate err : {a : Set} -> a
+
 {-
 postulate reduceErr : {f : Set -> Set} -> f err ≡ err
 postulate impossible : {a : Bool} -> err ≡ True -> ⊥ --True ≡ False
 -}
 
-postulate impossible : {n : Nat} -> (err == n) ≡ False
+postulate err : {a : Set} -> a
 
-foo : List Nat -> Nat
+--postulate impossible : {a : Set} {b : a}  {{_ : Eq a}} -> (err {a} == b) ≡ False
+
+
+foo : List Nat -> Bool
 foo [] = err
-foo (x ∷ []) = x
+foo (x ∷ []) = True
 foo (x ∷ y ∷ l) = err
 
 validator : List Nat -> String -> Bool
-validator ns str = foo ns == 5 && str == "foo"
-
+validator ns str = foo ns && str == "foo"
+{-
 bar : {n : List Nat} {str : String} -> n ≡ [] -> validator n str ≡ False
-bar {.[]} {str = str} refl rewrite impossible {5} = refl
+bar {.[]} {str = str} refl = {!!}-}
+
+--model mathematically Maybe, Notining = False
+-- pretend there are no errors  <-!
+
+--rewrite impossible {Nat} {5} {{ {!!} }} = {!!} --refl
 
 
 {-

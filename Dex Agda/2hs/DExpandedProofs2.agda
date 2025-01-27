@@ -500,7 +500,7 @@ prop2 {par} {l} {Exchange amt pkh} {ctx} {tx1} {tx2} {txs} p1 p2 = 5&&false {old
 prop2 {par} {l} {Close} {ctx} p1 p2 = ⊥-elim (p2 refl)
 
 
-{-
+
 rwr : ∀ {amt l txo ctx}
   -> (ltInteger (mulInteger amt (num (ratio l)))
        (mulInteger (amount (txOutValue txo))
@@ -524,7 +524,17 @@ prop3' : ∀ {l amt ctx}
                                       ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
   -> ratioCompare amt (amount (txOutValue (getPaymentOutput (owner l) ctx))) (ratio l) ≡ False
   -- -> checkPayment par amt l pkh ctx ≡ False
-prop3' {l} {amt} {ctx} p = rwr {amt} {l} {ctx = ctx} {!!} p
+prop3' {l} {amt} {ctx} p with a <- getPaymentOutput (owner l) ctx | refl <- p = {!!}
+
+--rewrite p = {!!}
+--= rwr {amt} {l} {ctx = ctx} {!!} p
+
+prop'3 : ∀ {a l amt}
+  -> a ≡ record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 }
+                                      ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
+  -> ratioCompare amt (amount (txOutValue (a))) (ratio l) ≡ False
+  -- -> checkPayment par amt l pkh ctx ≡ False
+prop'3 {.(record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) })} {amt} {ctx} refl = {!!}
 
 
 rwr' : ∀ {par l amt ctx asdf}
@@ -635,7 +645,7 @@ prop3 : ∀ {par l amt pkh ctx}
   -> agdaValidator par l (Exchange amt pkh) ctx ≡ False
 prop3 {par} {l} {amt} {pkh} {ctx} p = {!!}
 
--}
+{--}
 
 {-
 dingus : ∀ (f : Nat -> Nat) (n : Nat) -> Nat

@@ -1204,6 +1204,11 @@ lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
 
 
 
+-- getTransition ctx
+
+-- funciton going to bool (validator) and how to relate it to a transition function
+-- isomorphisim of relations of functions
+
 transitionImpliesValidator : ∀ {oV oA t s cont} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : par ⊢
                            record { label = l ; context = record { value = (inputVal ctx) ;
