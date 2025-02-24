@@ -180,15 +180,21 @@ svLemma2 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 ...| false = cong (λ a → snd x + a) (svLemma2 l p)
 ...| true rewrite (maybe≡ p) | 0+a (sumVal l) = refl
 
+monusLT : ∀ (a b : Nat) -> ltNat a b ≡ true -> Internal.subNat a b ≡ - (+ monusNat b a)
+monusLT zero (N.suc b) pf = refl
+monusLT (N.suc a) (N.suc b) pf = monusLT a b pf
+
+monusGT : ∀ (a b : Nat) -> ltNat a b ≡ false -> Internal.subNat a b ≡ + monusNat a b
+monusGT zero zero pf = refl
+monusGT (N.suc a) zero pf = refl
+monusGT (N.suc a) (N.suc b) pf = monusGT a b pf
 
 subN≡ : ∀ (a b : Nat) -> Internal.subNat a b ≡ a ⊖ b
-subN≡ zero zero = refl
-subN≡ zero (N.suc b) = refl
-subN≡ (N.suc a) zero = refl
-subN≡ (N.suc a) (N.suc b) with ltNat a b
-...| True = {!!} -- (pos (monusNat (N.suc m) n))
-...| False = {!!} --refl
+subN≡ a b with ltNat a b in eq
+...| true = monusLT a b eq
+...| false = monusGT a b eq
 
+--?
 ni≡ : ∀ (a : Integer) -> negateInteger a ≡ - a
 ni≡ (pos zero) = refl
 ni≡ +[1+ n ] = refl
@@ -197,60 +203,15 @@ ni≡ (negsuc (N.suc n)) = refl
 
 add≡ : ∀ (a b : Integer) -> addInteger a b ≡ a + b
 add≡ (+_ n) (+_ m) = refl
-add≡ (+_ zero) (negsuc zero) = refl
-add≡ (+_ zero) (negsuc (N.suc m)) = refl
-add≡ +[1+ n ] (negsuc zero) = refl
-add≡ +[1+ n ] (negsuc (N.suc m)) = {!!}
-
-{-with ltNat n (N.suc m)
-...| True = {!!} -- (pos (monusNat (N.suc m) n))
-...| False = {!!} --refl-}
-add≡ (negsuc n) (+_ m) = {!!}
+add≡ (+_ n) (negsuc m) = subN≡ n (N.suc m)
+add≡ (negsuc n) (+_ m) = subN≡ m (N.suc n)
 add≡ (negsuc n) (negsuc m) = refl
-{-
-add≡ (pos zero) (pos zero) = refl
-add≡ (pos zero) +[1+ m ] = refl
-add≡ +[1+ n ] (pos zero) = refl
-add≡ +[1+ n ] +[1+ m ] = refl
-add≡ (pos zero) (negsuc zero) = refl
-add≡ (pos zero) (negsuc (N.suc m)) = refl
-add≡ +[1+ n ] (negsuc zero) = refl
-add≡ +[1+ n ] (negsuc (N.suc m)) with ltNat n (N.suc m)
-...| True = ni≡ (pos (monusNat (N.suc m) n))
-...| False = refl 
-add≡ (negsuc zero) (pos zero) = refl
-add≡ (negsuc zero) +[1+ m ] = refl
-add≡ (negsuc (N.suc n)) (pos zero) = refl
-add≡ (negsuc (N.suc n)) +[1+ m ] with ltNat m (N.suc n)
-...| True = ni≡ (pos (monusNat (N.suc n) m))
-...| False = refl
-add≡ (negsuc zero) (negsuc zero) = refl
-add≡ (negsuc zero) (negsuc (N.suc m)) = refl
-add≡ (negsuc (N.suc n)) (negsuc zero) = refl
-add≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
--}
 
 sub≡ : ∀ (a b : Integer) -> subInteger a b ≡ a - b
-sub≡ = {!!} 
-{-
-sub≡ (pos zero) (pos zero) = refl
-sub≡ (pos zero) +[1+ m ] = refl
-sub≡ +[1+ n ] (pos zero) = refl
-sub≡ +[1+ n ] +[1+ m ] = sub≡ (negsuc m) (negsuc n)
-sub≡ (pos zero) (negsuc zero) = refl
-sub≡ (pos zero) (negsuc (N.suc m)) = refl
-sub≡ +[1+ n ] (negsuc zero) = refl
-sub≡ +[1+ n ] (negsuc (N.suc m)) = refl
-sub≡ (negsuc zero) (pos zero) = refl
-sub≡ (negsuc zero) +[1+ m ] = refl
-sub≡ (negsuc (N.suc n)) (pos zero) = refl
-sub≡ (negsuc (N.suc n)) +[1+ m ] = refl
-sub≡ (negsuc zero) (negsuc zero) = refl
-sub≡ (negsuc zero) (negsuc (N.suc m)) = refl
-sub≡ (negsuc (N.suc n)) (negsuc zero) = refl
-sub≡ (negsuc (N.suc n)) (negsuc (N.suc m)) with ltNat m n
-...| True = ni≡ (pos (monusNat n m))
-...| False = refl
+sub≡ (+_ n) (+_ m) rewrite ni≡ (+ m) = add≡ (+ n) (- (+ m))
+sub≡ (+_ n) (negsuc m) = refl
+sub≡ (negsuc n) (+_ m) rewrite ni≡ (+ m) = add≡ (negsuc n) (- (+ m))
+sub≡ (negsuc n) (negsuc m) = subN≡ (N.suc m) (N.suc n)
 
 svLemma3 : ∀ {pkh v val} (l : Label) -> lookup pkh l ≡ Just v
            -> sumVal l + val ≡ sumVal (insert pkh (v + val) l)
@@ -268,8 +229,8 @@ svLemma3 {pkh} {v} {val} (x ∷ l) p with pkh == (fst x) in eq
 ==to≡ (Nat.suc a) (Nat.suc b) p = cong Nat.suc (==to≡ a b p)
 
 ==ito≡ : ∀ (a b : Integer) -> (a == b) ≡ true -> a ≡ b
-==ito≡ (pos n) (pos m) pf = cong pos (==to≡ n m pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (sym (==to≡ m n pf)) 
+==ito≡ (pos n) (pos m) pf = cong (+_) (==to≡ n m pf)
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf) 
 
 switchSides : ∀ {a b c : Integer} -> a - b ≡ c -> a ≡ b + c
 switchSides {a} {b} refl rewrite +-comm a (- b) | sym (+-assoc b (- b) a)
@@ -325,12 +286,15 @@ fidelityMulti : ∀ {s s' : State} {is : List Input}
 fidelityMulti {s} {s} {[]} p1 root = p1
 fidelityMulti {s} {s'} {(i ∷ is)} p1 (cons {s' = s''} x p2) = fidelityMulti (fidelity p1 x) p2
 
+n=n : ∀ (n : Nat) -> eqNat n n ≡ true
+n=n zero = refl
+n=n (N.suc n) = n=n n
 
 i=i : ∀ (i : Value) -> (eqInteger i i) ≡ true
 i=i (pos zero) = refl
-i=i (pos (suc n)) = i=i (pos n)
+i=i (pos (suc n)) = n=n n 
 i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = i=i (pos n)
+i=i (negsuc (suc n)) = n=n n
 
 
 ≤NtoleqN : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true 
@@ -338,8 +302,8 @@ i=i (negsuc (suc n)) = i=i (pos n)
 ≤NtoleqN {zero} {N.suc b} pf = refl
 ≤NtoleqN {N.suc a} {N.suc b} (N.s≤s pf) = ≤NtoleqN pf
 
-aaa : ∀ (n m : Nat) -> ltNat n m ≡ true -> (ltNat m n || eqNat m n) ≡ true -> ⊥
-aaa (N.suc n) (N.suc m) p1 p2 = ⊥-elim (aaa n m p1 p2)
+nope : ∀ (n m : Nat) -> ltNat n m ≡ true -> (ltNat m n || eqNat m n) ≡ true -> ⊥
+nope (N.suc n) (N.suc m) p1 p2 = ⊥-elim (nope n m p1 p2)
 
 monusLemma : ∀ (n m : Nat) -> (0 <= (monusNat n m)) ≡ true
 monusLemma zero zero = refl
@@ -347,27 +311,29 @@ monusLemma zero (N.suc m) = refl
 monusLemma (N.suc n) zero = refl
 monusLemma (N.suc n) (N.suc m) = monusLemma n m
 
+geqNatLemma : ∀ (n : Nat) -> (n >= 0) ≡ true
+geqNatLemma zero = refl
+geqNatLemma (N.suc n) = refl
+
 diffSubLemma : ∀ (n m : Nat) -> 0 N.≤ m -> m N.≤ n ->
-             (ltInteger +0 (pos n + - pos m) || eqInteger +0 (pos n + - pos m)) ≡ true
+               geq (+ n - + m) emptyValue ≡ true
 diffSubLemma zero .zero N.z≤n N.z≤n = refl
 diffSubLemma (N.suc n) .zero N.z≤n N.z≤n = refl
 diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) with ltNat n m in eq
-diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | true = ⊥-elim (aaa n m eq (≤NtoleqN p2))
-diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | false = monusLemma n m
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | true = ⊥-elim (nope n m eq (≤NtoleqN p2))
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | false = geqNatLemma (monusNat n m) 
 
 diffLemma : ∀ (v v' : Value) -> v' ≤ v -> emptyValue ≤ v' -> geq (v - v') emptyValue ≡ true
-diffLemma .(negsuc _) .(negsuc _) (-≤- n≤m) ()
-diffLemma .(pos _) .(negsuc _) -≤+ ()
-diffLemma .(pos n) .(pos m) (+≤+ {m} {n} m≤n) (+≤+ m≤n₁) = diffSubLemma n m m≤n₁ m≤n
+diffLemma v v' (-≤- n≤m) ()
+diffLemma v v' -≤+ ()
+diffLemma v v' (+≤+ {m} {n} 0≤m) (+≤+ m≤n) = diffSubLemma n m m≤n 0≤m
 
-addNatLemma : ∀ (n m : Nat) -> (0 <= (addNat n m)) ≡ true
-addNatLemma zero zero = refl
-addNatLemma zero (N.suc m) = refl
-addNatLemma (N.suc n) zero = refl
-addNatLemma (N.suc n) (N.suc m) = refl 
+geqPosLemma : ∀ (n : Nat) -> geq (+ n) emptyValue ≡ true
+geqPosLemma zero = refl
+geqPosLemma (N.suc n) = refl
 
 sumLemma : ∀ (v v' : Value) -> emptyValue ≤ v' -> geq v emptyValue ≡ true -> geq (v + v') emptyValue ≡ true
-sumLemma (pos n) (pos m) p1 p2 = addNatLemma n m
+sumLemma (pos n) (pos m) p1 p2 = geqPosLemma (addNat n m)
 
 lem : ∀ {pkh} (label : Label) (v' : Value)
       -> geq v' emptyValue ≡ true 
@@ -427,11 +393,15 @@ leqNto≤N {zero} {zero} pf = N.z≤n
 leqNto≤N {zero} {suc b} pf = N.z≤n
 leqNto≤N {suc a} {suc b} pf = N.s≤s (leqNto≤N pf)
 
+leqNto≤N' : ∀ {a b} -> (ltNat a b || eqNat b a) ≡ true -> a N.≤ b
+leqNto≤N' {zero} {zero} pf = N.z≤n
+leqNto≤N' {zero} {suc b} pf = N.z≤n
+leqNto≤N' {suc a} {suc b} pf = N.s≤s (leqNto≤N' pf)
+
 geqto≤ : ∀ {a b} -> geq a b ≡ true -> a ≥ b
-geqto≤ {pos n} {pos m} pf = +≤+ (leqNto≤N pf)
+geqto≤ {pos n} {pos m} pf = +≤+ (leqNto≤N' pf)
 geqto≤ {pos n} {negsuc m} pf = -≤+
 geqto≤ {negsuc n} {negsuc m} pf = -≤- (leqNto≤N pf)
-
 
 ==pto≡ : ∀ (a b : PubKeyHash × Value) -> (a == b) ≡ true -> a ≡ b
 ==pto≡ (fst1 , snd1) (fst2 , snd2) pf
@@ -565,10 +535,15 @@ l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
 ≤NtoLeqN {b = N.suc b} N.z≤n = refl
 ≤NtoLeqN (N.s≤s p) = ≤NtoLeqN p
 
+≤NtoLeqN' : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat b a) ≡ true
+≤NtoLeqN' {b = zero} N.z≤n = refl
+≤NtoLeqN' {b = N.suc b} N.z≤n = refl
+≤NtoLeqN' (N.s≤s p) = ≤NtoLeqN' p
+
 ≤toGeq : ∀ {a b} -> a ≤ b -> geq b a ≡ true
 ≤toGeq (-≤- n≤m) = ≤NtoLeqN n≤m
 ≤toGeq -≤+ = refl
-≤toGeq (+≤+ m≤n) = ≤NtoLeqN m≤n
+≤toGeq (+≤+ m≤n) = ≤NtoLeqN' m≤n
 
 ≢to/= : ∀ (a b : PubKeyHash) -> a ≢ b -> (a /= b) ≡ true
 ≢to/= (pos n) (pos m) p with eqNat n m in eq
@@ -576,9 +551,9 @@ l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
 ...| True rewrite ==to≡ n m eq = ⊥-elim (p refl)
 ≢to/= (pos n) (negsuc m) p = refl
 ≢to/= (negsuc n) (pos m) p = refl
-≢to/= (negsuc n) (negsuc m) p with eqNat m n in eq
-...| False = refl
-...| True rewrite ==to≡ m n eq = ⊥-elim (p refl)
+≢to/= (negsuc n) (negsuc m) p with eqNat n m in eq
+...| False = refl 
+...| True rewrite ==to≡ n m eq = ⊥-elim (p refl)
 
 transitionImpliesValidator : ∀ { s} (l : Label) (i : Input) (ctx : ScriptContext)
                            -> (pf : record { label = l ; context = record { value = (inputVal ctx) ; tsig = s } }
@@ -600,7 +575,6 @@ transitionImpliesValidator l (Transfer from to val) ctx (TTransfer {vF = vF} {vT
   rewrite sym p1 | p2 | p3 | p8 | i=i from | i=i (inputVal ctx) | ≤toGeq p4 | ≤toGeq p5 |
   ≢to/= from to p6 | sym (add≡ vT val) | sym (sub≡ vF val) | sym p7 | l=l (outputLabel ctx) = refl
 
--}
 lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
                    -> s  ~[ is  ]~* s'
                    -> s' ~[ is' ]~* s''
@@ -773,7 +747,7 @@ getGeq : ∀ {s x label context}
          -> s ≡ record { label = x ∷ label ; context = context }
          -> Valid s
          -> snd x ≥ emptyValue
-getGeq refl (Always x (allCons {{i}} {{is}})) = {!!} --geqto≤ i
+getGeq refl (Always x (allCons {{i}} {{is}})) = geqto≤ i
 
 ltLem : ∀ (n : Nat) -> ltNat n n ≡ false
 ltLem zero = refl
@@ -793,13 +767,13 @@ rewriteLabel : ∀ (pkh : PubKeyHash) (val : Value) (label : Label)
 rewriteLabel pkh val label rewrite (i-i val) = refl
 
 
-{-
+
 minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
-minusLemma .(b + pos n) b (pos n) refl rewrite +-assoc b (pos n) (- (pos n))
+minusLemma .(b + + n) b (pos n) refl rewrite +-assoc b (+ n) (- (+ n))
            | [+m]-[+n]≡m⊖n n n | n⊖n≡0 n | +-identityʳ b = refl
 minusLemma .(b + negsuc n) b (negsuc n) refl rewrite +-assoc b (negsuc n) (- (negsuc n))
            | n⊖n≡0 (N.suc n) | +-identityʳ b = refl
--}
+
 
 sameLastSig' : ∀ {x context context'} (label : Label)
   -> lastSig (record { label = x ∷ label ; context = context }) ≡
@@ -824,7 +798,7 @@ minusLemma a b (pos zero) p rewrite +-identityʳ a | +-identityʳ b = p
 minusLemma a b +[1+ n ] p = {!!}
 minusLemma a b (negsuc zero) p = {!!}
 minusLemma a b (negsuc (N.suc n)) p = {!!}
-
+-}
 
 refactor : ∀ (a b c : Value) -> a ≡ b + c -> c ≡ a - b
 refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p)
@@ -833,6 +807,7 @@ subValid : ∀ {x label context}
   -> Valid (record { label = x ∷ label ; context = context })
   -> All (λ y → geq (snd y) emptyValue ≡ true) label
 subValid (Always x (allCons {{i}} {{is}})) = is
+
 
 prop1 : ∀ (s s' : State) {l : Label}
         -> label s ≡ l
@@ -863,7 +838,7 @@ prop1 s1@(record { label = (x ∷ label) ; context = context }) s2@(record { lab
                                               ; tsig = fst x}})
             s2 {label} refl p2 p3 p4 refl (Always refl (subValid p6))))
 
--}
+
 {-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
 prop1 record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 = cons {s' = record
@@ -916,12 +891,11 @@ liquidity : ∀ (s : State)
           -> Valid s
           -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value (context s') ≡ 0) )
 
-liquidity s p1 p2 = {!!}
-{-
+liquidity s p1 p2 = 
   ⟨ record { label = [] ; context = record { value = 0 ; tsig = lastSig s } } ,
   ⟨ makeIs (label s) , (prop1 s (record { label = [] ; context = record { value = 0 ; tsig = lastSig s } }) {label s}
   refl refl refl refl p1 p2 , refl) ⟩ ⟩
--}
+
 
 {-
 liquidity record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } refl
