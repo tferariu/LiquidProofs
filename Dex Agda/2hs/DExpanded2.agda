@@ -83,8 +83,8 @@ instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
 
-  iOrdRational : Ord Rational
-  iOrdRational = ordFromLessThan ltRational
+ -- iOrdRational : Ord Rational
+ -- iOrdRational = ordFromLessThan ltRational
 
 
 eqLabel : Label -> Label -> Bool
