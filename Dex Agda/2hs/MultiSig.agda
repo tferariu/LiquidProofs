@@ -78,7 +78,7 @@ expired : Deadline -> ScriptContext -> Bool
 expired d ctx = (time ctx) > d
 
 notTooLate : Params -> Deadline -> ScriptContext -> Bool
-notTooLate par d ctx = d <= (time ctx) + (maxWait par)
+notTooLate par d ctx = (time ctx) + (maxWait par) >= d
 
 newLabel : ScriptContext -> Label
 newLabel ctx = outputLabel ctx

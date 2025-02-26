@@ -248,11 +248,18 @@ add≡ (negsuc n) (+_ m) = subN≡ m (N.suc n)
 add≡ (negsuc n) (negsuc m) = refl
 
 
+sign+≡ : ∀ (n : Nat) -> + n ≡ Sign.+ ◃ n
+sign+≡ zero = refl
+sign+≡ (N.suc n) = refl
+
+sign-≡ : ∀ (n : Nat) -> Internal.negNat n ≡ Sign.- ◃ n
+sign-≡ zero = refl
+sign-≡ (N.suc n) = refl
 
 mul≡ : ∀ (a b : Integer) -> mulInteger a b ≡ a * b
-mul≡ (+_ n) (+_ m) = {!!}
-mul≡ (+_ n) (negsuc m) = {!!}
-mul≡ (negsuc n) (+_ m) = {!!}
+mul≡ (+_ n) (+_ m) = sign+≡ (mulNat n m)
+mul≡ (+_ n) (negsuc m) = sign-≡ (mulNat n (N.suc m))
+mul≡ (negsuc n) (+_ m) = sign-≡ (addNat m (mulNat n m))
 mul≡ (negsuc n) (negsuc m) = refl
 
 
@@ -274,14 +281,16 @@ rewriteAdd b c p rewrite add≡ b c = p
 ≤≡ zero (N.suc b) pf = refl
 ≤≡ (N.suc a) (N.suc b) pf = ≤≡lem a b pf
 
+swapEqNat : ∀ (n m : Nat) -> eqNat n m ≡ eqNat m n
+swapEqNat zero zero = refl
+swapEqNat zero (N.suc m) = refl
+swapEqNat (N.suc n) zero = refl
+swapEqNat (N.suc n) (N.suc m) = swapEqNat n m
 
 <=ito≤ : ∀ {a b : Integer} -> (ltInteger a b || eqInteger a b) ≡ true -> a ≤ b
 <=ito≤ {pos n} {pos m} pf = +≤+ (<=to≤ pf)
 <=ito≤ {negsuc n} {pos m} pf = -≤+
-<=ito≤ {negsuc n} {negsuc m} pf = {!!} ---≤- (<=to≤ pf)
-
-
-
+<=ito≤ {negsuc n} {negsuc m} pf rewrite swapEqNat n m = -≤- (<=to≤ pf)
 
 getPayOutVal : Label -> ScriptContext -> Value
 getPayOutVal l ctx = (txOutValue (getPaymentOutput (owner l) ctx))
@@ -422,9 +431,9 @@ n=n (suc n) = n=n n
 
 i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
 i=i (pos zero) = refl
-i=i (pos (suc n)) = {!!} --i=i (pos n)
+i=i (pos (suc n)) = n=n n 
 i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = {!!} --i=i (pos n)
+i=i (negsuc (suc n)) = n=n n 
 
 ≡to==l : ∀ {a b : Label} -> a ≡ b -> (a == b) ≡ true
 ≡to==l {record { ratio = ratio ; owner = owner }} refl
@@ -440,7 +449,7 @@ i=i (negsuc (suc n)) = {!!} --i=i (pos n)
 ≤to<= (N.s≤s p) = ≤to<= p
 
 ≤ito<= : ∀ {a b : Integer} -> a ≤ b -> (ltInteger a b || eqInteger a b) ≡ true
-≤ito<= (-≤- n≤m) = {!!} --≤to<= n≤m
+≤ito<= (-≤- {m} {n} n≤m) rewrite swapEqNat m n = ≤to<= n≤m
 ≤ito<= -≤+ = refl
 ≤ito<= (+≤+ m≤n) = ≤to<= m≤n
 
@@ -507,6 +516,9 @@ rwr : ∀ {amt l txo ctx}
         (den (ratio l)))) ≡ false
 rwr p1 refl = p1
 
+--------------------------------------------
+--ongoing?
+{-
 prop3' : ∀ {l amt ctx}
   -> getPaymentOutput (owner l) ctx ≡ record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 }
                                       ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
@@ -632,6 +644,12 @@ prop3 : ∀ {par l amt pkh ctx}
                                       ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }
   -> agdaValidator par l (Exchange amt pkh) ctx ≡ false
 prop3 {par} {l} {amt} {pkh} {ctx} p = {!!}
+
+-}
+
+
+---------------------------------------------------------------------------------
+--old
 
 {--}
 
