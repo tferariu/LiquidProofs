@@ -31,7 +31,6 @@ record ScriptContext : Set where
         payAmt      : Value
         signature   : PubKeyHash
         continues   : Bool
-        mint        : Integer
 open ScriptContext public
 
 
@@ -90,8 +89,8 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
-continuingSelf : ScriptContext -> Bool
-continuingSelf ctx = continues ctx
+continuing : ScriptContext -> Bool
+continuing ctx = continues ctx
 
 geq : Value -> Value -> Bool
 geq val v = val >= v 
@@ -110,27 +109,27 @@ agdaValidator param dat red ctx = case dat of λ where
 
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuingSelf ctx && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
     (Add _) -> False
     Pay -> False
     Cancel -> False
-    Close -> gt minValue (oldValue ctx) && not (continuingSelf ctx)
+    Close -> gt minValue (oldValue ctx) && not (continuing ctx)
 
   (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuingSelf ctx && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
 
-    Pay -> (lengthNat sigs) >= (nr param) && continuingSelf ctx && (case (newLabel ctx) of λ where
+    Pay -> (lengthNat sigs) >= (nr param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
       (Collecting _ _ _ _) -> False )
       
-    Cancel -> newValue ctx == oldValue ctx && continuingSelf ctx && (case (newLabel ctx) of λ where
+    Cancel -> newValue ctx == oldValue ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False)
 
@@ -139,63 +138,4 @@ agdaValidator param dat red ctx = case dat of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
-Address = Placeholder
-TxOutRef = Placeholder
-TokenName = Placeholder
 
-getMintedAmount : ScriptContext -> Integer
-getMintedAmount ctx = mint ctx 
-
-
-continuing : Address -> ScriptContext -> Bool
-continuing addr ctx = continues ctx
-
-
-agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr tref ⊤ ctx =
-  if      amt == 1  then True
-  else if amt == -1 then not (continuing addr ctx)
-  else False
-  where
-    amt = getMintedAmount ctx
-  
-
-{-
-mkPolicy :: Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
-mkPolicy addr oref tn () ctx
-  | amt == 1 =
-      hasUTxO
-        && checkDatum
-        && checkValue
-  | amt == -1 = noOutput
-  | otherwise = error ()
-  where
-
-    hasUTxO :: Bool
-    hasUTxO = any (\i -> txInInfoOutRef i == oref) $ txInfoInputs info
-
-
-    noOutput :: Bool
-    noOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
-      [] -> True
-      _ -> False
-
-    scriptOutput :: TxOut
-    scriptOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
-      [o] -> o
-      _ -> error ()
-
-    checkDatum :: Bool
-    checkDatum = case txOutDatum scriptOutput of
-      NoOutputDatum -> error ()
-      OutputDatumHash dh -> case smDatum $ findDatum dh info of
-        Nothing -> error ()
-        Just d -> tToken d == AssetClass (cs, tn) && label d == Holding
-      OutputDatum dat -> case PlutusTx.unsafeFromBuiltinData @State (getDatum dat) of
-        d -> tToken d == AssetClass (cs, tn) && label d == Holding
-        _ -> error ()
-
-    checkValue :: Bool
-    checkValue = valueOf (txOutValue scriptOutput) cs tn == 1
-
--}
