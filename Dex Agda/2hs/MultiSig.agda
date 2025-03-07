@@ -8,6 +8,10 @@ POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
 ThreadToken = Placeholder
 
+Address = Placeholder
+TxOutRef = Placeholder
+TokenName = Placeholder
+
 PubKeyHash = Integer
 Value = Nat
 Deadline = Nat
@@ -31,6 +35,8 @@ record ScriptContext : Set where
         payAmt      : Value
         signature   : PubKeyHash
         continues   : Bool
+        inputRef    : TxOutRef
+        outputAddr  : Address
         mint        : Integer
 open ScriptContext public
 
@@ -139,9 +145,7 @@ agdaValidator param dat red ctx = case dat of λ where
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
-Address = Placeholder
-TxOutRef = Placeholder
-TokenName = Placeholder
+
 
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = mint ctx 
