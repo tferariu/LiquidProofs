@@ -3,10 +3,9 @@ module MultiSig where
 open import Haskell.Prelude
 
 
-Placeholder = String
+Placeholder = Nat
 POSIXTimeRange = Placeholder
 ScriptPurpose = Placeholder
-ThreadToken = Placeholder
 
 Address = Placeholder
 TxOutRef = Placeholder
@@ -15,6 +14,7 @@ TokenName = Placeholder
 PubKeyHash = Integer
 Value = Nat
 Deadline = Nat
+ThreadToken = Placeholder
 
 {-# COMPILE AGDA2HS Deadline #-}
 
@@ -24,6 +24,9 @@ data Label : Set where
 
 {-# COMPILE AGDA2HS Label #-}
 
+Datum = (ThreadToken × Label)
+
+{-# COMPILE AGDA2HS Datum #-}
 
 record ScriptContext : Set where
     field
@@ -36,6 +39,8 @@ record ScriptContext : Set where
         signature   : PubKeyHash
         continues   : Bool
         inputRef    : TxOutRef
+        hasTokenIn  : Bool
+        hasTokenOut : Bool
         outputAddr  : Address
         mint        : Integer
 open ScriptContext public
@@ -96,8 +101,8 @@ oldValue ctx = inputVal ctx
 newValue : ScriptContext -> Value
 newValue ctx = outputVal ctx
 
-continuingSelf : ScriptContext -> Bool
-continuingSelf ctx = continues ctx
+continuing : ScriptContext -> Bool
+continuing ctx = continues ctx
 
 geq : Value -> Value -> Bool
 geq val v = val >= v 
@@ -111,32 +116,32 @@ emptyValue = 0
 minValue : Value
 minValue = 2
 
-agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
-agdaValidator param dat red ctx = case dat of λ where
+agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
+agdaValidator param (tok , dat) red ctx = case dat of λ where
 
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuingSelf ctx && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
     (Add _) -> False
     Pay -> False
     Cancel -> False
-    Close -> gt minValue (oldValue ctx) && not (continuingSelf ctx)
+    Close -> gt minValue (oldValue ctx) && not (continuing ctx)
 
   (Collecting v pkh d sigs) -> case red of λ where
 
     (Propose _ _ _) -> False
 
-    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuingSelf ctx && (case (newLabel ctx) of λ where
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
 
-    Pay -> (lengthNat sigs) >= (nr param) && continuingSelf ctx && (case (newLabel ctx) of λ where
+    Pay -> (lengthNat sigs) >= (nr param) && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
       (Collecting _ _ _ _) -> False )
       
-    Cancel -> newValue ctx == oldValue ctx && continuingSelf ctx && (case (newLabel ctx) of λ where
+    Cancel -> newValue ctx == oldValue ctx && continuing ctx && (case (newLabel ctx) of λ where
       Holding -> expired d ctx
       (Collecting _ _ _ _) -> False)
 
@@ -150,19 +155,35 @@ agdaValidator param dat red ctx = case dat of λ where
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = mint ctx 
 
+consumes : TxOutRef -> ScriptContext -> Bool
+consumes oref ctx = oref == inputRef ctx
 
-continuing : Address -> ScriptContext -> Bool
-continuing addr ctx = continues ctx
+checkDatum : Address -> ScriptContext -> Bool
+checkDatum addr ctx = case (newLabel ctx) of λ where
+  Holding -> True
+  (Collecting _ _ _ _) -> False
+
+checkValue : Address -> ScriptContext -> Bool
+checkValue addr ctx = hasTokenOut ctx
+
+isInitial : Address -> TxOutRef -> ScriptContext -> Bool
+isInitial addr oref ctx = consumes oref ctx &&
+                          checkDatum addr ctx &&
+                          checkValue addr ctx
+
+continuingAddr : Address -> ScriptContext -> Bool
+continuingAddr addr ctx = continues ctx
 
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr tref ⊤ ctx =
-  if      amt == 1  then True
-  else if amt == -1 then not (continuing addr ctx)
+agdaPolicy addr oref _ ctx =
+  if      amt == 1  then isInitial addr oref ctx
+  else if amt == -1 then not (continuingAddr addr ctx)
   else False
   where
     amt = getMintedAmount ctx
-  
+
+{-# COMPILE AGDA2HS agdaPolicy #-}
 
 {-
 mkPolicy :: Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
@@ -177,12 +198,6 @@ mkPolicy addr oref tn () ctx
 
     hasUTxO :: Bool
     hasUTxO = any (\i -> txInInfoOutRef i == oref) $ txInfoInputs info
-
-
-    noOutput :: Bool
-    noOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
-      [] -> True
-      _ -> False
 
     scriptOutput :: TxOut
     scriptOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
@@ -201,5 +216,10 @@ mkPolicy addr oref tn () ctx
 
     checkValue :: Bool
     checkValue = valueOf (txOutValue scriptOutput) cs tn == 1
+    
+    noOutput :: Bool
+    noOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
+      [] -> True
+      _ -> False
 
 -}
