@@ -32,7 +32,7 @@ record ScriptContext : Set where
     field
         inputVal    : Nat
         outputVal   : Nat
-        outputLabel : Label
+        outputDatum : Datum
         time        : Deadline
         payTo       : PubKeyHash
         payAmt      : Value
@@ -92,8 +92,8 @@ expired d ctx = (time ctx) > d
 notTooLate : Params -> Deadline -> ScriptContext -> Bool
 notTooLate par d ctx = (time ctx) + (maxWait par) >= d
 
-newLabel : ScriptContext -> Label
-newLabel ctx = outputLabel ctx
+newDatum : ScriptContext -> Datum
+newDatum ctx = outputDatum ctx
 
 oldValue : ScriptContext -> Value
 oldValue ctx = inputVal ctx
@@ -116,12 +116,48 @@ emptyValue = 0
 minValue : Value
 minValue = 2
 
-agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
-agdaValidator param (tok , dat) red ctx = case dat of λ where
+checkTokenIn : ThreadToken -> ScriptContext -> Bool
+checkTokenIn tok ctx = hasTokenIn ctx
 
+checkTokenOut : ThreadToken -> ScriptContext -> Bool
+checkTokenOut tok ctx = hasTokenOut ctx
+
+agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
+agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
+  (case ((checkTokenOut tok ctx) , lab , red) of λ where
+    (True , Holding , (Propose v pkh d)) ->
+      (newValue ctx == oldValue ctx) && geq (oldValue ctx) v &&
+      geq v minValue && notTooLate param d ctx && continuing ctx &&
+      (case (newDatum ctx) of λ where
+        (tok' , Holding) -> False
+        (tok' , (Collecting v' pkh' d' sigs')) ->
+          v == v' && pkh == pkh' && d == d' && sigs' == [] && tok == tok' )
+    (True , (Collecting v pkh d sigs) , (Add sig)) ->
+      newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) &&
+      continuing ctx && (case (newDatum ctx) of λ where
+        (tok' , Holding) -> False
+        (tok' , (Collecting v' pkh' d' sigs')) ->
+          v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs && tok == tok' )
+    (True , (Collecting v pkh d sigs) , Pay) ->
+      (lengthNat sigs) >= (nr param) && continuing ctx && (case (newDatum ctx) of λ where
+        (tok' , Holding) -> False
+        (tok' , (Collecting v' pkh' d' sigs')) ->
+          checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) &&
+          checkSigned pkh ctx && tok == tok' )
+    (True , (Collecting v pkh d sigs) , Cancel) ->
+      newValue ctx == oldValue ctx && continuing ctx &&
+      (case (newDatum ctx) of λ where
+        (tok' , Holding) -> expired d ctx
+        (tok' , (Collecting v' pkh' d' sigs')) -> False)
+    (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx)
+    _ -> False )
+
+{-
   Holding -> case red of λ where
 
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v && geq v minValue && notTooLate param d ctx && continuing ctx && (case (newLabel ctx) of λ where
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v &&
+                         geq v minValue && notTooLate param d ctx && continuing ctx &&
+                         (case (newLabel ctx) of λ where
       Holding -> False
       (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
     (Add _) -> False
@@ -146,7 +182,7 @@ agdaValidator param (tok , dat) red ctx = case dat of λ where
       (Collecting _ _ _ _) -> False)
 
     Close -> False
-  
+-}  
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
@@ -159,9 +195,9 @@ consumes : TxOutRef -> ScriptContext -> Bool
 consumes oref ctx = oref == inputRef ctx
 
 checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = case (newLabel ctx) of λ where
-  Holding -> True
-  (Collecting _ _ _ _) -> False
+checkDatum addr ctx = case (newDatum ctx) of λ where
+  (tok , Holding) -> True
+  (tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
 checkValue addr ctx = hasTokenOut ctx
