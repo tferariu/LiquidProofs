@@ -14,7 +14,7 @@ TokenName = Placeholder
 PubKeyHash = Integer
 Value = Nat
 Deadline = Nat
-ThreadToken = Placeholder
+AssetClass = Nat
 
 {-# COMPILE AGDA2HS Deadline #-}
 
@@ -24,7 +24,7 @@ data Label : Set where
 
 {-# COMPILE AGDA2HS Label #-}
 
-Datum = (ThreadToken × Label)
+Datum = (AssetClass × Label)
 
 {-# COMPILE AGDA2HS Datum #-}
 
@@ -116,10 +116,10 @@ emptyValue = 0
 minValue : Value
 minValue = 2
 
-checkTokenIn : ThreadToken -> ScriptContext -> Bool
+checkTokenIn : AssetClass -> ScriptContext -> Bool
 checkTokenIn tok ctx = hasTokenIn ctx
 
-checkTokenOut : ThreadToken -> ScriptContext -> Bool
+checkTokenOut : AssetClass -> ScriptContext -> Bool
 checkTokenOut tok ctx = hasTokenOut ctx
 
 agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
@@ -209,7 +209,6 @@ isInitial addr oref ctx = consumes oref ctx &&
 
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = continues ctx
-
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
