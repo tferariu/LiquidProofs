@@ -30,19 +30,19 @@ Datum = (AssetClass × Label)
 
 record ScriptContext : Set where
     field
-        inputVal    : Nat
-        outputVal   : Nat
-        outputDatum : Datum
-        time        : Deadline
-        payTo       : PubKeyHash
-        payAmt      : Value
-        signature   : PubKeyHash
-        continues   : Bool
-        inputRef    : TxOutRef
-        hasTokenIn  : Bool
-        hasTokenOut : Bool
-        outputAddr  : Address
-        mint        : Integer
+        inputVal      : Nat
+        outputVal     : Nat
+        outputDatum   : Datum
+        time          : Deadline
+        payTo         : PubKeyHash
+        payAmt        : Value
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        hasTokenIn    : Bool
+        hasTokenOut   : Bool
+        mint          : Integer
+        tokAssetClass : AssetClass
 open ScriptContext public
 
 
@@ -152,37 +152,6 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
     (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx)
     _ -> False )
 
-{-
-  Holding -> case red of λ where
-
-    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v &&
-                         geq v minValue && notTooLate param d ctx && continuing ctx &&
-                         (case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
-    (Add _) -> False
-    Pay -> False
-    Cancel -> False
-    Close -> gt minValue (oldValue ctx) && not (continuing ctx)
-
-  (Collecting v pkh d sigs) -> case red of λ where
-
-    (Propose _ _ _) -> False
-
-    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuing ctx && (case (newLabel ctx) of λ where
-      Holding -> False
-      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
-
-    Pay -> (lengthNat sigs) >= (nr param) && continuing ctx && (case (newLabel ctx) of λ where
-      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
-      (Collecting _ _ _ _) -> False )
-      
-    Cancel -> newValue ctx == oldValue ctx && continuing ctx && (case (newLabel ctx) of λ where
-      Holding -> expired d ctx
-      (Collecting _ _ _ _) -> False)
-
-    Close -> False
--}  
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
@@ -194,9 +163,12 @@ getMintedAmount ctx = mint ctx
 consumes : TxOutRef -> ScriptContext -> Bool
 consumes oref ctx = oref == inputRef ctx
 
+ownAssetClass : ScriptContext -> AssetClass
+ownAssetClass ctx = tokAssetClass ctx
+
 checkDatum : Address -> ScriptContext -> Bool
 checkDatum addr ctx = case (newDatum ctx) of λ where
-  (tok , Holding) -> True
+  (tok , Holding) -> ownAssetClass ctx == tok
   (tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
@@ -258,3 +230,37 @@ mkPolicy addr oref tn () ctx
       _ -> False
 
 -}
+
+
+
+{-
+  Holding -> case red of λ where
+
+    (Propose v pkh d) -> (newValue ctx == oldValue ctx) && geq (oldValue ctx) v &&
+                         geq v minValue && notTooLate param d ctx && continuing ctx &&
+                         (case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == [] )
+    (Add _) -> False
+    Pay -> False
+    Cancel -> False
+    Close -> gt minValue (oldValue ctx) && not (continuing ctx)
+
+  (Collecting v pkh d sigs) -> case red of λ where
+
+    (Propose _ _ _) -> False
+
+    (Add sig) -> newValue ctx == oldValue ctx && checkSigned sig ctx && query sig (authSigs param) && continuing ctx && (case (newLabel ctx) of λ where
+      Holding -> False
+      (Collecting v' pkh' d' sigs') -> v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs )
+
+    Pay -> (lengthNat sigs) >= (nr param) && continuing ctx && (case (newLabel ctx) of λ where
+      Holding -> checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) && checkSigned pkh ctx
+      (Collecting _ _ _ _) -> False )
+      
+    Cancel -> newValue ctx == oldValue ctx && continuing ctx && (case (newLabel ctx) of λ where
+      Holding -> expired d ctx
+      (Collecting _ _ _ _) -> False)
+
+    Close -> False
+-}  

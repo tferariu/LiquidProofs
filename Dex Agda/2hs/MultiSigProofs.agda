@@ -18,12 +18,13 @@ open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
-open import Data.Product
+--open import Data.Product
 
 open import Haskell.Prim hiding (⊥ ; All; Any)
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
+open import Haskell.Prim.Tuple as Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 
@@ -42,13 +43,47 @@ record Context : Set where
 open Context
 
 --raname to somtething appropriate
-
+{-
 record State : Set where
   field
     label         : Label
     context       : Context
     continues     : Bool
 open State
+-}
+
+record State : Set where
+  field
+    datum      : Datum
+    value      : Value  
+    outVal     : Value
+    outAdr     : PubKeyHash
+    now        : Deadline
+    tsig       : PubKeyHash
+    continues  : Bool
+    input      : TxOutRef
+    hasToken   : Bool
+    mint       : Integer
+    token      : AssetClass
+open State
+
+{-
+record ScriptContext : Set where
+    field
+        inputVal      : Nat
+        outputVal     : Nat
+        outputDatum   : Datum
+        time          : Deadline
+        payTo         : PubKeyHash
+        payAmt        : Value
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        hasTokenIn    : Bool
+        hasTokenOut   : Bool
+        mint          : Integer
+        tokAssetClass : AssetClass
+open ScriptContext public-}
 
 _∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∈ xs = Any (x ≡_) xs
@@ -56,32 +91,37 @@ x ∈ xs = Any (x ≡_) xs
 _∉_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∉ xs = ¬ (x ∈ xs)
 
+
 --Transition Rules
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
-  TPropose : ∀ {v pkh d s s' par} 
-    -> value (context s) ≥ v
+  TPropose : ∀ {v tok pkh d s s' par} 
+    -> value s ≥ v
     -> v ≥ minValue
-    -> label s ≡ Holding
-    -> label s' ≡ Collecting v pkh d []
-    -> value (context s) ≡ value (context s')
-    -> d ≤ (now (context s')) + (maxWait par) 
+    -> datum s ≡ (tok , Holding)
+    -> datum s' ≡ (tok , Collecting v pkh d [])
+    -> value s ≡ value s'
+    -> d ≤ (now s') + (maxWait par) 
     -> continues s ≡ true
     -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
 
-  TAdd : ∀ {sig par s s' v pkh d sigs} 
+  TAdd : ∀ {sig par s s' v tok pkh d sigs} 
     -> sig ∈ (authSigs par)
-    -> tsig (context s') ≡ sig
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value (context s) ≡ value (context s')
+    -> tsig s ≡ sig
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Collecting v pkh d (insert sig sigs))
+    -> value s ≡ value s'
     -> continues s ≡ true
     -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
-
+{-
   TPay : ∀ {v pkh d sigs s s' par} 
     -> tsig (context s') ≡ pkh
     -> value (context s) ≡ value (context s') + v
@@ -92,6 +132,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> outAdr (context s') ≡ pkh 
     -> continues s ≡ true
     -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ Pay ]~> s'
 
@@ -102,6 +144,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> value (context s) ≡ value (context s') 
     -> continues s ≡ true
     -> continues s' ≡ true 
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
@@ -110,6 +154,8 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> minValue > value (context s)
     -> continues s ≡ true
     -> continues s' ≡ false
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ false
     -------------------
     -> par ⊢ s ~[ Close ]~> s'
 
@@ -1769,4 +1815,5 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
   rewrite v=v inputVal | <to<ᵇ p1 = refl
 
 
+-}
 -}
