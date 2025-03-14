@@ -93,6 +93,17 @@ x ∉ xs = ¬ (x ∈ xs)
 
 
 --Transition Rules
+
+
+data _⊢~>_ : Params -> State -> Set where
+
+  TStart : ∀ {par s tok}
+    -> datum s ≡ ( tok , Holding )
+    -> continues s ≡ true
+    -> hasToken s ≡ true
+    -------------------
+    -> par ⊢~> s
+
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TPropose : ∀ {v tok pkh d s s' par} 
@@ -121,15 +132,15 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
-{-
-  TPay : ∀ {v pkh d sigs s s' par} 
-    -> tsig (context s') ≡ pkh
-    -> value (context s) ≡ value (context s') + v
+
+  TPay : ∀ {v pkh tok d sigs s s' par} 
+    -> tsig s' ≡ pkh
+    -> value s ≡ value s + v
     -> length sigs ≥ nr par
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding
-    -> outVal (context s') ≡ v
-    -> outAdr (context s') ≡ pkh 
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Holding)
+    -> outVal s' ≡ v
+    -> outAdr s' ≡ pkh 
     -> continues s ≡ true
     -> continues s' ≡ true
     -> hasToken s ≡ true
@@ -137,11 +148,11 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Pay ]~> s'
 
-  TCancel : ∀ {s s' par v pkh d sigs} 
-    -> now (context s') > d
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding  
-    -> value (context s) ≡ value (context s') 
+  TCancel : ∀ {s s' par v pkh d sigs tok} 
+    -> now s' > d
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Holding)
+    -> value s ≡ value s' 
     -> continues s ≡ true
     -> continues s' ≡ true 
     -> hasToken s ≡ true
@@ -149,16 +160,19 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
-  TClose : ∀ {par s s'}
-    -> label s ≡ Holding
-    -> minValue > value (context s)
+
+data _⊢_~[_]~|_ : Params -> State -> Input -> State -> Set where
+
+  TClose : ∀ {par s s' tok}
+    -> datum s ≡ ( tok , Holding )
+    -> minValue > value s
     -> continues s ≡ true
     -> continues s' ≡ false
     -> hasToken s ≡ true
     -> hasToken s' ≡ false
     -------------------
-    -> par ⊢ s ~[ Close ]~> s'
-
+    -> par ⊢ s ~[ Close ]~| s'
+{-
 data Unique {a : Set} : List a → Set where
   root : Unique []
   _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
