@@ -140,14 +140,14 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
           v == v' && pkh == pkh' && d == d' && sigs' == insert sig sigs && tok == tok' )
     (True , (Collecting v pkh d sigs) , Pay) ->
       (lengthNat sigs) >= (nr param) && continuing ctx && (case (newDatum ctx) of λ where
-        (tok' , Holding) -> False
-        (tok' , (Collecting v' pkh' d' sigs')) ->
+        (tok' , Holding) -> 
           checkPayment pkh v ctx && oldValue ctx == ((newValue ctx) + v) &&
-          checkSigned pkh ctx && tok == tok' )
+          tok == tok'
+        (tok' , (Collecting v' pkh' d' sigs')) -> False)
     (True , (Collecting v pkh d sigs) , Cancel) ->
       newValue ctx == oldValue ctx && continuing ctx &&
       (case (newDatum ctx) of λ where
-        (tok' , Holding) -> expired d ctx
+        (tok' , Holding) -> expired d ctx && tok == tok'
         (tok' , (Collecting v' pkh' d' sigs')) -> False)
     (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx)
     _ -> False )
@@ -184,7 +184,8 @@ continuingAddr addr ctx = continues ctx
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
-  if      amt == 1  then isInitial addr oref ctx
+  if      amt == 1  then continuingAddr addr ctx &&
+                         isInitial addr oref ctx 
   else if amt == -1 then not (continuingAddr addr ctx)
   else False
   where
