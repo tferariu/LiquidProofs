@@ -953,10 +953,10 @@ lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
 -- funciton going to bool (validator) and how to relate it to a transition function
 -- isomorphisim of relations of functions
 
-transitionImpliesValidator : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+transitionImpliesValidator : ∀ {oV oA t s tok spn mnt} (par : Params) (dat : Datum) (i : Input) (ctx : ScriptContext)
                           -- -> i ≢ Close
                            -> par ⊢
-                           record { datum = d ; value = (inputVal ctx) ;
+                           record { datum = dat ; value = (inputVal ctx) ;
                            outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
                            spends = spn ; hasToken = hasTokenIn ctx ; mint = mnt ; token = tok}
                            ~[ i ]~>
@@ -964,8 +964,46 @@ transitionImpliesValidator : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Dat
                            outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
                            continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
                            mint = mint ctx ; token = tokAssetClass ctx}
-                           -> agdaValidator par d i ctx ≡ true
-transitionImpliesValidator = {!!}
+                           -> agdaValidator par dat i ctx ≡ true
+transitionImpliesValidator par (tok , .Holding) (Propose v pkh d) record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Collecting v pkh d []) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TPropose p1 p2 refl refl refl p6 p7 refl refl refl)
+  rewrite v=v inputVal | v=v v | i=i pkh | v=v d | v=v tok | ≤to≤ᵇ p1 | ≤to≤ᵇ p2 | ≤to≤ᵇ p6 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Collecting v pkh d (insert sig sigs)) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = .sig ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TAdd p1 refl refl refl refl p6 refl refl refl)
+  rewrite v=v inputVal | v=v v | i=i pkh | v=v d | v=v tok | l=l (insert sig sigs) | i=i sig | ∈toQuery p1 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) Pay record { inputVal = .(addNat outputVal v) ; outputVal = outputVal ; outputDatum = .(tok , Holding) ; time = time ; payTo = .pkh ; payAmt = .v ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TPay refl p2 refl refl refl refl p7 refl refl refl)
+  rewrite i=i pkh | v=v v | v=v (addNat outputVal v) | v=v tok | lengthToLengthNat (nr par) sigs p2 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TCancel p1 refl refl refl p5 refl refl refl)
+  rewrite v=v inputVal | v=v tok | <to<ᵇ p1 = refl
+
+
+startImpliesMinting : ∀ {oV oA t s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> record {address = adr ; outputRef = oref } ⊢
+                           record { datum = outputDatum ctx ; value = outputVal ctx ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = continues ctx ;
+                           spends = inputRef ctx ; hasToken = hasTokenOut ctx ; mint = mint ctx ; token = tokAssetClass ctx}
+                           -> agdaPolicy adr oref top ctx ≡ true
+startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = .(tokAssetClass , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = .oref ; hasTokenIn = hasTokenIn ; hasTokenOut = .true ; mint = .1 ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl refl refl) rewrite v=v oref | v=v tokAssetClass = refl
+
+
+
+closeImpliesBoth : ∀ {oV oA t s spn tok} (par : Params) (d : Datum) (i : Input) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> (par ⊢
+               record { datum = d ; value = (inputVal ctx) ;
+               outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+               spends = spn ; hasToken = hasTokenIn ctx ; mint = -1 ; token = tok}
+               ~[ i ]~|
+               record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+               outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+               continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+               mint = mint ctx ; token = tokAssetClass ctx})
+               -> (agdaValidator par d Close ctx ≡ true × agdaPolicy adr oref top ctx ≡ true)
+closeImpliesBoth par (tok , Holding) .Close adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .false ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .false ; mint = .-1 ; tokAssetClass = tokAssetClass } (TClose refl p2 p3 refl refl refl refl) rewrite <to<ᵇ p2 = refl , refl
+
+
+
+{-par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = false ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = false ; mint = .-1 ; tokAssetClass = tokAssetClass } refl p1 p2 = TClose refl (<ᵇto< (get p1)) refl refl refl refl refl
+bothImplyClose par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2
+bothImplyClose par (tok , Collecting x x₁ x₂ x₃) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2-}
+
 {-
 validatorImpliesTransition : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
                            -> i ≢ Close
@@ -981,68 +1019,6 @@ validatorImpliesTransition : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Dat
                            mint = mint ctx ; token = tokAssetClass ctx}-}
 
 {-
-
-transitionImpliesValidator par Holding (Propose v pkh d)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting _ _ _ []) ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues }
-           (TPropose p1 p2 p3 refl p5 p6 p7 refl)
-  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | ≤to≤ᵇ p2 | ≤to≤ᵇ p6 | v=v v | i=i pkh | v=v d = refl --refl
-transitionImpliesValidator par Holding Close
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = outputLabel ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = false }
-           (TClose p1 p2 p3 p4)
-  rewrite <to<ᵇ p2 = refl
-transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting .v .pkh .d .(insert sig sigs)) ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = .sig ;
-           continues = .true }
-           (TAdd p1 refl refl refl p5 p6 refl)
-  rewrite ≡to≡ᵇ (sym p5) | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
-transitionImpliesValidator par (Collecting v pkh d sigs) Pay
-  record { inputVal = .(addNat outputVal v) ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = .pkh ;
-           payAmt = .v ;
-           signature = .pkh ;
-           continues = .true }
-           (TPay refl refl p3 refl refl refl refl p8 refl)
-  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p3 | v=v (outputVal + v) = refl --refl
-transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ;
-           outputVal = .(inputVal) ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = .true }
-           (TCancel p1 refl p3 refl p5 refl)
-  rewrite v=v inputVal | <to<ᵇ p1 = refl
-
-
-
-
-
-
 ----------------------------------------------------------
 
 --Leftover code from previous attempts
