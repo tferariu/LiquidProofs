@@ -1,4 +1,3 @@
---open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 
 open import MultiSig
 
