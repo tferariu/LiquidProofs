@@ -120,7 +120,7 @@ checkDeposit (Just v) pkh val lab ctx = geq val emptyValue && (newLabel ctx == i
 checkTransfer : Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
 checkTransfer Nothing _ _ _ _ _ _ = False
 checkTransfer (Just vF) Nothing _ _ _ _ _ = False
-checkTransfer (Just vF) (Just vT) from to val lab ctx = geq vF val && geq val 0 && from /= to &&
+checkTransfer (Just vF) (Just vT) from to val lab ctx = geq val 0 && geq vF val && from /= to &&
                          newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
 {-
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
