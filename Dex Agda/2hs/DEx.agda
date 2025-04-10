@@ -1,4 +1,4 @@
-module DExpanded2 where
+module DEx where
 
 open import Haskell.Prelude
 
@@ -32,31 +32,14 @@ data Map (A B : Set) : Set where
 Value = Map AssetClass Integer
 --Value = List (AssetClass × Integer)
 
-addSingleton : (AssetClass × Integer) -> Value -> Value
-addSingleton (ac , val) (MkMap []) = MkMap ((ac , val) ∷ [])
-addSingleton (ac , val) (MkMap ((ac' , val') ∷ vs)) = {!!}
-
-addValueAux : List (AssetClass × Integer) -> List (AssetClass × Integer) -> List (AssetClass × Integer)
-addValueAux [] [] = []
-addValueAux [] (v ∷ vs) = v ∷ vs
-addValueAux (v ∷ vs) [] = v ∷ vs
-addValueAux v1@((ac , val) ∷ xs) v2@((ac' , val') ∷ ys)
-  = if (ac == ac') then (ac , val + val') ∷ (addValueAux xs ys)
-                   else (if (ac < ac') then (ac , val) ∷ (addValueAux xs v2)
-                                       else (ac' , val') ∷ (addValueAux v1 ys))
-
 addValue : Value -> Value -> Value
-addValue (MkMap v1) (MkMap v2) = MkMap (addValueAux v1 v2)
-
-
-{-
 addValue (MkMap []) (MkMap []) = MkMap []
 addValue (MkMap []) (MkMap (v ∷ vs)) = MkMap (v ∷ vs)
 addValue (MkMap (v ∷ vs)) (MkMap []) = MkMap (v ∷ vs)
 addValue (MkMap ((ac , val) ∷ xs)) (MkMap ((ac' , val') ∷ ys)) 
   = if (ac == ac') then addValue (MkMap xs) (MkMap ((ac , val + val') ∷ ys)) --MkMap ((ac , val + val') ∷ (addValue ? ?))
                    else if (ac < ac') then {!!} --MkMap (ac , val) ∷ (addValue xs v2)
-                                       else {!!} --MkMap (ac' , val') ∷ (addValue v1 ys)) -}
+                                       else {!!} --MkMap (ac' , val') ∷ (addValue v1 ys)) 
 {-
 addValue : Value -> Value -> Value
 addValue [] [] = []
@@ -184,13 +167,12 @@ open TxOut public
 
 record ScriptContext : Set where
     field
-        txOutputs    : List TxOut
-        inputVal     : Value
-        inputAddr    : Address 
-        signature    : PubKeyHash
-   --     purpose      : ScriptPurpose
-        inputRef     : TxOutRef
-        mint         : Value
+        txOutputs   : List TxOut
+        inputVal    : Value
+        signature   : PubKeyHash
+        purpose     : ScriptPurpose
+        inputRef    : TxOutRef
+        mint        : Value
         
         
 open ScriptContext public
@@ -217,9 +199,7 @@ open Params public
 {-# COMPILE AGDA2HS Params #-}
 
 getContinuingOutputs : ScriptContext -> List TxOut
-getContinuingOutputs = {!!}
-
-{-record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = []
+getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = []
 getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint } = if adr == txOutAddress txO
   then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint })
   else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint })
@@ -227,7 +207,7 @@ getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; signature =
 getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Both adr t) ; inputRef = inputRef ; mint = mint } = if adr == txOutAddress txO
   then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint })
   else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint })
-getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = []-}
+getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = []
 
 {-record { txOutputs = [] ; inputVal = inputVal ; inputAc = inputAc
                             ; signature = signature ; purpose = (Spending x) }
