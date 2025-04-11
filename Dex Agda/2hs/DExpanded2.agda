@@ -32,9 +32,10 @@ data Map (A B : Set) : Set where
 Value = Map AssetClass Integer
 --Value = List (AssetClass × Integer)
 
+{-
 addSingleton : (AssetClass × Integer) -> Value -> Value
 addSingleton (ac , val) (MkMap []) = MkMap ((ac , val) ∷ [])
-addSingleton (ac , val) (MkMap ((ac' , val') ∷ vs)) = {!!}
+addSingleton (ac , val) (MkMap ((ac' , val') ∷ vs)) = {!!}-}
 
 addValueAux : List (AssetClass × Integer) -> List (AssetClass × Integer) -> List (AssetClass × Integer)
 addValueAux [] [] = []
@@ -74,17 +75,26 @@ addValue a b = case currency a == currency b of λ where
   False -> a
 -}
 
-{-
+
 eqValue : Value -> Value -> Bool
-eqValue a b = (amount a == amount b) &&
-              (currency a == currency b) -}
+eqValue (MkMap v1) (MkMap v2) = v1 == v2
+
+ltVal : Value -> Value -> Bool
+ltVal (MkMap v1) (MkMap v2) = v1 < v2 
 
 instance
---  iEqValue : Eq Value
---  iEqValue ._==_ = eqValue
+  iEqValue : Eq Value
+  iEqValue ._==_ = eqValue
   
   iSemigroupValue : Semigroup Value
   iSemigroupValue ._<>_ = addValue
+
+  iOrdFromLessThanValue : OrdFromLessThan Value
+  iOrdFromLessThanValue .OrdFromLessThan._<_ = ltVal
+
+  iOrdVal : Ord Value
+  iOrdVal = record
+    { OrdFromLessThan iOrdFromLessThanValue }
 
 
 record Rational : Set where
@@ -167,11 +177,13 @@ instance
   iEqDatum : Eq OutputDatum
   iEqDatum ._==_ = eqDatum
 
+{-
 data ScriptPurpose : Set where
 
   Spending : Address -> ScriptPurpose
   Minting : AssetClass -> ScriptPurpose
   Both : Address -> AssetClass -> ScriptPurpose
+-}
 
 record TxOut : Set where
   field
@@ -190,7 +202,9 @@ record ScriptContext : Set where
         signature    : PubKeyHash
    --     purpose      : ScriptPurpose
         inputRef     : TxOutRef
+        selfAc       : AssetClass
         mint         : Value
+        
         
         
 open ScriptContext public
@@ -201,7 +215,7 @@ checkSigned sig ctx = sig == signature ctx
 
 
 data Input : Set where
-  Update   : Integer -> Rational -> Input
+  Update   : Value -> Rational -> Input
   Exchange : Integer -> PubKeyHash -> Input
   Close    : Input
 
@@ -217,7 +231,11 @@ open Params public
 {-# COMPILE AGDA2HS Params #-}
 
 getContinuingOutputs : ScriptContext -> List TxOut
-getContinuingOutputs = {!!}
+getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } = []
+getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }
+  = if txOutAddress txO == inputAddr
+         then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
+         else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
 
 {-record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = []
 getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint } = if adr == txOutAddress txO
@@ -246,16 +264,24 @@ getContinuingOutputs record { txOutputs = txOutputs ; inputVal = inputVal ; inpu
 
 
 
+valueOfAc : Value -> AssetClass -> Integer
+valueOfAc (MkMap []) ac = 0
+valueOfAc (MkMap ((ac' , amt) ∷ vs)) ac = if ac' == ac then amt else valueOfAc (MkMap vs) ac
 
 ownOutput : AssetClass -> ScriptContext -> TxOut
-ownOutput tok ctx = {!!}
+ownOutput tok ctx = aux tok (getContinuingOutputs ctx)
+  where
+  aux : AssetClass -> List TxOut -> TxOut
+  aux tok [] = record { txOutAddress = 0 ; txOutValue = MkMap [] ; txOutDatum = Payment 0 }
+  aux tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then txO else aux tok txOs
 
 {-case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
   _ -> record { txOutAddress = 0 ; txOutValue = [] ; txOutDatum = Payment 0 }-}
 
 --record { txOutAddress = 0 ; txOutValue = record { amount = -1 ; currency = 0 } ; txOutDatum = Payment 0 }
-{-
+
+
 
 oldValue : ScriptContext -> Value
 oldValue ctx = inputVal ctx
@@ -270,16 +296,16 @@ newDatum tok ctx = case txOutDatum (ownOutput tok ctx) of λ where
 newValue : AssetClass -> ScriptContext -> Value
 newValue tok ctx = txOutValue (ownOutput tok ctx)
 
-aux : List TxOut -> Bool
-aux txs = case txs of λ {
-  (o ∷ []) -> True ;
-  _ -> False }
-
-continuing : ScriptContext -> Bool
-continuing ctx = aux (getContinuingOutputs ctx)
+continuing : AssetClass -> ScriptContext -> Bool
+continuing ac ctx = aux ac (getContinuingOutputs ctx)
+  where
+  aux : AssetClass -> List TxOut -> Bool
+  aux tok [] = False
+  aux tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then True else aux tok txOs 
   
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)
+
 
 
 {-
@@ -302,29 +328,40 @@ getPaymentOutput adr record { txOutputs = txOutputs ; inputVal = inputVal ; inpu
            ; txOutDatum = Script (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }) }-}
 -}
 
-aux' : ScriptPurpose -> Address
-aux' p = case p of λ where
-  (Minting cs) -> 0
-  (Spending adr) -> adr
-  (Both adr cs) -> adr
+--aux' : ScriptPurpose -> Address
+--aux' p = case p of λ where
+--  (Minting cs) -> 0
+--  (Spending adr) -> adr
+--  (Both adr cs) -> adr
 
-getSelf : ScriptContext -> Address
-getSelf ctx = aux' (purpose ctx) 
+--getSelf : ScriptContext -> Address
+--getSelf ctx = aux' (purpose ctx) 
+
 
 processPayment : AssetClass -> Integer -> Rational -> Value -> Bool
-processPayment ac amt r [] = False
-processPayment ac amt r ((ac' , amt') ∷ vs)
+processPayment ac amt r (MkMap []) = False
+processPayment ac amt r (MkMap ((ac' , amt') ∷ vs))
   = if ac == ac'
   then ratioCompare amt amt' r
-  else processPayment ac amt r vs
+  else processPayment ac amt r (MkMap vs)
+
+getOutputsAtAddr : Address -> ScriptContext -> List TxOut
+getOutputsAtAddr adr record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } = []
+getOutputsAtAddr adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }
+  = if txOutAddress txO == adr
+    then txO ∷ getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
+    else getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt l record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = False
+checkPayment par amt l ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && processPayment (buyC par) amt (ratio l) (txOutValue txO)) (getOutputsAtAddr (owner l) ctx)
+
+
+{-par amt l record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = False
 checkPayment par amt l record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint }
   = if txOutAddress txO == (owner l) && txOutDatum txO == (Payment x)
     then processPayment (buyC par) amt (ratio l) (txOutValue txO)
     else checkPayment par amt l (record { txOutputs = (txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint })
-checkPayment par amt l record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = False
+checkPayment par amt l record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = False-}
 
 
 {-txOutAddress (getPaymentOutput (owner l) ctx) == owner l &&
@@ -338,19 +375,28 @@ e                                 --ratioCompare amt (amount (txOutValue (getPay
 
 
 processBuyer : AssetClass -> Integer -> Value -> Bool
-processBuyer ac amt [] = False
-processBuyer ac amt ((ac' , amt') ∷ vs)
+processBuyer ac amt (MkMap []) = False
+processBuyer ac amt (MkMap ((ac' , amt') ∷ vs))
   = if ac == ac'
   then amt == amt'
-  else processBuyer ac amt vs
+  else processBuyer ac amt (MkMap vs)
+
+pubKeyHashAddress : PubKeyHash -> Address
+pubKeyHashAddress pkh = pkh
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = False
+checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
+
+-- processBuyer (sellC par) amt (txOutValue txO)
+
+--checkPayment par amt l ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && processPayment (buyC par) amt (ratio l) (txOutValu--e txO)) (getOutputsAtAddr (owner l) ctx)
+
+{-par amt pkh record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = False
 checkBuyer par amt pkh record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint }
   = if txOutAddress txO == pkh && txOutDatum txO == (Payment x)
     then processBuyer (sellC par) amt (txOutValue txO) 
     else checkBuyer par amt pkh (record { txOutputs = (txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint })
-checkBuyer par amt pkh record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = False
+checkBuyer par amt pkh record { txOutputs = txOutputs ; inputVal = inputVal ; signature = signature ; purpose = (Minting x) ; inputRef = inputRef ; mint = mint } = False-}
 {-
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
@@ -363,70 +409,86 @@ checkBuyer par amt pkh ctx = txOutAddress (getPaymentOutput pkh ctx) == pkh &&
 
 
 checkTokenIn : AssetClass -> ScriptContext -> Bool
-checkTokenIn tok record { txOutputs = txOutputs ; inputVal = [] ; signature = signature ; purpose = purpose ; inputRef = inputRef ; mint = mint } = False
+checkTokenIn tok ctx = valueOfAc (inputVal ctx) tok == 1
+
+{-record { txOutputs = txOutputs ; inputVal = [] ; signature = signature ; purpose = purpose ; inputRef = inputRef ; mint = mint } = False
 checkTokenIn tok record { txOutputs = txOutputs ; inputVal = ((ac , amt) ∷ inputVal) ; signature = signature ; purpose = purpose ; inputRef = inputRef ; mint = mint } = if tok == ac then amt == 1
-  else checkTokenIn tok record { txOutputs = txOutputs ; inputVal = (inputVal) ; signature = signature ; purpose = purpose ; inputRef = inputRef ; mint = mint } 
+  else checkTokenIn tok record { txOutputs = txOutputs ; inputVal = (inputVal) ; signature = signature ; purpose = purpose ; inputRef = inputRef ; mint = mint } -}
 
 checkTokenOut : AssetClass -> ScriptContext -> Bool
-checkTokenOut tok ctx = {!!} --hasTokenOut ctx
+checkTokenOut tok ctx = valueOfAc (txOutValue (ownOutput tok ctx)) tok == 1
+
+--updateValue 
+
+ada : AssetClass
+ada = 0
+
+minValue : Value
+minValue = MkMap ((ada , 2) ∷ [])
+
+checkValue : Value -> Bool
+checkValue v = v >= minValue
 
 agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
 agdaValidator par (tok , l) red ctx = checkTokenIn tok ctx &&
                                       (case red of λ where
-  (Update amt r) -> checkSigned (owner l) ctx &&
-                    checkRational r &&
-                    --newValue ctx == record { amount = amt ; currency = sellC par } && 
+  (Update v r) -> checkSigned (owner l) ctx &&
+                    checkRational r && checkValue v &&
+                    newValue tok ctx == v && --record { amount = amt ; currency = sellC par } && 
                     newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l })) &&
-                    continuing ctx
-  (Exchange amt pkh) -> oldValue ctx == addValue {-!!!-} (newValue tok ctx) (((sellC par) , amt) ∷ []) && 
+                    continuing tok ctx && checkTokenOut tok ctx
+  (Exchange amt pkh) -> oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []) && 
                         newDatum tok ctx == (tok , l) &&
                         checkPayment par amt l ctx && checkBuyer par amt pkh ctx &&
-                        continuing ctx
-  Close -> not (continuing ctx) &&
+                        continuing tok ctx && checkTokenOut tok ctx
+  Close -> not (continuing tok ctx) &&
            checkSigned (owner l) ctx)
 --record { amount = amt ; currency = sellC par }
+--(((sellC par) , amt) ∷ [])
 
 {-# COMPILE AGDA2HS agdaValidator #-} 
 
 
-getMintedAmount : ScriptContext -> Integer
-getMintedAmount ctx = {!!} --mint ctx 
+getMintedAmount : AssetClass -> ScriptContext -> Integer
+getMintedAmount tok ctx = valueOfAc (mint ctx) tok
 
 consumes : TxOutRef -> ScriptContext -> Bool
 consumes oref ctx = oref == inputRef ctx
 
-ownAssetClass : ScriptContext -> AssetClass
-ownAssetClass ctx = {!!} --tokAssetClass ctx
+--ownAssetClass : ScriptContext -> AssetClass
+--ownAssetClass ctx = {!!} --tokAssetClass ctx
 
-checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = {!!}
-{-case (newDatum tok ctx) of λ where
-  (tok , _) -> ownAssetClass ctx == tok
-  (tok , _) -> False-}
+checkDatum : AssetClass -> Address -> ScriptContext -> Bool
+checkDatum tok addr ctx = case (newDatum tok ctx) of λ where
+  (tok , l) → checkRational (ratio l)
 
-checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = {!!} --hasTokenOut ctx
 
-isInitial : Address -> TxOutRef -> ScriptContext -> Bool
-isInitial addr oref ctx = consumes oref ctx &&
-                          checkDatum addr ctx &&
-                          checkValue addr ctx
 
-continuingAddr : Address -> ScriptContext -> Bool
-continuingAddr addr ctx = True --continues ctx
+checkToken : AssetClass -> Address -> ScriptContext -> Bool
+checkToken tok addr ctx = valueOfAc (txOutValue (ownOutput tok ctx)) tok == 1
+
+--hasTokenOut ctx
+
+isInitial : AssetClass -> Address -> TxOutRef -> ScriptContext -> Bool
+isInitial tok addr oref ctx = consumes oref ctx &&
+                          checkDatum tok addr ctx &&
+                          checkToken tok addr ctx
+
+continuingAddr : AssetClass -> Address -> ScriptContext -> Bool
+continuingAddr tok addr ctx = continuing tok ctx
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
-  if      amt == 1  then continuingAddr addr ctx &&
-                         isInitial addr oref ctx 
-  else if amt == -1 then not (continuingAddr addr ctx)
+  if      amt == 1  then continuingAddr (selfAc ctx) addr ctx &&
+                         isInitial (selfAc ctx) addr oref ctx 
+  else if amt == -1 then not (continuingAddr (selfAc ctx) addr ctx)
   else False
   where
-    amt = getMintedAmount ctx
+    amt = getMintedAmount (selfAc ctx) ctx
 
 {-# COMPILE AGDA2HS agdaPolicy #-}
 
-
+{-
 
 
 {-

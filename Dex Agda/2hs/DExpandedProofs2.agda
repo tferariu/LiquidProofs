@@ -31,7 +31,7 @@ open import Haskell.Prelude using (lookup ; _<>_)
 
 module DExpandedProofs2 where
 
-
+{-
 record Context : Set where
   field
     value         : Value  
@@ -44,56 +44,75 @@ record Context : Set where
     tsig          : PubKeyHash -- List?
     self          : Address
 open Context
+-}
 
 -- More structure? Optional ones?
 
 record State : Set where
   field
-    label         : Label    -- datum
-    context       : Context
+    datum         : Datum    -- datum
+    value         : Value  
+    payVal        : Value
+    payTo         : PubKeyHash
+    payDat        : OutputDatum -- Flat bits we need instead of nested strucutre
+    buyVal        : Value
+    buyTo         : PubKeyHash
+    buyDat        : OutputDatum
+    tsig          : PubKeyHash -- List?
+    self          : Address
     continues     : Bool -- move to Context, because from context
+    spends        : TxOutRef
+ --   hasToken      : Bool
+    mint          : Integer
+    token         : AssetClass
 open State
 
 
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
-  TUpdate : ∀ {amt r s s' par lab}
-    -> label s ≡ lab
-    -> owner lab ≡  tsig (context s')
-    -> value (context s') ≡ record { amount = amt ; currency = sellC par }
-    -> label s' ≡ (record { ratio = r ; owner = owner lab })
+  TUpdate : ∀ {v r s s' par l tok}
+    -> datum s ≡ (tok , l)
+    -> owner l ≡  tsig s'
+    -> value s' ≡ v --record { amount = amt ; currency = sellC par }
+    -> datum s' ≡ (tok , (record { ratio = r ; owner = owner l })) --(record { ratio = r ; owner = owner lab })
     -> checkRational r ≡ true -- automate this maybe?
+    -> (v >= minValue) ≡ true
     -> continues s ≡ true
     -> continues s' ≡ true
+    -> valueOfAc (value s) tok ≡ 1
+    -> valueOfAc (value s') tok ≡ 1
     -------------------
-    -> par ⊢ s ~[ (Update amt r) ]~> s'
+    -> par ⊢ s ~[ (Update v r) ]~> s'
 
 {-
  amt - going out to the user in SellC
  payval - going out to owner in BuyC
 -}
 
-  TExchange : ∀ {amt pkh s s' par lab}
-    -> value (context s) ≡ (value (context s')) <> record { amount = amt ; currency = sellC par }
-    -> label s' ≡ label s
-    -> label s ≡ lab --??
-    -> payTo (context s') ≡ (owner lab)
-    -> amt * num (ratio lab) ≤ (amount (payVal (context s'))) * den (ratio lab) -- >
-    -> currency (payVal (context s')) ≡ buyC par  -- factor these 2 out in 1 function
-    -> payDat (context s') ≡ Payment (self (context s'))
-    -> buyTo  (context s') ≡ pkh 
-    -> buyVal (context s') ≡ record { amount = amt ; currency = sellC par }
-    -> buyDat (context s') ≡ Payment (self (context s'))
+  TExchange : ∀ {amt pkh s s' par tok l}
+    -> value s ≡ value s' <> MkMap (((sellC par) , amt) ∷ []) --record { amount = amt ; currency = sellC par }
+    -> datum s ≡ datum s'
+    -> datum s ≡ (tok , l) --??
+    -> payTo s' ≡ owner l
+    -> amt * num (ratio l) ≤ valueOfAc (payVal s') (buyC par) * den (ratio l) --(amount (payVal (context s'))) * den (ratio lab) -- >
+   -- -> {!!} --currency (payVal (context s')) ≡ buyC par  -- factor these 2 out in 1 function
+    -> payDat s' ≡ Payment (self s)
+    -> buyTo  s' ≡ pkh 
+    -> buyVal s' ≡ MkMap (((sellC par) , amt) ∷ []) --record { amount = amt ; currency = sellC par }
+    -> buyDat s' ≡ Payment (self s')
     -> continues s ≡ true
     -> continues s' ≡ true
+    -> valueOfAc (value s) tok ≡ 1
+    -> valueOfAc (value s') tok ≡ 1
     -------------------
     -> par ⊢ s ~[ (Exchange amt pkh) ]~> s'
 
-  TClose : ∀ {s s' par lab}
-    -> label s ≡ lab --??
-    -> owner lab ≡ tsig (context s')
+  TClose : ∀ {s s' par tok l}
+    -> datum s ≡ (tok , l) --??
+    -> owner l ≡ tsig s'
     -> continues s ≡ true
     -> continues s' ≡ false
+    -> valueOfAc (value s) tok ≡ 1
     -------------------
     -> par ⊢ s ~[ Close ]~> s'
 
@@ -107,7 +126,7 @@ data ValidS : State -> Set where
     -> ValidS s
 
   Oth : ∀ {s}
-    -> checkRational (ratio (label s)) ≡ true -- label s fix
+    -> checkRational (ratio (snd (datum s))) ≡ true -- label s fix
     ----------------
     -> ValidS s
 
@@ -129,7 +148,7 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 get⊥ : true ≡ false -> ⊥
 get⊥ ()
 
-
+{-
 selfContinuing : ∀ {s s' : State} {i par}
   -> i ≢ Close
   -> par ⊢ s ~[ i ]~> s'
@@ -647,6 +666,7 @@ prop3 {par} {l} {amt} {pkh} {ctx} p = {!!}
 
 -}
 
+-}
 
 ---------------------------------------------------------------------------------
 --old
