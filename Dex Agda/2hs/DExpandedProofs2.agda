@@ -63,10 +63,11 @@ record State : Set where
     continues     : Bool -- move to Context, because from context
     spends        : TxOutRef
  --   hasToken      : Bool
-    mint          : Integer
+    mint          : Value
     token         : AssetClass
 open State
 
+--minada???
 
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
@@ -148,21 +149,21 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 get⊥ : true ≡ false -> ⊥
 get⊥ ()
 
-{-
+
 selfContinuing : ∀ {s s' : State} {i par}
   -> i ≢ Close
   -> par ⊢ s ~[ i ]~> s'
   -> continues s' ≡ true
-selfContinuing pf (TUpdate p1 p2 p3 p4 p5 p6 p7) = p7
-selfContinuing pf (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = p12
-selfContinuing pf (TClose p1 p2 p3 p4) = ⊥-elim (pf refl)
+selfContinuing pf (TUpdate x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉) = x₇
+selfContinuing pf (TExchange x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁ x₁₂) = x₁₀
+selfContinuing pf (TClose x x₁ x₂ x₃ x₄) = ⊥-elim (pf refl)
 
-
+{-
 noDoubleSatOut : ∀ {s s' : State} {i par amt pkh}
   -> i ≡ Exchange amt pkh
   -> par ⊢ s ~[ i ]~> s'
   -> (payDat (context s') ≡ Payment (self (context s')) × buyDat (context s') ≡ Payment (self (context s')))
-noDoubleSatOut refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)
+noDoubleSatOut refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)-}
 
 
 --State Validity Invariant
@@ -170,10 +171,15 @@ validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
   -> ValidS s'
-validStateTransition {record { label = .( (record { ratio = ratio₁ ; owner = tsig context })) ; context = context₁ ; continues = .true }} {record { label = .( (record { ratio = _ ; owner = tsig context })) ; context = context ; continues = .true }} iv (TUpdate {lab = record { ratio = ratio₁ ; owner = .(tsig context) }} refl refl refl refl p5 refl refl) = Oth p5
+validStateTransition {s' = record { datum = fst₁ , snd₁ ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; payDat = payDat₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; buyDat = buyDat₁ ; tsig = tsig₁ ; self = self₁ ; continues = continues₁ ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} iv (TUpdate x x₁ x₂ refl x₄ x₅ x₆ x₇ x₈ x₉) = Oth x₄
+validStateTransition {record { datum = datum₁ ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; payDat = payDat₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; buyDat = buyDat₁ ; tsig = tsig₁ ; self = self₁ ; continues = .false ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} (Stp refl) (TExchange x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁ x₁₂) = ⊥-elim (get⊥ (sym x₉))
+validStateTransition (Oth b) (TExchange x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁ x₁₂) rewrite x₁ = Oth b
+validStateTransition iv (TClose x x₁ x₂ x₃ x₄) = Stp x₃
+
+{-{record { label = .( (record { ratio = ratio₁ ; owner = tsig context })) ; context = context₁ ; continues = .true }} {record { label = .( (record { ratio = _ ; owner = tsig context })) ; context = context ; continues = .true }} iv (TUpdate {lab = record { ratio = ratio₁ ; owner = .(tsig context) }} refl refl refl refl p5 refl refl) = Oth p5
 validStateTransition (Stp x) (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) rewrite x = ⊥-elim (get⊥ (sym p11))
 validStateTransition (Oth y) (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) rewrite sym p2 = Oth y
-validStateTransition iv (TClose p1 p2 p3 p4) = Stp p4
+validStateTransition iv (TClose p1 p2 p3 p4) = Stp p4-}
 
 
 validStateMulti : ∀ {s s' : State} {is par}
@@ -182,6 +188,7 @@ validStateMulti : ∀ {s s' : State} {is par}
   -> ValidS s'
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
+
 
 --include minAda
 --closeLiquidity -> value ≡ 0
@@ -193,11 +200,33 @@ validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 --because we learned MinAda problems with previous Liquidity proof
 
 liquidity : ∀ (par : Params) (s : State) --(pkh : PubKeyHash) 
-          -> ValidS s -> continues s ≡ true
-          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (amount (value (context s')) ≡ 0) )
+          -> ValidS s -> continues s ≡ true -> valueOfAc (value s) (fst (datum s)) ≡ + 1
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × value s' ≡ MkMap [] ) --(amount (value (context s')) ≡ 0)
+liquidity par s (Stp x) p1 p2 rewrite p1 = ⊥-elim (get⊥ x)
+liquidity par record { datum = (tok , record { ratio = r ; owner = o }) ; value = value ; payVal = payVal ; payTo = payTo ; payDat = payDat ; buyVal = buyVal ; buyTo = buyTo ; buyDat = buyDat ; tsig = tsig ; self = self ; continues = continues ; spends = spends ; mint = mint ; token = token } (Oth x) p1 p2
+  = ⟨ s' , ⟨ Close ∷ [] , (cons (TClose refl refl p1 refl p2) root , refl) ⟩ ⟩ --⟨ s' , ⟨ Close ∷ [] , ? , refl ⟩ ⟩
+  where
+  s' : State
+  s' = record
+        { datum = tok , (record { ratio = r ; owner = o })
+        ; value = MkMap []
+        ; payVal = MkMap []
+        ; payTo = zero
+        ; payDat = Payment 0
+        ; buyVal = MkMap []
+        ; buyTo = zero
+        ; buyDat = Payment 0
+        ; tsig = o
+        ; self = zero
+        ; continues = false
+        ; spends = zero
+        ; mint = MkMap []
+        ; token = tok
+        }
+{-
 liquidity par s (Stp x) p2 rewrite p2 = ⊥-elim (get⊥ x)
 liquidity par record { label = lab ; context = context ; continues = continues } (Oth y) p2 = ⟨ s' , ⟨  Close ∷ [] , (cons (TClose refl refl p2 refl ) root , refl) ⟩ ⟩
-  where
+  where   --(tok , record { ratio = r ; owner = o })
     s' = record { label = (record { ratio = ratio lab ; owner = owner lab }) ;
                   context = record
                              { value = record { amount = 0 ; currency = sellC par }
@@ -210,10 +239,10 @@ liquidity par record { label = lab ; context = context ; continues = continues }
                              ; tsig = owner lab
                              ; self = self context
                              } ;
-                  continues = false } 
+                  continues = false } -}
 
 
-
+{-
 go : ∀ (a : Bool) {b} -> (a && b) ≡ true -> b ≡ true
 go true {b} pf = pf
 

@@ -306,7 +306,17 @@ continuing ac ctx = aux ac (getContinuingOutputs ctx)
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)
 
+ada : AssetClass
+ada = 0
 
+minValue : Value
+minValue = MkMap ((ada , 2) ∷ [])
+
+checkValue : Value -> Bool
+checkValue v = v >= minValue
+
+checkMinValue : Value -> Bool
+checkMinValue v = (valueOfAc v ada) >= 2
 
 {-
 getPaymentOutput : Address -> ScriptContext -> TxOut
@@ -353,7 +363,7 @@ getOutputsAtAddr adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = input
     else getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt l ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && processPayment (buyC par) amt (ratio l) (txOutValue txO)) (getOutputsAtAddr (owner l) ctx)
+checkPayment par amt l ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && processPayment (buyC par) amt (ratio l) (txOutValue txO) && checkMinValue(txOutValue txO)) (getOutputsAtAddr (owner l) ctx)
 
 
 {-par amt l record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = False
@@ -385,7 +395,7 @@ pubKeyHashAddress : PubKeyHash -> Address
 pubKeyHashAddress pkh = pkh
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
+checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue(txOutValue txO)) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
 
 -- processBuyer (sellC par) amt (txOutValue txO)
 
@@ -420,20 +430,13 @@ checkTokenOut tok ctx = valueOfAc (txOutValue (ownOutput tok ctx)) tok == 1
 
 --updateValue 
 
-ada : AssetClass
-ada = 0
 
-minValue : Value
-minValue = MkMap ((ada , 2) ∷ [])
-
-checkValue : Value -> Bool
-checkValue v = v >= minValue
 
 agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
 agdaValidator par (tok , l) red ctx = checkTokenIn tok ctx &&
                                       (case red of λ where
   (Update v r) -> checkSigned (owner l) ctx &&
-                    checkRational r && checkValue v &&
+                    checkRational r && checkMinValue v &&
                     newValue tok ctx == v && --record { amount = amt ; currency = sellC par } && 
                     newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l })) &&
                     continuing tok ctx && checkTokenOut tok ctx
