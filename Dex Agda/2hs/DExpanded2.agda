@@ -395,7 +395,7 @@ pubKeyHashAddress : PubKeyHash -> Address
 pubKeyHashAddress pkh = pkh
 
 checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue(txOutValue txO)) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
+checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
 
 -- processBuyer (sellC par) amt (txOutValue txO)
 
