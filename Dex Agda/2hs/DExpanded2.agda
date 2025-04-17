@@ -230,12 +230,20 @@ open Params public
 
 {-# COMPILE AGDA2HS Params #-}
 
+outputsAtAddress : Address -> List TxOut -> List TxOut
+outputsAtAddress adr [] = []
+outputsAtAddress adr (txO ∷ txOs)
+  = if txOutAddress txO == adr then txO ∷ outputsAtAddress adr txOs
+                               else outputsAtAddress adr txOs
+
 getContinuingOutputs : ScriptContext -> List TxOut
-getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } = []
+getContinuingOutputs ctx = outputsAtAddress (inputAddr ctx) (txOutputs ctx)
+
+{-getContinuingOutputs record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } = []
 getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }
   = if txOutAddress txO == inputAddr
          then txO ∷ getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
-         else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
+         else getContinuingOutputs (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })-}
 
 {-record { txOutputs = [] ; inputVal = inputVal ; signature = signature ; purpose = (Spending x) ; inputRef = inputRef ; mint = mint } = []
 getContinuingOutputs record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; signature = signature ; purpose = (Spending adr) ; inputRef = inputRef ; mint = mint } = if adr == txOutAddress txO
@@ -268,12 +276,13 @@ valueOfAc : Value -> AssetClass -> Integer
 valueOfAc (MkMap []) ac = 0
 valueOfAc (MkMap ((ac' , amt) ∷ vs)) ac = if ac' == ac then amt else valueOfAc (MkMap vs) ac
 
+ownOutput' : AssetClass -> List TxOut -> TxOut
+ownOutput' tok [] = record { txOutAddress = 0 ; txOutValue = MkMap [] ; txOutDatum = Payment 0 }
+ownOutput' tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then txO else ownOutput' tok txOs
+
 ownOutput : AssetClass -> ScriptContext -> TxOut
-ownOutput tok ctx = aux tok (getContinuingOutputs ctx)
-  where
-  aux : AssetClass -> List TxOut -> TxOut
-  aux tok [] = record { txOutAddress = 0 ; txOutValue = MkMap [] ; txOutDatum = Payment 0 }
-  aux tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then txO else aux tok txOs
+ownOutput tok ctx = ownOutput' tok (getContinuingOutputs ctx)
+
 
 {-case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
@@ -296,12 +305,13 @@ newDatum tok ctx = case txOutDatum (ownOutput tok ctx) of λ where
 newValue : AssetClass -> ScriptContext -> Value
 newValue tok ctx = txOutValue (ownOutput tok ctx)
 
+continuing' : AssetClass -> List TxOut -> Bool
+continuing' tok [] = False
+continuing' tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then True else continuing' tok txOs 
+
 continuing : AssetClass -> ScriptContext -> Bool
-continuing ac ctx = aux ac (getContinuingOutputs ctx)
-  where
-  aux : AssetClass -> List TxOut -> Bool
-  aux tok [] = False
-  aux tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then True else aux tok txOs 
+continuing ac ctx = continuing' ac (getContinuingOutputs ctx)
+
   
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)
@@ -356,11 +366,13 @@ processPayment ac amt r (MkMap ((ac' , amt') ∷ vs))
   else processPayment ac amt r (MkMap vs)
 
 getOutputsAtAddr : Address -> ScriptContext -> List TxOut
+getOutputsAtAddr adr ctx = outputsAtAddress adr (txOutputs ctx)
+{-
 getOutputsAtAddr adr record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } = []
 getOutputsAtAddr adr record { txOutputs = (txO ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }
   = if txOutAddress txO == adr
     then txO ∷ getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
-    else getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })
+    else getOutputsAtAddr adr (record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint })-}
 
 checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
 checkPayment par amt l ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && processPayment (buyC par) amt (ratio l) (txOutValue txO) && checkMinValue(txOutValue txO)) (getOutputsAtAddr (owner l) ctx)
@@ -440,6 +452,10 @@ agdaValidator par (tok , l) red ctx = checkTokenIn tok ctx &&
                     newValue tok ctx == v && --record { amount = amt ; currency = sellC par } && 
                     newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l })) &&
                     continuing tok ctx && checkTokenOut tok ctx
+
+--continuing : AssetClass -> ScriptContext -> Bool
+--continuing ac ctx = continuing' ac (getContinuingOutputs ctx)
+
   (Exchange amt pkh) -> oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []) && 
                         newDatum tok ctx == (tok , l) &&
                         checkPayment par amt l ctx && checkBuyer par amt pkh ctx &&
@@ -455,22 +471,20 @@ agdaValidator par (tok , l) red ctx = checkTokenIn tok ctx &&
 getMintedAmount : AssetClass -> ScriptContext -> Integer
 getMintedAmount tok ctx = valueOfAc (mint ctx) tok
 
+{-
 consumes : TxOutRef -> ScriptContext -> Bool
 consumes oref ctx = oref == inputRef ctx
 
 --ownAssetClass : ScriptContext -> AssetClass
 --ownAssetClass ctx = {!!} --tokAssetClass ctx
 
+
 checkDatum : AssetClass -> Address -> ScriptContext -> Bool
 checkDatum tok addr ctx = case (newDatum tok ctx) of λ where
   (tok , l) → checkRational (ratio l)
 
-
-
 checkToken : AssetClass -> Address -> ScriptContext -> Bool
 checkToken tok addr ctx = valueOfAc (txOutValue (ownOutput tok ctx)) tok == 1
-
---hasTokenOut ctx
 
 isInitial : AssetClass -> Address -> TxOutRef -> ScriptContext -> Bool
 isInitial tok addr oref ctx = consumes oref ctx &&
@@ -479,17 +493,46 @@ isInitial tok addr oref ctx = consumes oref ctx &&
 
 continuingAddr : AssetClass -> Address -> ScriptContext -> Bool
 continuingAddr tok addr ctx = continuing tok ctx
+-}
+{-
+continuingAddr (selfAc ctx) addr ctx &&
+                         isInitial (selfAc ctx) addr oref ctx
+
+not (continuingAddr (selfAc ctx) addr ctx)
+
+{-
+mintOutput : TxOut
+
+checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
+checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr ctx) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (getOutputsAtAddr (pubKeyHashAddress pkh) ctx)
+-}
+-}
+
+
+checkDatum : AssetClass -> TxOut -> Bool
+checkDatum tok txO = case (txOutDatum txO) of λ where
+  (Payment a) → False
+  (Script (tok' , l)) -> tok == tok' && checkRational (ratio l)
+
+checkMint : Address -> TxOutRef -> ScriptContext -> Bool
+checkMint adr oref ctx
+  = any (λ txO -> checkDatum (selfAc ctx) txO &&
+    valueOfAc (txOutValue txO) (selfAc ctx) == 1 && inputRef ctx == oref) (getOutputsAtAddr adr ctx)
+
+checkBurn : Address -> ScriptContext -> Bool
+checkBurn adr ctx = all (λ txO -> valueOfAc (txOutValue txO) (selfAc ctx) == 0) (getOutputsAtAddr adr ctx)
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
-  if      amt == 1  then continuingAddr (selfAc ctx) addr ctx &&
-                         isInitial (selfAc ctx) addr oref ctx 
-  else if amt == -1 then not (continuingAddr (selfAc ctx) addr ctx)
+  if      amt == 1  then checkMint addr oref ctx
+  else if amt == -1 then checkBurn addr ctx
   else False
   where
     amt = getMintedAmount (selfAc ctx) ctx
 
 {-# COMPILE AGDA2HS agdaPolicy #-}
+
+
 
 {-
 

@@ -1,3 +1,5 @@
+--{-# OPTIONS --inversion-max-depth=500 #-}
+
 open import DExpanded2
 
 open import Agda.Builtin.Char
@@ -70,42 +72,68 @@ open State
 
 --minada???
 
+
+
+{-
+gco≡oad : ∀ {ctx : ScriptContext} -> getContinuingOutputs ctx ≡ outputsAtAddress (inputAddr ctx) (txOutputs ctx)
+gco≡oad = refl
+
+--continuingImpliesContinues : ∀ {tok ctx} -> continuing tok ctx ≡ true
+--  -> (continues tok (inputAddr ctx) (txOutputs ctx)) ≡ true
+
 continues : AssetClass -> Address -> List TxOut -> Bool
 continues ac adr [] = false
 continues ac adr (txO ∷ txOs)
-  = if txOutAddress txO == adr && valueOfAc (txOutValue txO) ac == 1
+  = if valueOfAc (txOutValue txO) ac == 1
        then true
        else continues ac adr txOs
+-}
 
-checkPayment' : Params -> Integer -> PubKeyHash -> Address -> Rational -> List TxOut -> Bool
-checkPayment' par amt pkh adr r [] = false
-checkPayment' par amt pkh adr r (txO ∷ txOs)
-  = if txOutAddress txO == pkh && txOutDatum txO == Payment adr &&
-       processPayment (buyC par) amt r (txOutValue txO) && checkMinValue (txOutValue txO)
-     then true
-     else checkPayment' par amt pkh adr r txOs
-     
-checkBuyer' : Params -> Integer -> PubKeyHash -> Address -> List TxOut -> Bool
-checkBuyer' par amt pkh adr [] = false
-checkBuyer' par amt pkh adr (txO ∷ txOs)
-  = if txOutAddress txO == pkh && txOutDatum txO == Payment adr &&
-       valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)
-     then true
-     else checkBuyer' par amt pkh adr txOs
+
+
+record MParams : Set where
+    field
+        address   : Address
+        outputRef : TxOutRef 
+open MParams public
+
+                           {-
+                           record ScriptContext : Set where
+    field
+        txOutputs    : List TxOut
+        inputVal     : Value
+        inputAddr    : Address 
+        signature    : PubKeyHash
+   --     purpose      : ScriptPurpose
+        inputRef     : TxOutRef
+        selfAc       : AssetClass
+        mint         : Value       
+-}
+
+data _⊢_ : MParams -> State -> Set where
+
+  TStart : ∀ {par s}
+    -> valueOfAc (mint s) (token s) ≡ 1 --MkMap (((token s) , + 1) ∷ [])
+    -> token s ≡ fst (datum s)
+    -> checkRational (ratio (snd (datum s))) ≡ true
+    -> valueOfAc (value s) (token s) ≡ 1
+    -> outputRef par ≡ spends s
+    -------------------
+    -> par ⊢ s
+
 
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TUpdate : ∀ {v r s s' par}
---    -> datum s ≡ (tok , l)
     -> owner (snd (datum s)) ≡  tsig s'
     -> value s' ≡ v --record { amount = amt ; currency = sellC par }
     -> datum s' ≡ ((fst (datum s)) , (record { ratio = r ; owner = owner (snd (datum s)) })) 
     -> checkRational r ≡ true -- automate this maybe?
     -> checkMinValue v ≡ true
-    -> continues (fst (datum s)) (self s) (outputs s) ≡ true
-    -> continues (fst (datum s')) (self s') (outputs s') ≡ true
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s')) ≡ true
     -> valueOfAc (value s) (fst (datum s)) ≡ 1
-    -> valueOfAc (value s') (fst (datum s')) ≡ 1
+    -> valueOfAc (value s') (fst (datum s)) ≡ 1
     -------------------
     -> par ⊢ s ~[ (Update v r) ]~> s'
 
@@ -125,35 +153,57 @@ data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
 -}
 
 
+{-
+checkPayment' : Params -> Integer -> PubKeyHash -> Address -> Rational -> List TxOut -> Bool
+checkPayment' par amt pkh adr r [] = false
+checkPayment' par amt pkh adr r (txO ∷ txOs)
+  = if txOutAddress txO == pkh && txOutDatum txO == Payment adr &&
+       processPayment (buyC par) amt r (txOutValue txO) && checkMinValue (txOutValue txO)
+     then true
+     else checkPayment' par amt pkh adr r txOs
+     
+checkBuyer' : Params -> Integer -> PubKeyHash -> Address -> List TxOut -> Bool
+checkBuyer' par amt pkh adr [] = false
+checkBuyer' par amt pkh adr (txO ∷ txOs)
+  = if txOutAddress txO == pkh && txOutDatum txO == Payment adr &&
+       valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)
+     then true
+     else checkBuyer' par amt pkh adr txOs
+
+-}
 
   TExchange : ∀ {amt pkh s s' par}
     -> value s ≡ value s' <> MkMap (((sellC par) , amt) ∷ []) --record { amount = amt ; currency = sellC par }
     -> datum s ≡ datum s'
 --    -> datum s ≡ (tok , l) --??
-    -> checkPayment' par amt (owner (snd (datum s))) (self s) (ratio (snd (datum s))) (outputs s)≡ true
-    -> checkBuyer' par amt pkh (self s) (outputs s) ≡ true
-    -> continues (fst (datum s)) (self s) (outputs s) ≡ true
-    -> continues (fst (datum s)) (self s') (outputs s') ≡ true
+--    -> checkPayment' par amt (owner (snd (datum s))) (self s) (ratio (snd (datum s))) (outputs s)≡ true
+--    -> checkBuyer' par amt pkh (self s) (outputs s) ≡ true
+    -> true ≡ true
+    -> true ≡ true
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s')) ≡ true
     -> valueOfAc (value s) (fst (datum s)) ≡ 1
     -> valueOfAc (value s') (fst (datum s)) ≡ 1
     -------------------
     -> par ⊢ s ~[ (Exchange amt pkh) ]~> s'
 
+
+data _⊢_~[_]~|_ : Params -> State -> Input -> State -> Set where
+
   TClose : ∀ {s s' par}
- --   -> datum s ≡ (tok , l) --??
     -> owner (snd (datum s)) ≡ tsig s'
-    -> continues (fst (datum s)) (self s) (outputs s) ≡ true
-    -> continues (fst (datum s')) (self s') (outputs s') ≡ false
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
+    -> continuing' (fst (datum s')) (outputsAtAddress (self s') (outputs s')) ≡ false
     -> valueOfAc (value s) (fst (datum s)) ≡ 1
     -------------------
-    -> par ⊢ s ~[ Close ]~> s'
+    -> par ⊢ s ~[ Close ]~| s'
 
 
 --Valid State
 data ValidS : State -> Set where
 
   Stp : ∀ {s}
-    -> continues (fst (datum s)) (self s) (outputs s) ≡ false
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ false
     ----------------
     -> ValidS s
 
@@ -172,6 +222,12 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
 
   cons : ∀ { par s s' s'' i is }
     -> par ⊢ s ~[ i ]~> s'
+    -> par ⊢ s' ~[ is ]~* s''
+    -------------------------
+    -> par ⊢ s ~[ (i ∷ is) ]~* s''
+
+  fin : ∀ { par s s' s'' i is }
+    -> par ⊢ s ~[ i ]~| s'
     -> par ⊢ s' ~[ is ]~* s''
     -------------------------
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
@@ -198,6 +254,11 @@ noDoubleSatOut refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p
 
 
 --State Validity Invariant
+validStateInitial : ∀ {s par}
+  -> par ⊢ s
+  -> ValidS s
+validStateInitial (TStart p1 p2 p3 p4 p5) = Oth p3 
+
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
@@ -205,7 +266,15 @@ validStateTransition : ∀ {s s' : State} {i par}
 validStateTransition {s} {record { datum = .(fst (datum s) , record { ratio = _ ; owner = owner (snd (datum s)) }) ; value = value₁ ; outputs = outputs₁ ; tsig = tsig₁ ; self = self₁ ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} iv (TUpdate x x₁ refl x₃ x₄ x₅ x₆ x₇ x₈) = Oth x₃
 validStateTransition (Stp a) (TExchange x x₁ x₂ x₃ x₄ x₅ x₆ x₇) rewrite a = ⊥-elim (get⊥ (sym x₄))
 validStateTransition {s} {record { datum = .(datum s) ; value = value₁ ; outputs = outputs₁ ; tsig = tsig₁ ; self = self₁ ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} (Oth b) (TExchange x refl x₂ x₃ x₄ x₅ x₆ x₇) = Oth b
-validStateTransition iv (TClose x x₁ x₂ x₃) = Stp x₂ --Stp {!!}
+
+validStateFinal : ∀ {s s' : State} {i par}
+  -> ValidS s
+  -> par ⊢ s ~[ i ]~| s'
+  -> ValidS s'
+validStateFinal iv (TClose p1 p2 p3 p4) = Stp p3 --p3
+
+
+--validStateTransition iv (TClose x x₁ x₂ x₃) = Stp x₂ --Stp {!!}
 
 {-{s' = record { datum = fst₁ , snd₁ ; value = value₁ ; payVal = payVal₁ ; payDat = payDat₁ ; buyVal = buyVal₁ ; buyDat = buyDat₁ ; tsig = tsig₁ ; self = self₁ ; continues = continues₁ ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} iv (TUpdate x x₁ x₂ refl x₄ x₅ x₆ x₇ x₈ x₉) = Oth x₄
 validStateTransition {record { datum = datum₁ ; value = value₁ ; payVal = payVal₁ ; payDat = payDat₁ ; buyVal = buyVal₁ ; buyDat = buyDat₁ ; tsig = tsig₁ ; self = self₁ ; continues = .false ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} (Stp refl) (TExchange x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀) = ⊥-elim (get⊥ (sym x₇))
@@ -224,6 +293,7 @@ validStateMulti : ∀ {s s' : State} {is par}
   -> ValidS s'
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
+validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x
 
 
 --include minAda
@@ -236,11 +306,11 @@ validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 --because we learned MinAda problems with previous Liquidity proof
 
 liquidity : ∀ (par : Params) (s : State) --(pkh : PubKeyHash) 
-          -> ValidS s -> continues (fst (datum s)) (self s) (outputs s) ≡ true
+          -> ValidS s -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
           -> valueOfAc (value s) (fst (datum s)) ≡ + 1
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × value s' ≡ MkMap [] ) --(amount (value (context s')) ≡ 0)
 liquidity par s (Stp x) p1 p2 rewrite p1 = ⊥-elim (get⊥ x)
-liquidity par s (Oth x) p1 p2 = ⟨ s' , ⟨ Close ∷ [] , (cons (TClose refl p1 refl p2) root , refl) ⟩ ⟩
+liquidity par s (Oth x) p1 p2 = ⟨ s' , ⟨ Close ∷ [] , (fin (TClose refl p1 refl p2) root , refl) ⟩ ⟩
   where
   s' : State
   s' = record
@@ -428,6 +498,9 @@ getBuyOutDat l Close ctx = Payment 0 -}
 ==vto≡ : {a b : Value} -> (a == b) ≡ true -> a ≡ b
 ==vto≡ {MkMap x} {MkMap y} p = cong MkMap (==v'to≡ p)
 
+==dto≡ : {a b : Datum} -> (a == b) ≡ true -> a ≡ b
+==dto≡ {tok , l} {tok' , l'} p rewrite ==to≡ {tok} {tok'} (get p) | ==lto≡ l l' (go (tok == tok') p) = refl
+
 {-{record { amount = a1 ; currency = c1 }} {record { amount = a2 ; currency = c2 }} p
   rewrite (==ito≡ {a1} {a2} (get p)) | (==to≡ {c1} {c2} (go (a1 == a2) p)) = refl-}
 
@@ -484,17 +557,61 @@ rewriteDatEq : ∀ {dat ctx} -> ∃[ adr ] (purpose ctx ≡ Spending adr × dat 
 rewriteDatEq {dat} {record { txOutputs = txOutputs₁ ; inputVal = inputVal₁ ; inputAc = inputAc₁ ; signature = signature₁ ; purpose = .(Spending adr) }} ⟨ adr , (refl , p2) ⟩ = p2
 -}
 
+{-
+continues : AssetClass -> Address -> List TxOut -> Bool
+continues ac adr [] = false
+continues ac adr (txO ∷ txOs)
+  = if txOutAddress txO == adr && valueOfAc (txOutValue txO) ac == 1
+       then true
+       else continues ac adr txOs
 
 
+    -> continues (fst (datum s)) (self s) (outputs s) ≡ true-}
+
+{-
+continuingImpliesContinues : ∀ {tok ctx} -> continuing tok ctx ≡ true
+  -> (continuing' tok (inputAddr ctx) (outputsAtAddress (inputAddr ctx) (txOutputs ctx))) ≡ true
+continuingImpliesContinues {tok} {record { txOutputs = [] ; inputVal = inputVal₁ ; inputAddr = inputAddr₁ ; signature = signature₁ ; inputRef = inputRef₁ ; selfAc = selfAc₁ ; mint = mint₁ }} p = p
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ txOutputs ; inputVal = inputVal₁ ; inputAddr = inputAddr ; signature = signature₁ ; inputRef = inputRef₁ ; selfAc = selfAc₁ ; mint = mint₁ }} p with txOutAddress x == inputAddr
+...| false = {!!}
+...| true = {!!}
+
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 with txOutAddress x == inputAddr
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | false = p1
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | true with (valueOfAc (txOutValue x) tok) == (+ 1)
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | true | false = p1
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | true | true = refl
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ y ∷ txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 with txOutAddress x == inputAddr
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ y ∷ txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | false = {!!}
+continuingImpliesContinues {tok} {record { txOutputs = x ∷ y ∷ txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint }} p1 | true = {!!}-}
+
+
+≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
+≡to== {zero} refl = refl
+≡to== {suc a} refl = ≡to== {a} refl
+
+n=n : ∀ (n : Nat) -> (n == n) ≡ true
+n=n zero = refl
+n=n (suc n) = n=n n
+
+i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
+i=i (pos zero) = refl
+i=i (pos (suc n)) = n=n n 
+i=i (negsuc zero) = refl
+i=i (negsuc (suc n)) = n=n n 
+
+--continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {txOs sig spn mnt tok} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+validatorImpliesTransition : ∀ {txO sig spn mnt tok} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
                            -> i ≢ Close
+                           -> continuing' (fst d) (outputsAtAddress (inputAddr ctx) txO) ≡ true
                            -> (pf : agdaValidator par d i ctx ≡ true)
                            -> par ⊢ record
                                      { datum = d
                                      ; value = inputVal ctx
-                                     ; outputs = txOs
+                                     ; outputs = txO
+                                     --(record { txOutAddress = inputAddr ctx ; txOutValue = inputVal ctx ; txOutDatum = Script d }) ∷ [] --is this fine?
                                      ; tsig = sig
                                      ; self = inputAddr ctx
                                      ; spends = spn
@@ -502,18 +619,6 @@ validatorImpliesTransition : ∀ {txOs sig spn mnt tok} (par : Params) (d : Datu
                                      ; token = tok
                                      }
                            ~[ i ]~>
-                           {-
-                           record ScriptContext : Set where
-    field
-        txOutputs    : List TxOut
-        inputVal     : Value
-        inputAddr    : Address 
-        signature    : PubKeyHash
-   --     purpose      : ScriptPurpose
-        inputRef     : TxOutRef
-        selfAc       : AssetClass
-        mint         : Value       
--}
                            record
                             { datum = newDatum (fst d) ctx
                             ; value = newValue (fst d) ctx
@@ -527,8 +632,17 @@ validatorImpliesTransition : ∀ {txOs sig spn mnt tok} (par : Params) (d : Datu
                                     
 
 
-validatorImpliesTransition par d (Update x x₁) ctx p1 p2 = TUpdate {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}
-validatorImpliesTransition par d (Exchange x x₁) ctx p1 p2 = TExchange {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}
+validatorImpliesTransition par (tok , l) (Update v r) record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } p1 p2 p3 = ⊥-elim {!!}
+validatorImpliesTransition par (tok , l) (Update v r) ctx@record { txOutputs = (record { txOutAddress = txOutAddress ; txOutValue = txOutValue ; txOutDatum = txOutDatum } ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } p1 p2 p3
+  rewrite n=n inputAddr = TUpdate (==to≡ (get (go ((valueOfAc inputVal tok) == (+ 1)) p3)))
+  (==vto≡ (get (go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))))
+  (==dto≡ (get (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))))))
+  (get (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))
+  (get (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))
+  p2 (get (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))))))
+  (==ito≡ (get p3))
+  (==ito≡ (go (continuing tok ctx) (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))))))
+validatorImpliesTransition par d (Exchange amt pkh) ctx p1 p2 = {!!}
 validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 {-
 validatorImpliesTransition par l (Update val r) ctx pf
@@ -564,23 +678,26 @@ validatorImpliesTransition par l Close ctx pf
   = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
 
 
-≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
-≡to== {zero} refl = refl
-≡to== {suc a} refl = ≡to== {a} refl
-
-n=n : ∀ (n : Nat) -> (n == n) ≡ true
-n=n zero = refl
-n=n (suc n) = n=n n
+eqInteger
+             (valueOfAc
+              (TxOut.txOutValue
+               (ownOutput' tok
+                (if eqNat txOutAddress inputAddr then
+                 (λ ⦃ @0 _ ⦄ →
+                    record
+                    { txOutAddress = txOutAddress
+                    ; txOutValue = txOutValue
+                    ; txOutDatum = txOutDatum
+                    }
+                    ∷ outputsAtAddress inputAddr txOutputs)
+                 else (λ ⦃ @0 _ ⦄ → outputsAtAddress inputAddr txOutputs))))
+              tok)
+             (+ 1))
 
 ≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
 ≡to==i {pos n} refl = n=n n
 ≡to==i {negsuc n} refl = n=n n
 
-i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
-i=i (pos zero) = refl
-i=i (pos (suc n)) = n=n n 
-i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = n=n n 
 
 ≡to==l : ∀ {a b : Label} -> a ≡ b -> (a == b) ≡ true
 ≡to==l {record { ratio = ratio ; owner = owner }} refl

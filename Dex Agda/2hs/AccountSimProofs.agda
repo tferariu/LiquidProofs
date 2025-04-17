@@ -62,7 +62,7 @@ record MParams : Set where
         outputRef : TxOutRef 
 open MParams public
 
-data ⊢_ : State -> Set where
+data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s tok}
     -> datum s ≡ ( tok , [] )
@@ -72,7 +72,7 @@ data ⊢_ : State -> Set where
     -> token s ≡ tok
     -> hasToken s ≡ true
     -------------------
-    -> ⊢ s
+    -> par ⊢ s
 
 --Transition Rules
 data _~[_]~>_ : State -> Input -> State -> Set where
@@ -577,6 +577,19 @@ validatorImpliesTransition (tok , map) (Transfer from to val) ctx@record { input
 
 
 
+mintingImpliesStart : ∀ {s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> mint ctx ≡ 1
+                           -> (pf : agdaPolicy adr oref top ctx ≡ true)
+                           -> record {address = adr ; outputRef = oref } ⊢
+                           record { datum = outputDatum ctx ; value = outputVal ctx ;
+                           tsig = s ; continues = continues ctx ;
+                           spends = inputRef ctx ; hasToken = hasTokenOut ctx ; mint = mint ctx ; token = tokAssetClass ctx}
+mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = + 1 ; tokAssetClass = tokAssetClass } refl pf
+  rewrite ==to≡ tokAssetClass tok (get (get (go (oref == inputRef) (go continues pf)))) |
+  ==lto≡ l [] (go (tokAssetClass == tok) (get (go (oref == inputRef) (go continues pf))))
+  = TStart refl refl (get pf) (==to≡ oref inputRef (get (go continues pf))) refl
+  (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf)))
+
 l=l : ∀ (l : Label) -> (l == l) ≡ true
 l=l [] = refl
 l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
@@ -640,7 +653,13 @@ transitionImpliesValidator (tok , map) (Deposit pkh val) record { inputVal = inp
 transitionImpliesValidator (tok , map) (Transfer from to val) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TTransfer {vF = vF} {vT = vT} refl refl p3 p4 p5 p6 p7 refl refl p10 refl refl refl) rewrite p3 | p4 | ≤toGeq p5 | ≤toGeq p6 | ≢to/= from to p7 | n=n tok | i=i from | i=i inputVal | add≡ vT val | sub≡ vF val | l=l (insert from (vF + - val) (insert to (vT + val) map)) = refl
 
 
-
+startImpliesMinting : ∀ {s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> record {address = adr ; outputRef = oref } ⊢
+                           record { datum = outputDatum ctx ; value = outputVal ctx ;
+                           tsig = s ; continues = continues ctx ;
+                           spends = inputRef ctx ; hasToken = hasTokenOut ctx ; mint = mint ctx ; token = tokAssetClass ctx}
+                           -> agdaPolicy adr oref top ctx ≡ true
+startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl refl refl) rewrite n=n oref | n=n tok = refl
 
 lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
                    -> s  ~[ is  ]~* s'
