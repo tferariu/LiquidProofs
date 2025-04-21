@@ -90,6 +90,13 @@ continues ac adr (txO ∷ txOs)
 -}
 
 
+checkPayment' : Params -> Integer -> State -> State -> Bool
+checkPayment' par amt s s' = any (λ txO -> txOutDatum txO == Payment (self s) && processPayment (buyC par) amt (ratio (snd (datum s))) (txOutValue txO) && checkMinValue(txOutValue txO)) (outputsAtAddress (self s) (outputs s')) 
+
+
+checkBuyer' : Params -> Integer -> PubKeyHash -> State -> State -> Bool
+checkBuyer' par amt pkh s s' = any (λ txO -> txOutDatum txO == Payment (self s) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (outputsAtAddress (self s) (outputs s'))
+
 
 record MParams : Set where
     field
@@ -172,14 +179,15 @@ checkBuyer' par amt pkh adr (txO ∷ txOs)
 
 -}
 
+
   TExchange : ∀ {amt pkh s s' par}
     -> value s ≡ value s' <> MkMap (((sellC par) , amt) ∷ []) --record { amount = amt ; currency = sellC par }
     -> datum s ≡ datum s'
 --    -> datum s ≡ (tok , l) --??
 --    -> checkPayment' par amt (owner (snd (datum s))) (self s) (ratio (snd (datum s))) (outputs s)≡ true
 --    -> checkBuyer' par amt pkh (self s) (outputs s) ≡ true
-    -> true ≡ true
-    -> true ≡ true
+    -> checkPayment' par amt s s' ≡ true
+    -> checkBuyer' par amt pkh s s' ≡ true
     -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
     -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s')) ≡ true
     -> valueOfAc (value s) (fst (datum s)) ≡ 1
@@ -642,7 +650,7 @@ validatorImpliesTransition par (tok , l) (Update v r) ctx@record { txOutputs = (
   p2 (get (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))))))
   (==ito≡ (get p3))
   (==ito≡ (go (continuing tok ctx) (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))))))
-validatorImpliesTransition par d (Exchange amt pkh) ctx p1 p2 = {!!}
+validatorImpliesTransition par d (Exchange amt pkh) ctx p1 p2 p3 = TExchange {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}
 validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 {-
 validatorImpliesTransition par l (Update val r) ctx pf
