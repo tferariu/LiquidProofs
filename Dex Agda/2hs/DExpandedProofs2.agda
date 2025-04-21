@@ -29,6 +29,7 @@ open import Haskell.Prim.Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup ; _<>_)
+import Haskell.Prim.Foldable as Fold
 
 
 module DExpandedProofs2 where
@@ -90,13 +91,25 @@ continues ac adr (txO ∷ txOs)
 -}
 
 
-checkPayment' : Params -> Integer -> State -> State -> Bool
-checkPayment' par amt s s' = any (λ txO -> txOutDatum txO == Payment (self s) && processPayment (buyC par) amt (ratio (snd (datum s))) (txOutValue txO) && checkMinValue(txOutValue txO)) (outputsAtAddress (self s) (outputs s')) 
+checkPayment' : Params -> Integer -> Label -> State -> State -> Bool
+checkPayment' par amt l s s' = any (λ txO -> txOutDatum txO == Payment (self s) && processPayment (buyC par) amt (ratio (snd (datum s))) (txOutValue txO) && checkMinValue(txOutValue txO)) (outputsAtAddress (owner l) (outputs s')) 
 
 
 checkBuyer' : Params -> Integer -> PubKeyHash -> State -> State -> Bool
-checkBuyer' par amt pkh s s' = any (λ txO -> txOutDatum txO == Payment (self s) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (outputsAtAddress (self s) (outputs s'))
+checkBuyer' par amt pkh s s' = any (λ txO -> txOutDatum txO == Payment (self s) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (outputsAtAddress pkh (outputs s'))
 
+
+anyToAny : ∀ (f : TxOut -> Bool) (m : List TxOut) -> Fold.any f m ≡ any f m
+anyToAny f [] = refl
+anyToAny f (x ∷ m) with (f x)
+...| true = refl
+...| false = anyToAny f m
+
+anyToAny' : ∀ {f : TxOut -> Bool} {m : List TxOut} -> Fold.any f m ≡ true -> any f m ≡ true
+anyToAny' {f} {[]} p = p --refl
+anyToAny' {f} {(x ∷ m)} p with (f x)
+...| true = refl
+...| false = anyToAny' {f} {m} p 
 
 record MParams : Set where
     field
@@ -182,11 +195,11 @@ checkBuyer' par amt pkh adr (txO ∷ txOs)
 
   TExchange : ∀ {amt pkh s s' par}
     -> value s ≡ value s' <> MkMap (((sellC par) , amt) ∷ []) --record { amount = amt ; currency = sellC par }
-    -> datum s ≡ datum s'
+    -> datum s' ≡ datum s
 --    -> datum s ≡ (tok , l) --??
 --    -> checkPayment' par amt (owner (snd (datum s))) (self s) (ratio (snd (datum s))) (outputs s)≡ true
 --    -> checkBuyer' par amt pkh (self s) (outputs s) ≡ true
-    -> checkPayment' par amt s s' ≡ true
+    -> checkPayment' par amt (snd (datum s)) s s' ≡ true
     -> checkBuyer' par amt pkh s s' ≡ true
     -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
     -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s')) ≡ true
@@ -608,6 +621,7 @@ i=i (pos (suc n)) = n=n n
 i=i (negsuc zero) = refl
 i=i (negsuc (suc n)) = n=n n 
 
+
 --continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
 
 --Validator returning true implies transition relation is inhabited
@@ -650,9 +664,41 @@ validatorImpliesTransition par (tok , l) (Update v r) ctx@record { txOutputs = (
   p2 (get (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3))))))))
   (==ito≡ (get p3))
   (==ito≡ (go (continuing tok ctx) (go (newDatum tok ctx == (tok , (record { ratio = r ; owner = owner l }))) (go (newValue tok ctx == v) ((go (checkMinValue v) (go (checkRational r) (go (owner l == signature) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))))))
-validatorImpliesTransition par d (Exchange amt pkh) ctx p1 p2 p3 = TExchange {!!} {!!} {!!} {!!} {!!} {!!} {!!} {!!}
+validatorImpliesTransition par (tok , l) (Exchange amt pkh) ctx@record { txOutputs = [] ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } p1 p2 p3 = ⊥-elim {!!}
+validatorImpliesTransition par (tok , l) (Exchange amt pkh) ctx@record { txOutputs = (x ∷ txOutputs) ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } p1 p2 p3
+  = TExchange (==vto≡ (get (go ((valueOfAc inputVal tok) == (+ 1)) p3)))
+    (==dto≡ (get (go (oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []))
+    (go ((valueOfAc inputVal tok) == (+ 1)) p3))))
+    (anyToAny' { λ txO → txOutDatum txO == Payment inputAddr && processPayment (buyC par) amt (ratio l) (txOutValue txO) && checkMinValue(txOutValue txO) }
+    { outputsAtAddress (owner l) (x ∷ txOutputs) }
+    (get (go (newDatum tok ctx == (tok , l)) (go (oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []))
+    (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))
+    (anyToAny' {λ txO → txOutDatum txO == Payment inputAddr && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue(txOutValue txO)}
+    { outputsAtAddress pkh (x ∷ txOutputs) } (get (go (checkPayment par amt l ctx) ((go (newDatum tok ctx == (tok , l))
+    (go (oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ [])) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))))
+    p2 (get (go (checkBuyer par amt pkh ctx) (go (checkPayment par amt l ctx) (go (newDatum tok ctx == (tok , l))
+    (go (oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []))
+    (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))) (==ito≡ (get p3)) (==ito≡ (go (continuing tok ctx)
+    (go (checkBuyer par amt pkh ctx) (go (checkPayment par amt l ctx) (go (newDatum tok ctx == (tok , l))
+    (go (oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ [])) (go ((valueOfAc inputVal tok) == (+ 1)) p3)))))))
 validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 {-
+
+checkBuyer' : Params -> Integer -> PubKeyHash -> State -> State -> Bool
+checkBuyer' par amt pkh s s' = any (λ txO -> txOutDatum txO == Payment (self s) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (outputsAtAddress (self s) (outputs s'))
+ (Exchange amt pkh) -> oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []) && 
+                        newDatum tok ctx == (tok , l) &&
+                        checkPayment par amt l ctx && checkBuyer par amt pkh ctx &&
+                        continuing tok ctx && checkTokenOut tok ctx
+
+  (Exchange amt pkh) -> oldValue ctx == (newValue tok ctx) <> MkMap (((sellC par) , amt) ∷ []) && 
+                        newDatum tok ctx == (tok , l) &&
+                        checkPayment par amt l ctx && checkBuyer par amt pkh ctx &&
+                        continuing tok ctx && checkTokenOut tok ctx
+
+
+
+--(==vto≡ (go ((valueOfAc inputVal tok) == (+ 1)) (get {!p3!})))
 validatorImpliesTransition par l (Update val r) ctx pf
   = TUpdate refl (==to≡ (get pf)) (==vto≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
   ((==lto≡ (newLabel ctx) (record { ratio = r ; owner = owner l }) (get (go
@@ -686,21 +732,6 @@ validatorImpliesTransition par l Close ctx pf
   = TClose refl (==to≡ (go (not (continuing ctx)) pf)) refl (unNot (get pf))
 
 
-eqInteger
-             (valueOfAc
-              (TxOut.txOutValue
-               (ownOutput' tok
-                (if eqNat txOutAddress inputAddr then
-                 (λ ⦃ @0 _ ⦄ →
-                    record
-                    { txOutAddress = txOutAddress
-                    ; txOutValue = txOutValue
-                    ; txOutDatum = txOutDatum
-                    }
-                    ∷ outputsAtAddress inputAddr txOutputs)
-                 else (λ ⦃ @0 _ ⦄ → outputsAtAddress inputAddr txOutputs))))
-              tok)
-             (+ 1))
 
 ≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
 ≡to==i {pos n} refl = n=n n
