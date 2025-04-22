@@ -276,14 +276,6 @@ valueOfAc : Value -> AssetClass -> Integer
 valueOfAc (MkMap []) ac = 0
 valueOfAc (MkMap ((ac' , amt) ∷ vs)) ac = if ac' == ac then amt else valueOfAc (MkMap vs) ac
 
-ownOutput' : AssetClass -> List TxOut -> TxOut
-ownOutput' tok [] = record { txOutAddress = 0 ; txOutValue = MkMap [] ; txOutDatum = Payment 0 }
-ownOutput' tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then txO else ownOutput' tok txOs
-
-ownOutput : AssetClass -> ScriptContext -> TxOut
-ownOutput tok ctx = ownOutput' tok (getContinuingOutputs ctx)
-
-
 {-case (getContinuingOutputs ctx) of λ where
   (o ∷ []) -> o
   _ -> record { txOutAddress = 0 ; txOutValue = [] ; txOutDatum = Payment 0 }-}
@@ -295,11 +287,22 @@ ownOutput tok ctx = ownOutput' tok (getContinuingOutputs ctx)
 oldValue : ScriptContext -> Value
 oldValue ctx = inputVal ctx
 
-newDatum : AssetClass -> ScriptContext -> Datum
-newDatum tok ctx = case txOutDatum (ownOutput tok ctx) of λ where
+ownOutput' : AssetClass -> List TxOut -> TxOut
+ownOutput' tok [] = record { txOutAddress = 0 ; txOutValue = MkMap [] ; txOutDatum = Payment 0 }
+ownOutput' tok (txO ∷ txOs) = if valueOfAc (txOutValue txO) tok == 1 then txO else ownOutput' tok txOs
+
+ownOutput : AssetClass -> ScriptContext -> TxOut
+ownOutput tok ctx = ownOutput' tok (getContinuingOutputs ctx)
+
+
+newDatum' : AssetClass -> TxOut -> Datum
+newDatum' tok txO = case (txOutDatum txO) of λ where
   (Script x) -> x
   _ -> 0 , (record { ratio = record { num = 0 ; den = 0 } ; owner = 0 })
 
+
+newDatum : AssetClass -> ScriptContext -> Datum
+newDatum tok ctx = newDatum' tok (ownOutput tok ctx)
 --record { ratio = record { num = 0 ; den = 0 } ; owner = 0 }
 
 newValue : AssetClass -> ScriptContext -> Value
@@ -524,7 +527,8 @@ checkBurn adr ctx = all (λ txO -> valueOfAc (txOutValue txO) (selfAc ctx) == 0)
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
-  if      amt == 1  then checkMint addr oref ctx
+  if      amt == 1  then checkMint addr oref ctx &&
+                         True --newDatum
   else if amt == -1 then checkBurn addr ctx
   else False
   where
