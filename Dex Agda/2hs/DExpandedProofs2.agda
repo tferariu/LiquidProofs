@@ -103,9 +103,10 @@ checkPayment' par amt l s s' = any (λ txO -> txOutDatum txO == Payment (self s)
 checkBuyer' : Params -> Integer -> PubKeyHash -> State -> State -> Bool
 checkBuyer' par amt pkh s s' = any (λ txO -> txOutDatum txO == Payment (self s) && valueOfAc (txOutValue txO) (sellC par) == amt && checkMinValue (txOutValue txO)) (outputsAtAddress pkh (outputs s'))
 
+{-
 checkMint' : MParams -> State -> Bool
 checkMint' par s = any (λ txO -> checkDatum (token s) txO && valueOfAc (txOutValue txO) (token s) == 1 && spends s == outputRef par) (outputsAtAddress (address par) (outputs s))
-
+-}
 
 anyToAny : ∀ (f : TxOut -> Bool) (m : List TxOut) -> Fold.any f m ≡ any f m
 anyToAny f [] = refl
@@ -136,40 +137,34 @@ anyToAny' {f} {(x ∷ m)} p with (f x)
 
 
 {-
+checkDatum : AssetClass -> Datum -> Bool
+checkDatum tok (tok' , l) = tok == tok' && checkRational (ratio l)
 
-checkDatum : AssetClass -> TxOut -> Bool
-checkDatum tok txO = case (txOutDatum txO) of λ where
-  (Payment a) → False
-  (Script (tok' , l)) -> tok == tok' && checkRational (ratio l)
+checkDatum (selfAc ctx) (mintDatum (selfAc ctx) addr ctx) &&
+                         valueOfAc (mintValue (selfAc ctx) addr ctx) (selfAc ctx) == 1 &&
+                         inputRef ctx == oref
 
-checkMint : Address -> TxOutRef -> ScriptContext -> Bool
-checkMint adr oref ctx
-  = any (λ txO -> checkDatum (selfAc ctx) txO &&
-    valueOfAc (txOutValue txO) (selfAc ctx) == 1 && inputRef ctx == oref) (getOutputsAtAddr adr ctx)
-
-checkBurn : Address -> ScriptContext -> Bool
-checkBurn adr ctx = all (λ txO -> valueOfAc (txOutValue txO) (selfAc ctx) == 0) (getOutputsAtAddr adr ctx)
-
-agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr oref _ ctx =
-  if      amt == 1  then checkMint addr oref ctx
-  else if amt == -1 then checkBurn addr ctx
-  else False
-  where
-    amt = getMintedAmount (selfAc ctx) ctx
+    -> checkDatum (token s) (newDatum' (token s) (ownOutput' (token s) (outputsAtAddress (address par) (outputs s)))) ≡ true
+    -> valueOfAc (txOutValue (ownOutput' (token s) (outputsAtAddress (address par) (outputs s)))) (token s) ≡ 1
 -}
 
 data _⊢_ : MParams -> State -> Set where
 
-  TStart : ∀ {par r o s}
-    -> checkMint' par s ≡ true
-    -> valueOfAc (mint s) (token s) ≡ 1
-    -> datum s ≡ ((token s) , record { ratio = r ; owner = o })
-    -> checkRational r ≡ true
+  TStart : ∀ {par  s}
+  --  -> true ≡ true --checkMint' par s ≡ true
+  --  -> datum s ≡ ((token s) , record { ratio = r ; owner = o })
+  --  -> checkRational r ≡ true
+    
+    -> valueOfAc (mint s) (token s) ≡ + 1
+    -> checkDatum (token s) (datum s) ≡ true
+    -> valueOfAc (value s) (token s) ≡ + 1
+    -> spends s ≡ outputRef par 
     -------------------
     -> par ⊢ s
 
-
+{-
+ any (λ txO -> checkDatum (token s) txO && valueOfAc (txOutValue txO) (token s) == 1 && spends s == outputRef par) (outputsAtAddress (address par) (outputs s))
+-}
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
   TUpdate : ∀ {v r s s' par}
@@ -242,7 +237,7 @@ data _⊢_~[_]~|_ : Params -> State -> Input -> State -> Set where
   TClose : ∀ {s s' par}
     -> owner (snd (datum s)) ≡ tsig s'
     -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
-    -> continuing' (fst (datum s')) (outputsAtAddress (self s') (outputs s')) ≡ false
+    -> continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s')) ≡ false
     -> valueOfAc (value s) (fst (datum s)) ≡ 1
     -------------------
     -> par ⊢ s ~[ Close ]~| s'
@@ -301,12 +296,17 @@ noDoubleSatOut : ∀ {s s' : State} {i par amt pkh}
   -> (payDat (context s') ≡ Payment (self (context s')) × buyDat (context s') ≡ Payment (self (context s')))
 noDoubleSatOut refl (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) = (p7 , p10)-}
 
+go : ∀ (a : Bool) {b} -> (a && b) ≡ true -> b ≡ true
+go true {b} pf = pf
+
+get : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
+get {true} {true} pf = refl
 
 --State Validity Invariant
 validStateInitial : ∀ {s par}
   -> par ⊢ s
   -> ValidS s
-validStateInitial {record { datum = .(token₁ , record { ratio = _ ; owner = _ }) ; value = value₁ ; outputs = outputs₁ ; tsig = tsig₁ ; self = self₁ ; spends = spends₁ ; mint = mint₁ ; token = token₁ }} {par} (TStart p1 p2 refl p4) = Oth p4
+validStateInitial {record { datum = d ; value = value ; outputs = outputs₁ ; tsig = tsig₁ ; self = self₁ ; spends = spends₁ ; mint = mint₁ ; token = token }} {par} (TStart p1 p2 p3 p4) = Oth (go (token == d .fst) p2) --Oth p4
 --(TStart ) = Oth p3 
 
 validStateTransition : ∀ {s s' : State} {i par}
@@ -321,7 +321,7 @@ validStateFinal : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~| s'
   -> ValidS s'
-validStateFinal iv (TClose p1 p2 p3 p4) = Stp p3 --p3
+validStateFinal iv (TClose p1 p2 p3 p4) = Stp {!!} --p3 --p3 --p3- stopped?
 
 
 --validStateTransition iv (TClose x x₁ x₂ x₃) = Stp x₂ --Stp {!!}
@@ -412,11 +412,7 @@ liquidity par record { label = lab ; context = context ; continues = continues }
 
 
 
-go : ∀ (a : Bool) {b} -> (a && b) ≡ true -> b ≡ true
-go true {b} pf = pf
 
-get : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
-get {true} {true} pf = refl
 
 ==to≡ : ∀ {a b : Nat} -> (a == b) ≡ true -> a ≡ b
 ==to≡ {zero} {zero} p = refl
@@ -660,6 +656,12 @@ i=i (pos (suc n)) = n=n n
 i=i (negsuc zero) = refl
 i=i (negsuc (suc n)) = n=n n 
 
+l=l : ∀ (l : List (AssetClass × Int)) -> (l == l) ≡ true
+l=l [] = refl
+l=l (x ∷ xs) rewrite n=n (x . fst) | i=i (x .snd) = l=l xs
+
+v=v : ∀ (v : Value) -> (v == v) ≡ true
+v=v (MkMap l) = l=l l
 
 --continuing' (fst (datum s)) (outputsAtAddress (self s) (outputs s)) ≡ true
 
@@ -730,25 +732,54 @@ validatorImpliesTransition par (tok , l) (Exchange amt pkh) ctx@record { txOutpu
 validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 
 
+rewriteMint : ∀ {x y : Integer} {b : Bool} -> b ≡ true -> (if b then x else y) ≡ x
+rewriteMint refl = refl
+
 mintingImpliesStart : ∀ (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> mint ctx ≡ MkMap (((selfAc ctx) , 1) ∷ [])
                            -> (pf : agdaPolicy adr oref top ctx ≡ true)
                            -> record {address = adr ; outputRef = oref }
-                           ⊢ record
-                                { datum = newDatum (selfAc ctx) ctx 
-                                ; value = newValue (selfAc ctx) ctx 
+                            ⊢ record
+                                { datum = mintDatum (selfAc ctx) adr ctx 
+                                ; value = mintValue (selfAc ctx) adr ctx 
+                                ; outputs = txOutputs ctx
+                                ; tsig = signature ctx
+                                ; self = adr
+                                ; spends = inputRef ctx
+                                ; mint = mint ctx
+                                ; token = selfAc ctx }
+mintingImpliesStart adr oref top ctx@record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = .(MkMap ((selfAc , 1) ∷ [])) } refl p2 rewrite n=n selfAc = TStart (rewriteMint (n=n selfAc)) (get p2) (==ito≡ (get (go (checkDatum selfAc (mintDatum selfAc adr ctx)) p2))) (==to≡ (go (valueOfAc (mintValue selfAc adr ctx) selfAc == 1) (go (checkDatum selfAc (mintDatum selfAc adr ctx)) p2))) --TStart {!!} {!!} {!!} {!!} 
+
+
+notTo≡f : ∀ {b : Bool} -> (not b) ≡ true -> b ≡ false
+notTo≡f {false} pf = refl
+
+bothImplyClose : ∀ {txO sig spn mnt tok} (par : Params) (d : Datum) (i : Input) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> mint ctx ≡ MkMap (((selfAc ctx) , - 1) ∷ [])
+               -> continuing' (fst d) (outputsAtAddress (inputAddr ctx) txO) ≡ true
+               -> (p1 : agdaValidator par d Close ctx ≡ true)
+               -> (p2 : agdaPolicy adr oref top ctx ≡ true)
+               -> (par ⊢ record
+                                { datum = d 
+                                ; value = inputVal ctx
+                                ; outputs = txO
+                                ; tsig = sig
+                                ; self = inputAddr ctx
+                                ; spends = spn
+                                ; mint = mnt
+                                ; token = tok }
+               ~[ Close ]~|
+               record
+                                { datum = newDatum (fst d) ctx
+                                ; value = newValue (fst d) ctx 
                                 ; outputs = txOutputs ctx
                                 ; tsig = signature ctx
                                 ; self = inputAddr ctx
                                 ; spends = inputRef ctx
                                 ; mint = mint ctx
-                                ; token = selfAc ctx }
-mintingImpliesStart adr oref top record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = .(MkMap ((selfAc , 1) ∷ [])) } refl p2 rewrite n=n selfAc = TStart {!!} {!!} {!!} {!!} --TStart {!!} {!!} {!!} {!!} {!!}
---TStart {!!} {!!} {!!} {!!} {!!}
+                                ; token = selfAc ctx })
 
-
-
-
+bothImplyClose par d i adr oref top ctx@record { txOutputs = txOutputs ; inputVal = inputVal ; inputAddr = inputAddr ; signature = signature ; inputRef = inputRef ; selfAc = selfAc ; mint = mint } refl p1 p2 p3 rewrite n=n selfAc = TClose (==to≡ (go (not (continuing' (d .fst) (outputsAtAddress inputAddr txOutputs))) (go ((valueOfAc inputVal (d .fst)) == (+ 1)) p2))) p1 (notTo≡f (get (go ((valueOfAc inputVal (d .fst)) == (+ 1)) p2))) (==ito≡ (get p2))
 
 
 ≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
@@ -762,7 +793,8 @@ mintingImpliesStart adr oref top record { txOutputs = txOutputs ; inputVal = inp
 
 
 ≡to==v : ∀ {a b : Value} -> a ≡ b -> (a == b) ≡ true
-≡to==v {a} {b} = {!!} --refl rewrite i=i (amount a) | n=n (currency a) = refl
+≡to==v {a} {b} refl = v=v a
+--refl rewrite i=i (amount a) | n=n (currency a) = refl
 
 ≤to<= : ∀ {a b : Nat} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true
 ≤to<= {b = zero} N.z≤n = refl
@@ -776,7 +808,8 @@ mintingImpliesStart adr oref top record { txOutputs = txOutputs ; inputVal = inp
 
 ≡to==d : ∀ {a b : OutputDatum} -> a ≡ b -> (a == b) ≡ true
 ≡to==d {Payment x} refl rewrite n=n x = refl
-≡to==d {Script x} refl = {!!}
+≡to==d {Script x} refl rewrite n=n (x .fst) | i=i (num (ratio (x .snd)))
+  | i=i (den (ratio (x .snd))) | n=n (owner (x .snd)) = refl
 --rewrite n=n (owner x) | i=i (num (ratio x)) | i=i (den (ratio x)) = refl
 
 {-
