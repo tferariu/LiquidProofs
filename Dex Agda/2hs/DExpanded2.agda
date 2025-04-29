@@ -471,7 +471,8 @@ agdaValidator par (tok , l) red ctx = checkTokenIn tok ctx &&
 {-# COMPILE AGDA2HS agdaValidator #-} 
 
 
-
+getMintedAmount : AssetClass -> ScriptContext -> Integer
+getMintedAmount tok ctx = valueOfAc (mint ctx) tok
 
 {-
 consumes : TxOutRef -> ScriptContext -> Bool
@@ -510,30 +511,11 @@ checkBuyer par amt pkh ctx = any (λ txO -> txOutDatum txO == Payment (inputAddr
 -}
 -}
 
-getMintedAmount : AssetClass -> ScriptContext -> Integer
-getMintedAmount tok ctx = valueOfAc (mint ctx) tok
 
-
-mintOutput : AssetClass -> Address -> ScriptContext -> TxOut
-mintOutput tok addr ctx = ownOutput' tok (outputsAtAddress addr (txOutputs ctx))
-
-mintDatum : AssetClass -> Address -> ScriptContext -> Datum
-mintDatum tok addr ctx = newDatum' tok (mintOutput tok addr ctx)
-
-mintValue : AssetClass -> Address -> ScriptContext -> Value
-mintValue tok addr ctx = txOutValue (mintOutput tok addr ctx)
-
-checkDatum : AssetClass -> Datum -> Bool
-checkDatum tok (tok' , l) = tok == tok' && (checkRational (ratio l))
-  
-{-
 checkDatum : AssetClass -> TxOut -> Bool
 checkDatum tok txO = case (txOutDatum txO) of λ where
   (Payment a) → False
   (Script (tok' , l)) -> tok == tok' && checkRational (ratio l)
-
-checkMint addr oref ctx &&
-                         True --newDatum
 
 checkMint : Address -> TxOutRef -> ScriptContext -> Bool
 checkMint adr oref ctx
@@ -541,19 +523,13 @@ checkMint adr oref ctx
     valueOfAc (txOutValue txO) (selfAc ctx) == 1 && inputRef ctx == oref) (getOutputsAtAddr adr ctx)
 
 checkBurn : Address -> ScriptContext -> Bool
-checkBurn adr ctx = all (λ txO -> valueOfAc (txOutValue txO) (selfAc ctx) == 0) (getOutputsAtAddr adr ctx)-}
-
-
-
-stopping : AssetClass -> Address -> ScriptContext -> Bool
-stopping ac addr ctx = not (continuing' ac (outputsAtAddress addr (txOutputs ctx)))
+checkBurn adr ctx = all (λ txO -> valueOfAc (txOutValue txO) (selfAc ctx) == 0) (getOutputsAtAddr adr ctx)
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
-  if      amt == 1  then checkDatum (selfAc ctx) (mintDatum (selfAc ctx) addr ctx) &&
-                         valueOfAc (mintValue (selfAc ctx) addr ctx) (selfAc ctx) == 1 &&
-                         inputRef ctx == oref
-  else if amt == -1 then stopping (selfAc ctx) addr ctx
+  if      amt == 1  then checkMint addr oref ctx &&
+                         True --newDatum
+  else if amt == -1 then checkBurn addr ctx
   else False
   where
     amt = getMintedAmount (selfAc ctx) ctx
