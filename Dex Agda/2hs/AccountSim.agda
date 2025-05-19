@@ -16,16 +16,17 @@ AssetClass = Nat
 
 Label = List (PubKeyHash × Value)
 
-Datum = (AssetClass × Label)
+State = (AssetClass × Label)
 
 {-# COMPILE AGDA2HS Label #-}
+{-# COMPILE AGDA2HS State #-}
 
 
 record ScriptContext : Set where
     field
         inputVal      : Integer
         outputVal     : Integer
-        outputDatum   : Datum
+        outputDatum   : State
         signature     : PubKeyHash
         continues     : Bool
         inputRef      : TxOutRef
@@ -62,7 +63,7 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 
-newDatum : ScriptContext -> Datum
+newDatum : ScriptContext -> State
 newDatum ctx = outputDatum ctx
 
 newToken : ScriptContext -> AssetClass
@@ -142,7 +143,7 @@ checkTokenOut tok ctx = hasTokenOut ctx
 continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
-agdaValidator : Datum -> Input -> ScriptContext -> Bool
+agdaValidator : State -> Input -> ScriptContext -> Bool
 agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && checkTokenOut tok ctx && continuing ctx &&
                                     newToken ctx == tok && (case inp of λ where
 
@@ -189,6 +190,13 @@ isInitial addr oref ctx = consumes oref ctx &&
 
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = continues ctx
+
+{-# COMPILE AGDA2HS consumes #-}
+{-# COMPILE AGDA2HS checkDatum #-}
+{-# COMPILE AGDA2HS checkValue #-}
+{-# COMPILE AGDA2HS isInitial #-}
+{-# COMPILE AGDA2HS continuingAddr #-}
+{-# COMPILE AGDA2HS getMintedAmount #-}
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =

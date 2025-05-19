@@ -2,6 +2,8 @@ module AccountSim where
 
 type Label = [(PubKeyHash, Value)]
 
+type State = (AssetClass, Label)
+
 data Input = Open PubKeyHash
            | Close PubKeyHash
            | Withdraw PubKeyHash Value
@@ -17,6 +19,13 @@ delete :: PubKeyHash -> Label -> Label
 delete pkh [] = []
 delete pkh ((x, y) : xs)
   = if pkh == x then xs else (x, y) : delete pkh xs
+
+---
+lookup :: PubKeyHash → Label → Maybe Value
+lookup pkh []             = Nothing
+lookup pkh ((x , y) ∷ xs) 
+	= if pkh == x then Just y else lookup x xs
+---
 
 checkMembership :: Maybe Value -> Bool
 checkMembership Nothing = False
@@ -53,7 +62,7 @@ checkTransfer (Just vF) (Just vT) from to val lab ctx
         from /= to &&
           newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
 
-agdaValidator :: Datum -> Input -> ScriptContext -> Bool
+agdaValidator :: State -> Input -> ScriptContext -> Bool
 agdaValidator (tok, lab) inp ctx
   = checkTokenIn tok ctx &&
       checkTokenOut tok ctx &&
@@ -78,6 +87,27 @@ agdaValidator (tok, lab) inp ctx
                                             lab
                                             ctx
                                             && newValue ctx == oldValue ctx
+
+getMintedAmount :: ScriptContext -> Integer
+getMintedAmount ctx = mint ctx
+
+consumes :: TxOutRef -> ScriptContext -> Bool
+consumes oref ctx = oref == inputRef ctx
+
+checkDatum :: Address -> ScriptContext -> Bool
+checkDatum addr ctx
+  = case newDatum ctx of
+        (tok, map) -> ownAssetClass ctx == tok && map == []
+
+checkValue :: Address -> ScriptContext -> Bool
+checkValue addr ctx = hasTokenOut ctx
+
+isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
+isInitial addr oref ctx
+  = consumes oref ctx && checkDatum addr ctx && checkValue addr ctx
+
+continuingAddr :: Address -> ScriptContext -> Bool
+continuingAddr addr ctx = continues ctx
 
 agdaPolicy :: Address -> TxOutRef -> () -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx
