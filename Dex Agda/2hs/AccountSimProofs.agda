@@ -151,16 +151,12 @@ data Valid : State -> Set where
   Always : ∀ {s}
     -> value (context s) ≡ sumVal (label s)
     -> All (\y -> geq (snd y) emptyValue ≡ true) (label s)
-    -- -> (∀ {pkh v} -> lookup pkh (label s) ≡ Just v -> (geq v emptyValue ≡ true)) --use ALl
     ----------------
     -> Valid s
 
 
 sub : ∀ {a b c : ℤ} -> a ≡ b -> a ≡ c -> b ≡ c
 sub refl refl = refl
-
-
-
 
 maybe⊥ : ∀ {x : Value} -> Nothing ≡ Just x -> ⊥
 maybe⊥ ()
@@ -195,6 +191,16 @@ ni≡ (negsuc zero) = refl
 ni≡ (negsuc (N.suc n)) = refl
 
 add≡ : ∀ (a b : Integer) -> addInteger a b ≡ a + b
+add≡ (+_ n) (+_ m) = refl
+add≡ (+_ zero) (negsuc zero) = refl
+add≡ (+_ zero) (negsuc (N.suc m)) = refl
+add≡ +[1+ n ] (negsuc zero) = refl
+add≡ +[1+ n ] (negsuc (N.suc m)) with ltNat n (N.suc m)
+...| True = {!!} -- (pos (monusNat (N.suc m) n))
+...| False = {!!} --refl
+add≡ (negsuc n) (+_ m) = {!!}
+add≡ (negsuc n) (negsuc m) = refl
+{-
 add≡ (pos zero) (pos zero) = refl
 add≡ (pos zero) +[1+ m ] = refl
 add≡ +[1+ n ] (pos zero) = refl
@@ -215,6 +221,7 @@ add≡ (negsuc zero) (negsuc zero) = refl
 add≡ (negsuc zero) (negsuc (N.suc m)) = refl
 add≡ (negsuc (N.suc n)) (negsuc zero) = refl
 add≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
+
 
 sub≡ : ∀ (a b : Integer) -> subInteger a b ≡ a - b
 sub≡ (pos zero) (pos zero) = refl
@@ -584,7 +591,7 @@ transitionImpliesValidator l (Transfer from to val) ctx (TTransfer {vF = vF} {vT
   rewrite sym p1 | p2 | p3 | p8 | i=i from | i=i (inputVal ctx) | ≤toGeq p4 | ≤toGeq p5 |
   ≢to/= from to p6 | sym (add≡ vT val) | sym (sub≡ vF val) | sym p7 | l=l (outputLabel ctx) = refl
 
-
+-}
 lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
                    -> s  ~[ is  ]~* s'
                    -> s' ~[ is' ]~* s''
@@ -757,7 +764,7 @@ getGeq : ∀ {s x label context}
          -> s ≡ record { label = x ∷ label ; context = context }
          -> Valid s
          -> snd x ≥ emptyValue
-getGeq refl (Always x (allCons {{i}} {{is}})) = geqto≤ i
+getGeq refl (Always x (allCons {{i}} {{is}})) = {!!} --geqto≤ i
 
 ltLem : ∀ (n : Nat) -> ltNat n n ≡ false
 ltLem zero = refl
@@ -777,13 +784,13 @@ rewriteLabel : ∀ (pkh : PubKeyHash) (val : Value) (label : Label)
 rewriteLabel pkh val label rewrite (i-i val) = refl
 
 
-
+{-
 minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
 minusLemma .(b + pos n) b (pos n) refl rewrite +-assoc b (pos n) (- (pos n))
            | [+m]-[+n]≡m⊖n n n | n⊖n≡0 n | +-identityʳ b = refl
 minusLemma .(b + negsuc n) b (negsuc n) refl rewrite +-assoc b (negsuc n) (- (negsuc n))
            | n⊖n≡0 (N.suc n) | +-identityʳ b = refl
-
+-}
 
 sameLastSig' : ∀ {x context context'} (label : Label)
   -> lastSig (record { label = x ∷ label ; context = context }) ≡
@@ -807,7 +814,8 @@ minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
 minusLemma a b (pos zero) p rewrite +-identityʳ a | +-identityʳ b = p
 minusLemma a b +[1+ n ] p = {!!}
 minusLemma a b (negsuc zero) p = {!!}
-minusLemma a b (negsuc (N.suc n)) p = {!!}-}
+minusLemma a b (negsuc (N.suc n)) p = {!!}
+
 
 refactor : ∀ (a b c : Value) -> a ≡ b + c -> c ≡ a - b
 refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p)
@@ -846,7 +854,7 @@ prop1 s1@(record { label = (x ∷ label) ; context = context }) s2@(record { lab
                                               ; tsig = fst x}})
             s2 {label} refl p2 p3 p4 refl (Always refl (subValid p6))))
 
-
+-}
 {-
 prop1 record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } record { label = .[] ; context = record { value = .0 ; tsig = .(lastSig (record { label = [] ; context = record { value = sumVal [] ; tsig = tsig₁ } })) } } refl refl refl refl (Always x x₁) = root
 prop1 record { label = (x ∷ label) ; context = context } record { label = label' ; context = context' } p1 p2 p3 p4 p5 = cons {s' = record
@@ -899,10 +907,12 @@ liquidity : ∀ (s : State)
           -> Valid s
           -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value (context s') ≡ 0) )
 
-liquidity s p1 p2 =
+liquidity s p1 p2 = {!!}
+{-
   ⟨ record { label = [] ; context = record { value = 0 ; tsig = lastSig s } } ,
   ⟨ makeIs (label s) , (prop1 s (record { label = [] ; context = record { value = 0 ; tsig = lastSig s } }) {label s}
   refl refl refl refl p1 p2 , refl) ⟩ ⟩
+-}
 
 {-
 liquidity record { label = [] ; context = record { value = .(sumVal []) ; tsig = tsig₁ } } refl
@@ -1725,3 +1735,5 @@ validStateTransition iv (TCancel p1 p2 p3 p4) = Hol p3-}
 {-par s .s s'' [] is' root p2 = p2
 lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
 -}
+
+

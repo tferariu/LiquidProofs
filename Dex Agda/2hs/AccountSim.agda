@@ -19,9 +19,7 @@ record ScriptContext : Set where
     field
         inputVal    : Integer
         outputVal   : Integer
-        outputLabel : Label {-
-        payTo       : PubKeyHash
-        payAmt      : Value -}
+        outputLabel : Label
         signature   : PubKeyHash
 open ScriptContext public
 
