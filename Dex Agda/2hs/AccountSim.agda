@@ -24,6 +24,12 @@ State = (AssetClass × Label)
 
 record ScriptContext : Set where
     field
+<<<<<<< HEAD
+        inputVal    : Integer
+        outputVal   : Integer
+        outputLabel : Label
+        signature   : PubKeyHash
+=======
         inputVal      : Integer
         outputVal     : Integer
         outputDatum   : State
@@ -34,6 +40,7 @@ record ScriptContext : Set where
         hasTokenOut   : Bool
         mint          : Integer
         tokAssetClass : AssetClass
+>>>>>>> ebb61a072ac7971440fcd00679c6bee57036bdbe
 open ScriptContext public
 
 
