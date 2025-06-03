@@ -1,8 +1,7 @@
---open import Haskell.Prelude hiding (_×_; _×_×_; _,_; _,_,_)
 
 open import MultiSig
 
-open import Data.Product using (_×_; ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
+open import Data.Product using (∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
@@ -18,12 +17,12 @@ open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
-open import Data.Product
 
 open import Haskell.Prim hiding (⊥ ; All; Any)
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
 open import Haskell.Prim.Eq
+open import Haskell.Prim.Tuple as Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 
@@ -42,13 +41,47 @@ record Context : Set where
 open Context
 
 --raname to somtething appropriate
-
+{-
 record State : Set where
   field
     label         : Label
     context       : Context
     continues     : Bool
 open State
+-}
+
+record State : Set where
+  field
+    datum      : Datum
+    value      : Value  
+    outVal     : Value
+    outAdr     : PubKeyHash
+    now        : Deadline
+    tsig       : PubKeyHash
+    continues  : Bool
+    spends     : TxOutRef
+    hasToken   : Bool
+    mint       : Integer
+    token      : AssetClass
+open State
+
+{-
+record ScriptContext : Set where
+    field
+        inputVal      : Nat
+        outputVal     : Nat
+        outputDatum   : Datum
+        time          : Deadline
+        payTo         : PubKeyHash
+        payAmt        : Value
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        hasTokenIn    : Bool
+        hasTokenOut   : Bool
+        mint          : Integer
+        tokAssetClass : AssetClass
+open ScriptContext public-}
 
 _∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∈ xs = Any (x ≡_) xs
@@ -56,62 +89,104 @@ x ∈ xs = Any (x ≡_) xs
 _∉_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∉ xs = ¬ (x ∈ xs)
 
+
 --Transition Rules
+
+
+--agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
+--agdaPolicy addr oref _ ctx =
+{-(eqNat oref inputRef &&
+              eqNat tokAssetClass tok-}
+
+
+record MParams : Set where
+    field
+        address   : Address
+        outputRef : TxOutRef 
+open MParams public
+
+data _⊢_ : MParams -> State -> Set where
+
+  TStart : ∀ {par s tok}
+    -> datum s ≡ ( tok , Holding )
+    -> mint s ≡ 1
+    -> continues s ≡ true
+    -> outputRef par ≡ spends s
+    -> token s ≡ tok
+    -> hasToken s ≡ true
+    -------------------
+    -> par ⊢ s
+
+
+
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
  
-  TPropose : ∀ {v pkh d s s' par} 
-    -> value (context s) ≥ v
+  TPropose : ∀ {v tok pkh d s s' par} 
+    -> value s ≥ v
     -> v ≥ minValue
-    -> label s ≡ Holding
-    -> label s' ≡ Collecting v pkh d []
-    -> value (context s) ≡ value (context s')
-    -> d ≤ (now (context s')) + (maxWait par) 
-    -> continues s ≡ True
-    -> continues s' ≡ True
+    -> datum s ≡ (tok , Holding)
+    -> datum s' ≡ (tok , Collecting v pkh d [])
+    -> value s ≡ value s'
+    -> d ≤ (now s') + (maxWait par) 
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
 
-  TAdd : ∀ {sig par s s' v pkh d sigs} 
+  TAdd : ∀ {sig par s s' v tok pkh d sigs} 
     -> sig ∈ (authSigs par)
-    -> tsig (context s') ≡ sig
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Collecting v pkh d (insert sig sigs)
-    -> value (context s) ≡ value (context s')
-    -> continues s ≡ True
-    -> continues s' ≡ True
+    -> tsig s' ≡ sig
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Collecting v pkh d (insert sig sigs))
+    -> value s ≡ value s'
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ (Add sig) ]~> s'
 
-  TPay : ∀ {v pkh d sigs s s' par} 
-    -> tsig (context s') ≡ pkh
-    -> value (context s) ≡ value (context s') + v
+  TPay : ∀ {v pkh tok d sigs s s' par} 
+    -> value s ≡ value s' + v
     -> length sigs ≥ nr par
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding
-    -> outVal (context s') ≡ v
-    -> outAdr (context s') ≡ pkh 
-    -> continues s ≡ True
-    -> continues s' ≡ True
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Holding)
+    -> outVal s' ≡ v
+    -> outAdr s' ≡ pkh 
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ Pay ]~> s'
 
-  TCancel : ∀ {s s' par v pkh d sigs} 
-    -> now (context s') > d
-    -> label s ≡ Collecting v pkh d sigs
-    -> label s' ≡ Holding  
-    -> value (context s) ≡ value (context s') 
-    -> continues s ≡ True
-    -> continues s' ≡ True 
+  TCancel : ∀ {s s' par v pkh d sigs tok} 
+    -> now s' > d
+    -> datum s ≡ (tok , Collecting v pkh d sigs)
+    -> datum s' ≡ (tok , Holding)
+    -> value s ≡ value s' 
+    -> continues s ≡ true
+    -> continues s' ≡ true 
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
-  TClose : ∀ {par s s'}
-    -> label s ≡ Holding
-    -> minValue > value (context s)
-    -> continues s ≡ True
-    -> continues s' ≡ False
+
+data _⊢_~[_]~|_ : Params -> State -> Input -> State -> Set where
+
+  TClose : ∀ {par s s' tok}
+    -> datum s ≡ ( tok , Holding )
+    -> minValue > value s
+    -> continues s ≡ true
+    -> continues s' ≡ false
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ false
+    -> mint s' ≡ -1
     -------------------
-    -> par ⊢ s ~[ Close ]~> s'
+    -> par ⊢ s ~[ Close ]~| s'
 
 data Unique {a : Set} : List a → Set where
   root : Unique []
@@ -124,30 +199,37 @@ data Unique {a : Set} : List a → Set where
 
 ≡ⁱto≡ : ∀ {a b : Int} -> (a == b) ≡ true -> a ≡ b
 ≡ⁱto≡ {pos n} {pos m} pf = cong pos (≡ᵇto≡ pf)
-≡ⁱto≡ {negsuc n} {negsuc m} pf = cong negsuc (sym (≡ᵇto≡ pf))
+≡ⁱto≡ {negsuc n} {negsuc m} pf = cong negsuc (≡ᵇto≡ pf)
+
+==nto≡ : ∀ (a b : Nat) -> (a == b) ≡ true -> a ≡ b
+==nto≡ zero zero pf = refl
+==nto≡ (suc a) (suc b) pf = cong suc (==nto≡ a b pf)
 
 ==ito≡ : ∀ (a b : Int) -> (a == b) ≡ true -> a ≡ b
 ==ito≡ (pos n) (pos m) pf = cong pos (≡ᵇto≡ pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (sym (≡ᵇto≡ pf))
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (≡ᵇto≡ pf)
 
 --Valid State
 data ValidS : State -> Set where
 
-  Hol : ∀ {s}
-    -> label s ≡ Holding
+  Hol : ∀ {s tok}
+    -> datum s ≡ (tok , Holding)
+    -> hasToken s ≡ true
     ----------------
     -> ValidS s
 
   Stp : ∀ {s}
-    -> continues s ≡ False
+    -> continues s ≡ false
+    -> hasToken s ≡ false
     ----------------
     -> ValidS s
 
-  Col : ∀ {s v pkh d sigs}
-    -> label s ≡ Collecting v pkh d sigs
-    -> value (context s) ≥ v
+  Col : ∀ {s v pkh d sigs tok}
+    -> datum s ≡ ( tok , Collecting v pkh d sigs )
+    -> value s ≥ v
     -> v ≥ minValue
     -> Unique sigs
+    -> hasToken s ≡ true
     --------------------------------
     -> ValidS s
 
@@ -164,19 +246,25 @@ data _⊢_~[_]~*_ : Params -> State -> List Input -> State -> Set where
     -------------------------
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 
+  fin : ∀ { par s s' s'' i is }
+    -> par ⊢ s ~[ i ]~| s'
+    -> par ⊢ s' ~[ is ]~* s''
+    -------------------------
+    -> par ⊢ s ~[ (i ∷ is) ]~* s''
+
 
 --State Validity sub-lemmas
-diffLabels : ∀ {v pkh d sigs} (l : Label) -> l ≡ Holding
-           -> l ≡ Collecting v pkh d sigs -> ⊥ 
-diffLabels Holding p1 ()
-diffLabels (Collecting v pkh d sigs) () p2
+diffLabels : ∀ {v pkh d sigs tok1 tok2} (dat : Datum) -> dat ≡ (tok1 , Holding)
+           -> dat ≡ (tok2 , Collecting v pkh d sigs) -> ⊥ 
+diffLabels (tok , Holding) p1 ()
+diffLabels (tok , (Collecting v pkh d sigs)) () p2
 
-sameValue : ∀ {v v' pkh pkh' d d' sigs sigs'}
-  -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> v ≡ v'
+sameValue : ∀ {v v' pkh pkh' d d' sigs sigs' } {tok tok' : AssetClass}
+  -> (tok , Collecting v pkh d sigs) ≡ (tok' , Collecting v' pkh' d' sigs') -> v ≡ v'
 sameValue refl = refl
 
-sameSigs : ∀ {v v' pkh pkh' d d' sigs sigs'}
-  -> Collecting v pkh d sigs ≡ Collecting v' pkh' d' sigs' -> sigs ≡ sigs'
+sameSigs : ∀ {v v' pkh pkh' d d' sigs sigs'} {tok tok' : AssetClass}
+  -> (tok , Collecting v pkh d sigs) ≡ (tok' , Collecting v' pkh' d' sigs')  -> sigs ≡ sigs'
 sameSigs refl = refl
 
 get⊥ : true ≡ false -> ⊥
@@ -215,30 +303,39 @@ insertPreservesUniqueness {sig} {(x ∷ xs)} (p :: ps) with sig == x in eq
 ...| false = (λ z → p (insertPreserves∈ z eq)) :: (insertPreservesUniqueness ps)
 ...| true rewrite ==ito≡ sig x eq = p :: ps
 
+
 --State Validity Invariant
+validStateInitial : ∀ {s par}
+  -> par ⊢ s
+  -> ValidS s
+validStateInitial (TStart p1 p2 p3 p4 p5 p6) = Hol p1 p6
+
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
   -> ValidS s'
-validStateTransition iv (TPropose p1 (s≤s p2) p3 p4 p5 p6 p7 p8) rewrite p5 = Col p4 p1 (s≤s p2) root
-validStateTransition {s} (Hol pf) (TAdd p1 p2 p3 p4 p5 p6 p7) = ⊥-elim (diffLabels (label s) pf p3)
-validStateTransition (Col pf1 pf2 pf3 pf4) (TAdd p1 p2 p3 p4 p5 p6 p7)
+validStateTransition iv (TPropose p1 (s≤s p2) p3 p4 p5 p6 p7 p8 p9 p10) rewrite p5 = Col p4 p1 (s≤s p2) root p10
+validStateTransition {s} (Hol pf pf') (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) = ⊥-elim (diffLabels (datum s) pf p3)
+validStateTransition (Col pf1 pf2 pf3 pf4 pf5) (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9)
                      rewrite pf1 | sameValue p3 | p5 | sameSigs p3
-                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4)
-validStateTransition (Stp pf) (TAdd p1 p2 p3 p4 p5 p6 p7) rewrite pf = ⊥-elim (get⊥ (sym p6))
-validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9) = Hol p5
-validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6) = Hol p3
-validStateTransition iv (TClose p1 p2 p3 p4) = Stp p4
+                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4) p9
+validStateTransition (Stp pf pf') (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf = ⊥-elim (get⊥ (sym p6))
+validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9 p10) = Hol p4 p10
+validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6 p7 p8) = Hol p3 p8
 
-
+validStateFinal : ∀ {s s' : State} {i par}
+  -> ValidS s
+  -> par ⊢ s ~[ i ]~| s'
+  -> ValidS s'
+validStateFinal iv (TClose p1 p2 p3 p4 p5 p6 p7) = Stp p4 p6
 
 validStateMulti : ∀ {s s' : State} {is par}
   -> ValidS s
   -> par ⊢ s ~[ is ]~* s'
   -> ValidS s'
 validStateMulti iv root = iv
-validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x 
-
+validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
+validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x
 
 
 --Prop1 sub-lemmas and helper functions
@@ -259,208 +356,82 @@ appendLemma x (a ∷ as) b = cong (λ y → a ∷ y) (appendLemma x as b)
 ∈lemma (x ∷ xs) ys z = there (∈lemma xs ys z)
 
 finalSig : ∀ (s : State) -> (ls : List Input) -> PubKeyHash
-finalSig s [] = tsig (context s)
-finalSig s (Propose x x₁ x₂ ∷ [])  = tsig (context s)
+finalSig s [] = tsig s
+finalSig s (Propose x x₁ x₂ ∷ [])  = tsig s
 finalSig s (Add sig ∷ []) = sig
-finalSig s (Pay ∷ []) = tsig (context s)
-finalSig s (Cancel ∷ []) = tsig (context s)
+finalSig s (Pay ∷ []) = tsig s
+finalSig s (Cancel ∷ []) = tsig s
 finalSig s (i ∷ ls) = finalSig s ls
 
 finalSigLemma : ∀ (s s' : State) (x : PubKeyHash) (xs : List PubKeyHash)
-  -> tsig (context s') ≡ x -> finalSig s (makeIs (x ∷ xs)) ≡ finalSig s' (makeIs xs)
+  -> tsig s' ≡ x -> finalSig s (makeIs (x ∷ xs)) ≡ finalSig s' (makeIs xs)
 finalSigLemma s1 s2 x [] pf = sym pf
 finalSigLemma s1 s2 x (y ∷ []) pf = refl
 finalSigLemma s1 s2 x (y ∷ z ∷ xs) pf = finalSigLemma s1 s2 x (z ∷ xs) pf
 
 --Generalized Prop1 (Can add signatures 1 by 1)
-prop : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
+prop : ∀ {v pkh d sigs tok} (s s' : State) (par : Params) (asigs asigs' asigs'' : List PubKeyHash)
          -> asigs ≡ (authSigs par)
          -> asigs ≡ (asigs' ++ asigs'')
-         -> label s ≡ Collecting v pkh d sigs
-         -> label s' ≡ Collecting v pkh d (insertList asigs'' sigs)
-         -> outVal (context s) ≡ outVal (context s')
-         -> outAdr (context s) ≡ outAdr (context s')
-         -> now (context s) ≡ now (context s')
-         -> value (context s) ≡ value (context s')
-         -> tsig (context s') ≡ finalSig s (makeIs asigs'')
-         -> continues s ≡ True
-         -> continues s' ≡ True
+         -> datum s ≡ (tok , Collecting v pkh d sigs)
+         -> datum s' ≡ (tok , Collecting v pkh d (insertList asigs'' sigs))
+         -> outVal s ≡ outVal s' {- not quite right -}
+         -> outAdr s ≡ outAdr s'
+         -> now s ≡ now s'
+         -> value s ≡ value s'
+         -> spends s ≡ spends s'
+         -> mint s ≡ mint s'
+         -> token s ≡ token s'
+         -> tsig s' ≡ finalSig s (makeIs asigs'')
+         -> continues s ≡ true
+         -> continues s' ≡ true
+         -> hasToken s ≡ true
+         -> hasToken s' ≡ true
          -> par ⊢ s ~[ makeIs asigs'' ]~* s'
 
-prop {v} {pkh} {d} {sigs}
-  record { label = .(Collecting v pkh d sigs) ;
-           context = record { value = .value₁ ;
-                              outVal = .outVal₁ ;
-                              outAdr = .outAdr₁ ;
-                              now = .now₁ ;
-                              tsig = tsig₁ } ;
-           continues = True }
-  record { label = .(Collecting v pkh d (insertList [] sigs)) ;
-           context = record { value = value₁ ;
-                              outVal = outVal₁ ;
-                              outAdr = outAdr₁ ;
-                              now = now₁ ;
-                              tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
-                                                          context = record { value = value₁ ;
-                                                                             outVal = outVal₁ ;
-                                                                             outAdr = outAdr₁ ;
-                                                                             now = now₁ ;
-                                                                             tsig = tsig₁ } ;
-                                                          continues = True }) (makeIs [])) } ;
-           continues = True }
-  record { authSigs = .(sigs2 ++ []) ;
-           nr = nr₁ }
-  .(sigs2 ++ []) sigs2 [] refl refl refl refl refl refl refl refl refl refl refl = root --root
-  
-prop {v} {pkh} {d} {sigs}
-  s1@(record { label = .(Collecting v pkh d sigs) ;
-               context = record { value = .value₁ ;
-                                  outVal = .outVal₁ ;
-                                  outAdr = .outAdr₁ ;
-                                  now = .now₁ ;
-                                  tsig = tsig₁ } })
-  s2@(record { label = .(Collecting v pkh d (insertList (x ∷ sigs3) sigs)) ;
-               context = record { value = value₁ ;
-                                  outVal = outVal₁ ;
-                                  outAdr = outAdr₁ ;
-                                  now = now₁ ;
-                                  tsig = .(finalSig s1 (makeIs (x ∷ sigs3))) } })
-  par@(record { authSigs = .(sigs2 ++ x ∷ sigs3) ; nr = nr₁ })
-  .(sigs2 ++ x ∷ sigs3) sigs2 (x ∷ sigs3) refl refl refl refl refl refl refl refl refl refl refl
-  
-  = cons
-    (TAdd (∈lemma sigs2 sigs3 x) refl refl refl refl refl refl)
-    (prop s' s2 par (sigs2 ++ x ∷ sigs3) (sigs2 ++ [ x ]) sigs3 refl
-          (appendLemma x sigs2 sigs3) refl refl refl refl refl refl
-          (finalSigLemma s1 s' x sigs3 refl) refl refl)
+prop {v} {pkh} {d} {sigs} {tok} record { datum = .(tok , Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = .true ; spends = spends ; hasToken = .true ; mint = mint ; token = token } record { datum = .(_ , Collecting v pkh d (insertList [] sigs)) ; value = .(value) ; outVal = .(outVal) ; outAdr = .(outAdr) ; now = .(now) ; tsig = .(finalSig (record { datum = tok , Collecting v pkh d sigs ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = true ; spends = spends ; hasToken = true ; mint = mint ; token = token }) (makeIs [])) ; continues = .true ; spends = .(spends) ; hasToken = .true ; mint = .(mint) ; token = .(token) } record { authSigs = .(asigs1 ++ []) ; nr = nr₁ ; maxWait = maxWait₁ } .(asigs1 ++ []) asigs1 [] refl refl refl refl refl refl refl refl refl refl refl refl refl refl refl refl = root
+
+prop {v} {pkh} {d} {sigs} {tok}
+  s1@record { datum = .(tok , Collecting v pkh d sigs) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = .true ; spends = spends ; hasToken = .true ; mint = mint ; token = token }
+  s2@record { datum = .(tok , Collecting v pkh d (insertList (x ∷ asigs2) sigs)) ; value = .(value) ; outVal = .(outVal) ; outAdr = .(outAdr) ; now = .(now) ; tsig = .(finalSig (record { datum = _ , Collecting v pkh d sigs ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = true ; spends = spends ; hasToken = true ; mint = mint ; token = token }) (makeIs (x ∷ asigs2))) ; continues = .true ; spends = .(spends) ; hasToken = .true ; mint = .(mint) ; token = .(token) }
+  par@record { authSigs = .(asigs1 ++ x ∷ asigs2) ; nr = nr₁ ; maxWait = maxWait₁ } .(asigs1 ++ x ∷ asigs2) asigs1 (x ∷ asigs2) refl refl refl refl refl refl refl refl refl refl refl refl refl refl refl refl
+  = cons (TAdd (∈lemma asigs1 asigs2 x) refl refl refl refl refl refl refl refl)
+    (prop s' s2 par (asigs1 ++ x ∷ asigs2) (asigs1 ++ [ x ]) asigs2 refl (appendLemma x asigs1 asigs2) refl refl refl refl refl refl refl refl refl (finalSigLemma s1 s' x asigs2 refl) refl refl refl refl)
     where
-      s' = record { label = Collecting v pkh d (insert x sigs) ;
-                    context = record { value = value₁ ;
-                                       outVal = outVal₁ ;
-                                       outAdr = outAdr₁ ;
-                                       now = now₁ ;
-                                       tsig = x }} 
+      s' = record
+            { datum = tok , Collecting v pkh d (insert x sigs)
+            ; value = value
+            ; outVal = outVal
+            ; outAdr = outAdr
+            ; now = now
+            ; tsig = x
+            ; continues = true
+            ; spends = spends
+            ; hasToken = true
+            ; mint = mint
+            ; token = token
+            }
 
-
-
-prop' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' asigs''' : List PubKeyHash)
-         -> asigs ≡ (authSigs par)
-         -> asigs ≡ (asigs' ++ asigs'' ++ asigs''')
-         -> label s ≡ Collecting v pkh d sigs
-         -> label s' ≡ Collecting v pkh d (insertList asigs'' sigs)
-         -> outVal (context s) ≡ outVal (context s')
-         -> outAdr (context s) ≡ outAdr (context s')
-         -> now (context s) ≡ now (context s')
-         -> value (context s) ≡ value (context s')
-         -> tsig (context s') ≡ finalSig s (makeIs asigs'')
-         -> continues s ≡ True
-         -> continues s' ≡ True
-         -> par ⊢ s ~[ makeIs asigs'' ]~* s'
-
-prop' {v} {pkh} {d} {sigs}
-  record { label = .(Collecting v pkh d sigs) ;
-           context = record { value = .value₁ ;
-                              outVal = .outVal₁ ;
-                              outAdr = .outAdr₁ ;
-                              now = .now₁ ;
-                              tsig = tsig₁ } ;
-           continues = True }
-  record { label = .(Collecting v pkh d (insertList [] sigs)) ;
-           context = record { value = value₁ ;
-                              outVal = outVal₁ ;
-                              outAdr = outAdr₁ ;
-                              now = now₁ ;
-                              tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
-                                                          context = record { value = value₁ ;
-                                                                             outVal = outVal₁ ;
-                                                                             outAdr = outAdr₁ ;
-                                                                             now = now₁ ;
-                                                                             tsig = tsig₁ } ;
-                                                          continues = True }) (makeIs [])) } ;
-           continues = True }
-  record { authSigs = .(sigs2 ++ [] ++ sigs3) ;
-           nr = nr₁ }
-  .(sigs2 ++ [] ++ sigs3) sigs2 [] sigs3 refl refl refl refl refl refl refl refl refl refl refl = root 
-  
-prop' {v} {pkh} {d} {sigs}
-  s1@(record { label = .(Collecting v pkh d sigs) ;
-               context = record { value = .value₁ ;
-                                  outVal = .outVal₁ ;
-                                  outAdr = .outAdr₁ ;
-                                  now = .now₁ ;
-                                  tsig = tsig₁ } })
-  s2@(record { label = .(Collecting v pkh d (insertList (x ∷ sigs3) sigs)) ;
-               context = record { value = value₁ ;
-                                  outVal = outVal₁ ;
-                                  outAdr = outAdr₁ ;
-                                  now = now₁ ;
-                                  tsig = .(finalSig s1 (makeIs (x ∷ sigs3))) } })
-  par@(record { authSigs = .(sigs2 ++ x ∷ sigs3 ++ sigs4) ; nr = nr₁ })
-  .(sigs2 ++ x ∷ sigs3 ++ sigs4) sigs2 (x ∷ sigs3) sigs4 refl refl refl refl refl refl refl refl refl refl refl
-  
-  = cons
-    (TAdd (∈lemma sigs2 (sigs3 ++ sigs4) x) refl refl refl refl refl refl)
-  
-    (prop' s' s2 par (sigs2 ++ x ∷ sigs3 ++ sigs4) (sigs2 ++ [ x ]) sigs3 sigs4 refl 
-          (appendLemma x sigs2 (sigs3 ++ sigs4)) refl refl refl refl refl refl
-          (finalSigLemma s1 s' x sigs3 refl) refl refl)
-    where
-      s' = record { label = Collecting v pkh d (insert x sigs) ;
-                    context = record { value = value₁ ;
-                                       outVal = outVal₁ ;
-                                       outAdr = outAdr₁ ;
-                                       now = now₁ ;
-                                       tsig = x }} 
 
 
 --Actual Prop1 (Can add all signatures 1 by 1)
-prop1 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-        -> label s ≡ Collecting v pkh d sigs
-        -> label s' ≡ Collecting v pkh d (insertList (authSigs par) sigs)
-        -> outVal (context s) ≡ outVal (context s')
-        -> outAdr (context s) ≡ outAdr (context s')
-        -> now (context s) ≡ now (context s')
-        -> value (context s) ≡ value (context s')
-        -> tsig (context s') ≡ finalSig s (makeIs (authSigs par))
-        -> continues s ≡ True
-        -> continues s' ≡ True
+prop1 : ∀ { v pkh d sigs tok } (s s' : State) (par : Params)
+        -> datum s ≡ (tok , Collecting v pkh d sigs)
+        -> datum s' ≡ (tok , Collecting v pkh d (insertList (authSigs par) sigs))
+        -> outVal s ≡ outVal s'
+        -> outAdr s ≡ outAdr s'
+        -> now s ≡ now s'
+        -> value s ≡ value s'
+        -> spends s ≡ spends s'
+        -> mint s ≡ mint s'
+        -> token s ≡ token s'
+        -> tsig s' ≡ finalSig s (makeIs (authSigs par))
+        -> continues s ≡ true
+        -> continues s' ≡ true
+        -> hasToken s ≡ true
+        -> hasToken s' ≡ true
         -> par ⊢ s ~[ (makeIs (authSigs par)) ]~* s'
-prop1 s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 = prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7 p8 p9
-
-
-
-
---Prop3 (Can add minimum nr of signatures 1 by 1)
-prop3 : ∀ { v pkh d sigs } (s s' : State) (par : Params) 
-        -> label s ≡ Collecting v pkh d sigs
-        -> label s' ≡ Collecting v pkh d (insertList (take (nr par) (authSigs par)) sigs)
-        -> outVal (context s) ≡ outVal (context s')
-        -> outAdr (context s) ≡ outAdr (context s')
-        -> now (context s) ≡ now (context s')
-        -> value (context s) ≡ value (context s')
-        -> tsig (context s') ≡ finalSig s (makeIs (take (nr par) (authSigs par)))
-        -> continues s ≡ True
-        -> continues s' ≡ True
-        -> par ⊢ s ~[ (makeIs (take (nr par) (authSigs par))) ]~* s'
-prop3 s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 = prop' s s' par (authSigs par) [] (take (nr par) (authSigs par)) (drop (nr par) (authSigs par)) refl (sym (take++drop (nr par) (authSigs par))) p1 p2 p3 p4 p5 p6 p7 p8 p9
-
-
---Prop3 (Can add minimum nr of signatures 1 by 1)
-prop3' : ∀ { v pkh d sigs } (s s' : State) (par : Params) 
-        -> label s ≡ Collecting v pkh d sigs
-        -> label s' ≡ Collecting v pkh d (insertList (drop (length (authSigs par) - nr par) (authSigs par)) sigs)
-        -> outVal (context s) ≡ outVal (context s')
-        -> outAdr (context s) ≡ outAdr (context s')
-        -> now (context s) ≡ now (context s')
-        -> value (context s) ≡ value (context s')
-        -> tsig (context s') ≡ finalSig s (makeIs (drop (length (authSigs par) - nr par) (authSigs par)))
-        -> continues s ≡ True
-        -> continues s' ≡ True
-        -> par ⊢ s ~[ (makeIs (drop (length (authSigs par) - nr par) (authSigs par))) ]~* s'
-prop3' s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 = prop s s' par (authSigs par) (take (length (authSigs par) - nr par) (authSigs par)) (drop (length (authSigs par) - nr par) (authSigs par)) refl (sym (take++drop (monusNat (foldr (λ _ → suc) zero (authSigs par)) (nr par)) (authSigs par))) p1 p2 p3 p4 p5 p6 p7 p8 p9
-
---prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7 p8 p9
-
+prop1 s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 = prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 
 
 
 --UniqueInsertLemma sub-lemmas
@@ -535,7 +506,6 @@ insertList-lem (x ∷ l1) l2 = insertList-sublem l1 (insert x l2) x (insert-lem1
 uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l1) -> (length (insertList l1 l2) ≥ length l1)
 uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
 
-
 --Valid Parameters
 data ValidP : Params -> Set where
 
@@ -545,7 +515,6 @@ data ValidP : Params -> Set where
     ------------------
     -> ValidP par
 
-
 --Multi-Step lemma
 lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is  ]~* s'
@@ -553,45 +522,56 @@ lemmaMultiStep : ∀ (par : Params) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is ++ is' ]~* s''
 lemmaMultiStep par s .s s'' [] is' root p2 = p2
 lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
-
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''} p1 p2) p3 = fin p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
 
 --Prop2 (Can add signatures 1 by 1 and then pay)
-prop2' : ∀ { v pkh d sigs } (s s' : State) (par : Params)
+prop2 : ∀ { v pkh d sigs tok } (s s' : State) (par : Params)
           -> ValidS s
-          -> label s ≡ Collecting v pkh d sigs
-          -> label s' ≡ Holding
-          -> outVal (context s') ≡ v
-          -> outAdr (context s') ≡ pkh
-          -> value (context s) ≡ value (context s') + v
+          -> datum s ≡ (tok , Collecting v pkh d sigs)
+          -> datum s' ≡ (tok , Holding)
+          -> outVal s' ≡ v
+          -> outAdr s' ≡ pkh
+          -> value s ≡ value s' + v
           -> ValidP par
-          -> continues s ≡ True
-          -> continues s' ≡ True
-          -> tsig (context s') ≡ pkh
+          -> continues s ≡ true
+          -> continues s' ≡ true
+          -> hasToken s ≡ true
+          -> hasToken s' ≡ true
+          -> tsig s' ≡ pkh
           -> par ⊢ s ~[ ((makeIs (authSigs par)) ++ [ Pay ]) ]~* s'
-prop2' {d = d} {sigs = sigs}
-  s1@(record { label = .(Collecting (outVal context₁) (outAdr context₁) d sigs) ;
-               context = record { value = .(addNat (value context₁) (outVal context₁)) ;
-                                  outVal = outVal₁ ;
-                                  outAdr = outAdr₁ ;
-                                  now = now₁ ;
-                                  tsig = tsig₁ } })
-  s2@record { label = .Holding ; context = context₁ }
-  par (Col p1 p2 p3 p6) refl refl refl refl refl (Always p4 p5) refl refl refl
-  = lemmaMultiStep par s1 s' s2 (makeIs (authSigs par)) [ Pay ]   
-    (prop1 s1 s' par refl refl refl refl refl refl refl refl refl)
-    (cons (TPay refl refl (≤-trans p5 (uil (authSigs par) sigs p4)) refl refl refl refl refl refl) root)
-      where
-        s' = record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList (authSigs par) sigs) ;
-                       context = record { value = (addNat (value context₁) (outVal context₁)) ;
-                                          outVal = outVal₁ ;
-                                          outAdr = outAdr₁ ;
-                                          now = now₁ ;
-                                          tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
-                                                                    context = record { value = (addNat (value context₁) (outVal context₁)) ;
-                                                                              outVal = outVal₁ ;
-                                                                              outAdr = outAdr₁ ;
-                                                                              now = now₁ ;
-                                                                              tsig = tsig₁ } }) (makeIs (authSigs par)) } }
+
+
+prop2 {d = d} {sigs = sigs} {tok = tok}
+  s1@record { datum = .(tok , Collecting outVal outAdr d sigs) ; value = .(addNat value outVal) ; outVal = oV ; outAdr = oA ; now = now ; tsig = tsig ; continues = .true ; spends = spends ; hasToken = .true ; mint = mint ; token = token }
+  s2@record { datum = .(tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = n ; tsig = outAdr ; continues = .true ; spends = spn ; hasToken = .true ; mint = m ; token = tok' } par (Col p1 p2 p3 p4 p7) refl refl refl refl refl (Always p5 p6) refl refl refl refl refl
+  = lemmaMultiStep par s1 s' s2 (makeIs (authSigs par)) [ Pay ]
+    (prop1 s1 s' par refl refl refl refl refl refl refl refl refl refl refl refl refl refl)
+    (cons (TPay refl (≤-trans p6 (uil (authSigs par) sigs p5)) refl refl refl refl refl refl refl refl) root)
+  where
+    s' = record
+          { datum = tok , (Collecting outVal outAdr d (insertList (authSigs par) sigs)) 
+          ; value = addNat value outVal
+          ; outVal = oV
+          ; outAdr = oA
+          ; now = now
+          ; tsig = finalSig (record { datum = tok , Collecting outVal outAdr d sigs
+                                    ; value = addNat value outVal
+                                    ; outVal = oV
+                                    ; outAdr = oA
+                                    ; now = now
+                                    ; tsig = tsig
+                                    ; continues = true
+                                    ; spends = spends
+                                    ; hasToken = true
+                                    ; mint = mint
+                                    ; token = token })  (makeIs (authSigs par))
+          ; continues = true
+          ; spends = spends
+          ; hasToken = true
+          ; mint = mint
+          ; token = token
+          }
+                                                                             
 
 
 takeLength : ∀ {a : Nat} {l : List PubKeyHash} -> length l ≥ a -> a ≤ length (take a l)
@@ -615,48 +595,6 @@ takeUnique {zero} {x ∷ l} p = root
 takeUnique {suc a} {[]} p = p
 takeUnique {suc a} {x ∷ l} (p :: ps) = ∉take p :: (takeUnique ps)
 
-
-prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
-          -> ValidS s
-          -> label s ≡ Collecting v pkh d sigs
-          -> label s' ≡ Holding
-          -> outVal (context s') ≡ v
-          -> outAdr (context s') ≡ pkh
-          -> value (context s) ≡ value (context s') + v
-          -> ValidP par
-          -> continues s ≡ True
-          -> continues s' ≡ True
-          -> tsig (context s') ≡ pkh
-          -> par ⊢ s ~[ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ]~* s'
-prop2 {d = d} {sigs = sigs}
-  s1@(record { label = .(Collecting (outVal context₁) (outAdr context₁) d sigs) ;
-               context = record { value = .(addNat (value context₁) (outVal context₁)) ;
-                                  outVal = outVal₁ ;
-                                  outAdr = outAdr₁ ;
-                                  now = now₁ ;
-                                  tsig = tsig₁ } })
-  s2@record { label = .Holding ; context = context₁ }
-  par (Col p1 p2 p3 p6) refl refl refl refl refl (Always p4 p5) refl refl refl
-  = lemmaMultiStep par s1 s' s2 (makeIs (take (nr par) (authSigs par))) [ Pay ]   
-    (prop3 s1 s' par refl refl refl refl refl refl refl refl refl)
-    (cons (TPay refl refl (≤-trans (takeLength p5) (uil (take (nr par) (authSigs par)) sigs (takeUnique p4))) refl refl refl refl refl refl) root)
-    --(≤-trans p5 (uil (authSigs par) sigs p4))
-      where
-        s' = record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList (take (nr par) (authSigs par)) sigs) ;
-                       context = record { value = (addNat (value context₁) (outVal context₁)) ;
-                                          outVal = outVal₁ ;
-                                          outAdr = outAdr₁ ;
-                                          now = now₁ ;
-                                          tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
-                                                                    context = record { value = (addNat (value context₁) (outVal context₁)) ;
-                                                                              outVal = outVal₁ ;
-                                                                              outAdr = outAdr₁ ;
-                                                                              now = now₁ ;
-                                                                              tsig = tsig₁ } }) (makeIs (take (nr par) (authSigs par))) } }
-
-
-
-
 v≤v : ∀ (v : Value) -> v ≤ v
 v≤v zero = z≤n
 v≤v (suc v) = s≤s (v≤v v)
@@ -667,6 +605,15 @@ v≤v (suc v) = s≤s (v≤v v)
 ≤ᵇto≤ {zero} {suc b} pf = z≤n
 ≤ᵇto≤ {suc a} {suc b} pf = s≤s (≤ᵇto≤ pf)
 
+swapEqNat : ∀ (n m : Nat) -> eqNat n m ≡ eqNat m n
+swapEqNat zero zero = refl
+swapEqNat zero (suc m) = refl
+swapEqNat (suc n) zero = refl
+swapEqNat (suc n) (suc m) = swapEqNat n m
+
+≤ᵇto≤' : ∀ {a b} -> (a <ᵇ b || b ≡ᵇ a) ≡ true -> a ≤ b
+≤ᵇto≤' {a} {b} p rewrite swapEqNat b a = ≤ᵇto≤ p
+
 n≤ᵇto> : ∀ {a b} -> (a <ᵇ b || a ≡ᵇ b) ≡ false -> a > b
 n≤ᵇto> {suc a} {zero} pf = s≤s z≤n
 n≤ᵇto> {suc a} {suc b} pf = s≤s (n≤ᵇto> pf)
@@ -674,209 +621,108 @@ n≤ᵇto> {suc a} {suc b} pf = s≤s (n≤ᵇto> pf)
 --Weak Liquidity (For any state that is valid and has valid parameters,
 --there exists another state and some inputs such that we can transition
 --there and have no value left in the contract)
-liquidity' : ∀ (par : Params) (s : State) (pkh : PubKeyHash) 
-          -> ValidS s -> ValidP par -> continues s ≡ True
-          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value (context s') ≡ 0) )
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash) 
+          -> ValidS s -> ValidP par -> continues s ≡ true
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0) )
           
-liquidity' par s pkh (Stp p1) valid p2 rewrite p1 = ⊥-elim (get⊥ (sym p2))
-
-liquidity' par
-  s@(record { label = .Holding ;
-              context = record { value = value ;
-                                 outVal = outVal ;
-                                 outAdr = outAdr ;
-                                 now = now ;
-                                 tsig = tsig }})
-  pkh (Hol refl) (Always p2 p3) pf with minValue <= value in eq
-...| false  = ⟨ s' , ⟨  [ Close ] , ⟨ cons (TClose refl (n≤ᵇto> eq) pf refl) root , refl ⟩ ⟩ ⟩
-      where
-        s' = record { label = Holding ;
-                      context = record { value = zero ;
-                                         outVal = value ;
-                                         outAdr = pkh ;
-                                         now = now ;
-                                         tsig = tsig } ;
-                      continues = False }
-...| true  = ⟨ s'' , ⟨ (Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
-    ⟨ cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n pf refl)
-    (prop2' s' s'' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p2 p3) refl refl refl ) , refl ⟩ ⟩ ⟩
-      where
-        s'' = record { label = Holding ;
-                      context = record { value = zero ;
-                                         outVal = value ;
-                                         outAdr = pkh ;
-                                         now = now ;
-                                         tsig = pkh } ;
-                      continues = True }
-        s' = record { label = Collecting value pkh 0 [] ;
-                       context = record { value = value ;
-                                          outVal = outVal ;
-                                          outAdr = outAdr ;
-                                          now = now ;
-                                          tsig = tsig } ;
-                      continues = True }
-
-
-
-liquidity' par
-  s@(record { label = (Collecting v' pkh' d' sigs') ;
-             context = record { value = value ;
-                                outVal = outVal ;
-                                outAdr = outAdr ;
-                                now = now ;
-                                tsig = tsig } } )
-  pkh (Col refl p2 p3 p6) (Always p4 p5) pf with minValue <= value in eq
-...| false  = ⊥-elim (≤⇒≯ (≤-trans p3 p2) (n≤ᵇto> eq))
-
-...| true  = ⟨ s''' , ⟨ Cancel ∷ (Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ]) ,
-    ⟨ cons (TCancel {s' = s'}
-    (s≤s (v≤v d')) refl refl refl pf refl)
-    (cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n refl refl)
-    (prop2' s'' s''' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p4 p5) refl refl refl)) , refl ⟩ ⟩ ⟩
-      where
-        s''' = record { label = Holding ;
-                       context = record { value = zero ;
-                                          outVal = value ;
-                                          outAdr = pkh ;
-                                          now = now ;
-                                          tsig = pkh } ;
-                      continues = True }
-        s' = record { label = Holding ;
-                      context = record { value = value ;
-                                         outVal = outVal ;
-                                         outAdr = outAdr ;
-                                         now = suc d' ;
-                                         tsig = tsig } ;
-                      continues = True }
-        s'' = record { label = Collecting value pkh 0 [] ;
-                        context = record { value = value ;
-                                           outVal = outVal ;
-                                           outAdr = outAdr ;
-                                           now = 0 + 1 ;
-                                           tsig = tsig } ;
-                      continues = True }
-                      
-
-
-
-getSigNr : List Input -> Nat
-getSigNr [] = 0
-getSigNr ((Add x) ∷ xs) = 1 + getSigNr xs
-getSigNr (x ∷ xs) = getSigNr xs
-
-sigNrSum : ∀ (l1 l2 : List Input) -> getSigNr l1 + getSigNr l2 ≡ getSigNr (l1 ++ l2)
-sigNrSum [] l2 = refl
-sigNrSum (Propose x x₁ x₂ ∷ l1) l2 = sigNrSum l1 l2
-sigNrSum (Add x ∷ l1) l2 = cong suc (sigNrSum l1 l2)
-sigNrSum (Pay ∷ l1) l2 = sigNrSum l1 l2
-sigNrSum (Cancel ∷ l1) l2 = sigNrSum l1 l2
-sigNrSum (Close ∷ l1) l2 = sigNrSum l1 l2
-
-sigNrRewrite : ∀ (sigs : List PubKeyHash) -> getSigNr (makeIs (sigs)) ≡ length sigs
-sigNrRewrite [] = refl
-sigNrRewrite (x ∷ sigs) = cong suc (sigNrRewrite sigs)
-
-⊓Lemma : ∀ {n m} -> n ≤ m -> n ⊓ m ≡ n
-⊓Lemma {.zero} {m} z≤n = refl
-⊓Lemma {.(suc _)} {.(suc _)} (s≤s p) = cong suc (⊓Lemma p)
-
-sigNrLemma : ∀ {n : Nat} {sigs : List PubKeyHash} {is : List Input}
-  -> n ≤ length sigs
-  -> getSigNr is ≡ 0
-  -> getSigNr (makeIs (take n sigs) ++ is) ≤ n
-sigNrLemma {n} {sigs} {is} p1 p2 rewrite sym (sigNrSum (makeIs (take n sigs)) is) | sigNrRewrite (take n sigs)
-  | p2 | +-identityʳ (length (take n sigs)) | length-take n sigs | ⊓Lemma p1 = v≤v n
-
---Strong Liquidity (For any state that is valid and has valid parameters,
---there exists another state and some inputs containing at most n "honest
---participants" signing Add transitions such that we can transition
---there and have no value left in the contract)
-liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash)
-          -> ValidS s -> ValidP par -> continues s ≡ True
-          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') ×
-            ((value (context s') ≡ 0) × (getSigNr is ≤ nr par) ) )
-
-liquidity par s pkh (Stp p1) valid p2 rewrite p1 = ⊥-elim (get⊥ (sym p2))
-
+liquidity par s pkh (Stp p1 p4) p2 p3 rewrite p1 = ⊥-elim (get⊥ (sym p3))
 liquidity par
-  s@(record { label = .Holding ;
-              context = record { value = value ;
-                                 outVal = outVal ;
-                                 outAdr = outAdr ;
-                                 now = now ;
-                                 tsig = tsig }})
-  pkh (Hol refl) (Always p2 p3) pf with minValue <= value in eq
-...| false  = ⟨ s' , ⟨  [ Close ] , ⟨ cons (TClose refl (n≤ᵇto> eq) pf refl) root , ⟨ refl , z≤n ⟩ ⟩ ⟩ ⟩
-      where
-        s' = record { label = Holding ;
-                      context = record { value = zero ;
-                                         outVal = value ;
-                                         outAdr = pkh ;
-                                         now = now ;
-                                         tsig = tsig } ;
-                      continues = False }
-...| true = ⟨ s'' , ⟨ (Propose value pkh 0) ∷ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ,
-    ⟨ cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n pf refl)
-    (prop2 s' s'' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p2 p3) refl refl refl ) ,
-    ⟨ refl , sigNrLemma p3 refl ⟩ ⟩ ⟩ ⟩
-      where
-        s'' = record { label = Holding ;
-                      context = record { value = zero ;
-                                         outVal = value ;
-                                         outAdr = pkh ;
-                                         now = now ;
-                                         tsig = pkh } ;
-                      continues = True }
-        s' = record { label = Collecting value pkh 0 [] ;
-                       context = record { value = value ;
-                                          outVal = outVal ;
-                                          outAdr = outAdr ;
-                                          now = now ;
-                                          tsig = tsig } ;
-                      continues = True }
-
-
-
-liquidity par
-  s@(record { label = (Collecting v' pkh' d' sigs') ;
-             context = record { value = value ;
-                                outVal = outVal ;
-                                outAdr = outAdr ;
-                                now = now ;
-                                tsig = tsig } } )
-  pkh (Col refl p2 p3 p6) (Always p4 p5) pf with minValue <= value in eq
+  s@record { datum = (tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Hol refl p) (Always p2 p3) p4 with minValue <= value in eq
+...| false = ⟨ s' , ⟨ [ Close ] , ((fin (TClose refl (n≤ᵇto> eq) p4 refl p refl refl) root) , refl) ⟩ ⟩
+     where
+       s' : State
+       s' = record
+             { datum = tok , Holding
+             ; value = zero
+             ; outVal = value
+             ; outAdr = pkh
+             ; now = now
+             ; tsig = tsig
+             ; continues = false
+             ; spends = spends
+             ; hasToken = false
+             ; mint = -1
+             ; token = tok } 
+...| true  = ⟨ s'' , ⟨ ((Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ])) ,
+             (cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n p4 refl p refl)
+             (prop2 s' s'' par (Col refl (v≤v value) (≤ᵇto≤ eq) root refl) refl refl refl refl refl (Always p2 p3) refl refl refl refl refl) , refl) ⟩ ⟩
+     where
+       s'' = record
+              { datum = tok , Holding
+              ; value = zero
+              ; outVal = value
+              ; outAdr = pkh
+              ; now = now
+              ; tsig = pkh
+              ; continues = true
+              ; spends = spends
+              ; hasToken = true
+              ; mint = mint
+              ; token = token
+              }
+       s' = record
+             { datum = tok , (Collecting value pkh 0 [])
+             ; value = value
+             ; outVal = outVal
+             ; outAdr = outAdr
+             ; now = now
+             ; tsig = tsig
+             ; continues = true
+             ; spends = spends
+             ; hasToken = true
+             ; mint = mint
+             ; token = token
+             }
+liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Col refl p2 p3 p4 p5) (Always p6 p7) p8 with minValue <= value in eq
 ...| false  = ⊥-elim (≤⇒≯ (≤-trans p3 p2) (n≤ᵇto> eq))
+...| true  = ⟨ s''' , ⟨ (Cancel ∷ (Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ])) ,
+             ((cons (TCancel  {s' = s'} (s≤s (v≤v d')) refl refl refl p8 refl p5 refl)
+             (cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n refl refl refl refl)
+             (prop2 s'' s''' par (Col refl (v≤v value) (≤ᵇto≤ eq) root refl) refl refl refl refl refl (Always p6 p7) refl refl refl refl refl))) , refl) ⟩ ⟩
+     where
+       s''' = record
+              { datum = tok , Holding
+              ; value = zero
+              ; outVal = value
+              ; outAdr = pkh
+              ; now = suc (suc (suc d'))
+              ; tsig = pkh
+              ; continues = true
+              ; spends = spends
+              ; hasToken = true
+              ; mint = mint
+              ; token = token
+              }
+       s'' = record
+             { datum = tok , (Collecting value pkh 0 [])
+             ; value = value
+             ; outVal = outVal
+             ; outAdr = outAdr
+             ; now = suc (suc d')
+             ; tsig = tsig
+             ; continues = true
+             ; spends = spends
+             ; hasToken = true
+             ; mint = mint
+             ; token = token
+             }
+       s' = record
+              { datum = tok , Holding
+              ; value = value
+              ; outVal = outVal
+              ; outAdr = outAdr
+              ; now = suc d'
+              ; tsig = tsig
+              ; continues = true
+              ; spends = spends
+              ; hasToken = true
+              ; mint = mint
+              ; token = token
+              }
 
-...| true  = ⟨ s''' , ⟨ Cancel ∷ (Propose value pkh 0) ∷ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ,
-    ⟨ cons (TCancel {s' = s'}
-    (s≤s (v≤v d')) refl refl refl pf refl)
-    (cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n refl refl)
-    (prop2 s'' s''' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p4 p5) refl refl refl)) ,
-    ⟨ refl , (sigNrLemma p5 refl) ⟩ ⟩ ⟩ ⟩
-      where
-        s''' = record { label = Holding ;
-                       context = record { value = zero ;
-                                          outVal = value ;
-                                          outAdr = pkh ;
-                                          now = now ;
-                                          tsig = pkh } ;
-                      continues = True }
-        s' = record { label = Holding ;
-                      context = record { value = value ;
-                                         outVal = outVal ;
-                                         outAdr = outAdr ;
-                                         now = suc d' ;
-                                         tsig = tsig } ;
-                      continues = True }
-        s'' = record { label = Collecting value pkh 0 [] ;
-                        context = record { value = value ;
-                                           outVal = outVal ;
-                                           outAdr = outAdr ;
-                                           now = 0 + 1 ;
-                                           tsig = tsig } ;
-                      continues = True }
 
-   
+
+
 
 
 --sub-lemmas and helper functions for validator returning true implies transition
@@ -885,8 +731,11 @@ liquidity par
 <ᵇto< {zero} {suc b} pf = s≤s z≤n
 <ᵇto< {suc a} {suc b} pf = s≤s (<ᵇto< pf)
 
-3&&false : ∀ (a b c : Bool) -> (a && b && c && false) ≡ true -> ⊥
-3&&false true true true ()
+&&false : ∀ (a : Bool) -> (a && false) ≡ true -> ⊥
+&&false true ()
+
+2&&false : ∀ (a b : Bool) -> (a && b && false) ≡ true -> ⊥
+2&&false true true ()
 
 4&&false : ∀ (a b c d : Bool) -> (a && b && c && d && false) ≡ true -> ⊥
 4&&false true true true true ()
@@ -894,97 +743,23 @@ liquidity par
 5&&false : ∀ (a b c d f : Bool) -> (a && b && c && d && f && false) ≡ true -> ⊥
 5&&false true true true true true ()
 
-2&&false : ∀ (a b : Bool) -> (a && b && false) ≡ true -> ⊥
-2&&false true true ()
 
-&&false : ∀ (a : Bool) -> (a && false) ≡ true -> ⊥
-&&false true ()
-
-
-get : ∀ (a : Bool) {b} -> (a && b) ≡ true -> a ≡ true
-get true pf = refl
 
 go : ∀ (a : Bool) {b} -> (a && b) ≡ true -> b ≡ true
 go true {b} pf = pf
 
-goo : ∀ {a b : Bool} -> (a && b) ≡ true -> b ≡ true
-goo {true} {true} pf = pf
-
-gett : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
-gett {true} {true} pf = refl
+get : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
+get {true} {true} pf = refl
 
 ≡ˡto≡ : ∀ {a b : List PubKeyHash} -> (a == b) ≡ true -> a ≡ b
 ≡ˡto≡ {[]} {[]} pf = refl
-≡ˡto≡ {(x ∷ a)} {(y ∷ b)} pf rewrite (==ito≡ x y (get (x == y) pf)) = cong (λ x -> y ∷ x) (≡ˡto≡ (go (x == y) pf))
+≡ˡto≡ {(x ∷ a)} {(y ∷ b)} pf rewrite (==ito≡ x y (get pf)) = cong (λ x -> y ∷ x) (≡ˡto≡ (go (x == y) pf))
 
 ==lto≡ : ∀ (a b : List PubKeyHash) -> (a == b) ≡ true -> a ≡ b
 ==lto≡ [] [] pf = refl
-==lto≡ (x ∷ a) (y ∷ b) pf rewrite (==ito≡ x y (get (x == y) pf)) = cong (λ x -> y ∷ x) (==lto≡ a b (go (x == y) pf))
+==lto≡ (x ∷ a) (y ∷ b) pf rewrite (==ito≡ x y (get pf)) = cong (λ x -> y ∷ x) (==lto≡ a b (go (x == y) pf))
 
-p1 : ∀ (a b c d e f : Bool) (x y : Value) -> ((x ≡ᵇ y) && a && b && c && d && e && f) ≡ true -> x ≡ y
-p1 a b c d e f x y pf = ≡ᵇto≡ (get (x ≡ᵇ y)  pf)
 
-p2 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && (x <ᵇ y || x ≡ᵇ y) && b && c && d && e && f) ≡ true -> x ≤ y
-p2 a b c d e f x y pf = ≤ᵇto≤ ( get ((x <ᵇ y || x ≡ᵇ y)) (go a pf) )
-
-p3 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && b && (x <ᵇ y) && c && d && e && f) ≡ true -> x < y
-p3 a b c d e f x y pf = <ᵇto< ( get (x <ᵇ y) (go b (go a pf)) )
-
-p4 : ∀ (a b c d e f : Bool) (x y : Value) -> (a && b && c && (x ≡ᵇ y) && d && e && f) ≡ true -> x ≡ y
-p4 a b c d e f x y pf = ≡ᵇto≡ (get (x ≡ᵇ y) (go c (go b (go a pf))) )
-
-p5 : ∀ (a b c d e f : Bool) (x y : PubKeyHash) -> (a && b && c && d && (x == y) && e && f) ≡ true -> x ≡ y
-p5 a b c d e f x y pf = ==ito≡ x y (get (x == y) (go d (go c (go b (go a pf)))) )
-
-p6 : ∀ (a b c d e f : Bool) (x y : Deadline) -> (a && b && c && d && e && (x ≡ᵇ y) && f) ≡ true -> x ≡ y
-p6 a b c d e f x y pf = ≡ᵇto≡ (get (x ≡ᵇ y) (go e (go d (go c (go b (go a pf))))))
-
-p7 : ∀ (a b c d e f : Bool) (x y : List PubKeyHash) -> (a && b && c && d && e && f && (x == y)) ≡ true -> x ≡ y
-p7 a b c d e f x y pf = ==lto≡ x y (go f (go e (go d (go c (go b (go a pf))))))
-
-pr6 : ∀ (b c d e f g h i : Bool) (x y : Value)
-      -> (b && c && d && e && f && (x == y) && g && h && i) ≡ true -> x ≡ y
-pr6 b c d e f g h i x y pf = ≡ᵇto≡ (gett (go f (go e (go d (go c (go b pf))))))
-
-pr7 : ∀ (b c d e f g h i : Bool) (x y : PubKeyHash)
-      -> (b && c && d && e && f && g && (x == y) && h && i) ≡ true -> x ≡ y
-pr7 b c d e f g h i x y pf = ≡ⁱto≡ (gett (go g(go f (go e (go d (go c (go b pf)))))))
-
-pr8 : ∀ (b c d e f g h i : Bool) (x y : Value)
-      -> (b && c && d && e && f && g && h && (x == y) && i) ≡ true -> x ≡ y
-pr8 b c d e f g h i x y pf = ≡ᵇto≡ (gett (go h (go g (go f (go e (go d (go c (go b pf))))))))
-
-pr9 : ∀ (b c d e f g h i : Bool) (x y : List PubKeyHash)
-      -> (b && c && d && e && f && g && h && i && (x == y)) ≡ true -> x ≡ y
-pr9 b c d e f g h i x y pf = ≡ˡto≡ (go i (go h (go g (go f (go e (go d (go c (go b pf))))))))
-
-ar5 : ∀ (c d e f g h i : Bool) (x y : Value)
-      -> (c && d && e && f && (x == y) && g && h && i) ≡ true -> x ≡ y
-ar5 c d e f g h i x y pf = ≡ᵇto≡ (gett (go f (go e (go d (go c pf)))))
-
-ar6 : ∀ (c d e f g h i : Bool) (x y : PubKeyHash)
-      -> (c && d && e && f && g && (x == y) && h && i) ≡ true -> x ≡ y
-ar6 c d e f g h i x y pf = ≡ⁱto≡ (gett (go g(go f (go e (go d (go c pf))))))
-
-ar7 : ∀ (c d e f g h i : Bool) (x y : Value)
-      -> (c && d && e && f && g && h && (x == y) && i) ≡ true -> x ≡ y
-ar7 c d e f g h i x y pf = ≡ᵇto≡ (gett (go h (go g (go f (go e (go d (go c pf)))))))
-
-ar8 : ∀ (c d e f g h i : Bool) (x y : List PubKeyHash)
-      -> (c && d && e && f && g && h && i && (x == y)) ≡ true -> x ≡ y
-ar8 c d e f g h i x y pf = ≡ˡto≡ (go i (go h (go g (go f (go e (go d (go c pf)))))))
-
-{-
-             (eqNat outputVal inputVal &&
-             (ltNat v inputVal || eqNat v inputVal) &&
-             (ltNat 2 v || eqNat 2 v) &&
-             (ltNat d (addNat time (maxWait par)) ||eqNat d (addNat time (maxWait par)))&&
-             continues &&
-             eqNat v v' &&
-             eqInteger pkh pkh' &&
-             eqNat d d' &&
-             Haskell.Prim.Eq.eqList sigs' [])
--}
 
 orToSum : ∀ (a b : Bool) -> (a || b) ≡ true -> a ≡ true ⊎ b ≡ true
 orToSum false true pf = inj₂ refl
@@ -995,171 +770,139 @@ queryTo∈ {sig} {x ∷ sigs} pf with orToSum (x == sig) (query sig sigs) pf
 ... | inj₁ a = here (sym (==ito≡ x sig a))
 ... | inj₂ b = there (queryTo∈ b)
 
-a2 : ∀ (a b c d e f : Bool) (x y : PubKeyHash) -> (a && (x == y) && b && c && d && e && f) ≡ true -> x ≡ y
-a2 a b c d e f x y pf = ==ito≡ x y ( get (x == y) (go a pf) )
 
-a3 : ∀ (a b c d e f : Bool) (sig : PubKeyHash) (sigs : List PubKeyHash) -> (a && b && (query sig sigs) && c && d && e && f) ≡ true -> sig ∈ sigs
-a3 a b c d e f sig sigs pf = queryTo∈ ( get (query sig sigs) (go b (go a pf)) )
-
-lengthNatToLength : ∀ (n : ℕ) (l : List PubKeyHash) -> (n <ᵇ lengthNat l || n ≡ᵇ lengthNat l ) ≡ true -> n ≤ length l
+lengthNatToLength : ∀ (n : ℕ) (l : List PubKeyHash) -> (n <ᵇ lengthNat l || lengthNat l ≡ᵇ n) ≡ true -> n ≤ length l
 lengthNatToLength zero [] pf = z≤n
 lengthNatToLength zero (x ∷ l) pf = z≤n
 lengthNatToLength (suc n) (x ∷ l) pf = s≤s (lengthNatToLength n l pf)
 
-y1 : ∀ (a b c : Bool) (n : ℕ) (sigs : List PubKeyHash) -> ((n <ᵇ lengthNat sigs || n ≡ᵇ lengthNat sigs) && (a && b) && c) ≡ true -> n ≤ length sigs
-y1 a b c n sigs pf = lengthNatToLength n sigs (get (n <ᵇ lengthNat sigs || n ≡ᵇ lengthNat sigs) pf)
 
-y2 : ∀ (a b c : Bool) (x y : PubKeyHash) -> (a && ((x == y) && b) && c) ≡ true -> x ≡ y
-y2 a b c x y pf = ==ito≡ x y (get (x == y) (get ((x == y) && b) (go a pf)))
+{-
+record
+             { datum = tok , (Collecting value pkh 0 [])
+             ; value = value
+             ; outVal = outVal
+             ; outAdr = outAdr
+             ; now = suc (suc d')
+             ; tsig = tsig
+             ; continues = true
+             ; input = input
+             ; hasToken = true
+             ; mint = mint
+             ; token = token
+             }
 
-y3 : ∀ (a b c : Bool) (x y : Value) -> (a && (b && (x ≡ᵇ y)) && c) ≡ true -> x ≡ y
-y3 a b c x y pf = ≡ᵇto≡ (go b (get (b && (x ≡ᵇ y)) (go a pf)))
-
-y4 : ∀ (a b c : Bool) (x y : Value) -> (a && (b && c) && x ≡ᵇ y) ≡ true -> x ≡ y
-y4 a b c x y pf = ≡ᵇto≡ (go (b && c) (go a pf))
-
-c1 : ∀ (a : Bool) (x y : Value) -> (x ≡ᵇ y && a) ≡ true -> x ≡ y
-c1 a x y pf = ≡ᵇto≡ (get (x ≡ᵇ y) pf) 
-
-c2 : ∀ (a : Bool) (x y : Deadline) -> (a && (x <ᵇ y)) ≡ true -> x < y
-c2 a x y pf = <ᵇto< (go a pf)
+        inputVal      : Nat
+        outputVal     : Nat
+        outputDatum   : Datum
+        time          : Deadline
+        payTo         : PubKeyHash
+        payAmt        : Value
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        hasTokenIn    : Bool
+        hasTokenOut   : Bool
+        mint          : Integer
+        tokAssetClass : AssetClass
+-}
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {oV oA t s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
-                           -> (pf : agdaValidator par l i ctx ≡ true)
+validatorImpliesTransition : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+                           -> i ≢ Close
+                           -> (pf : agdaValidator par d i ctx ≡ true)
                            -> par ⊢
-                           record { label = l ; context = record { value = (inputVal ctx) ;
-                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } ; continues = True }
+                           record { datum = d ; value = (inputVal ctx) ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+                           spends = spn ; hasToken = hasTokenIn ctx ; mint = mnt ; token = tok}
                            ~[ i ]~>
-                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
-                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } ;
-                           continues = continuing ctx}
+                           record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+                           continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+                           mint = mint ctx ; token = tokAssetClass ctx}
 
-validatorImpliesTransition par Holding (Propose v pkh d)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = ⊥-elim (5&&false (eqNat outputVal inputVal) (ltNat v inputVal || eqNat v inputVal) (ltNat 2 v || eqNat 2 v)
-    (ltNat d (addNat time (maxWait par)) || eqNat d (addNat time (maxWait par))) continues pf)
+validatorImpliesTransition par (tok , Holding) Close record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = false ; mint = mint ; tokAssetClass = tokAssetClass } nc pf = ⊥-elim (nc refl)
+validatorImpliesTransition par (tok , Holding) (Propose v pkh d) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  = ⊥-elim (5&&false (eqNat outputVal inputVal) (ltNat v inputVal || eqNat inputVal v) (ltNat 2 v || eqNat v 2)
+    (ltNat d (addNat time (maxWait par)) || eqNat (addNat time (maxWait par)) d) continues  pf)
+validatorImpliesTransition par (tok , Holding) Close record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v pkh d sigs) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = false ; mint = mint ; tokAssetClass = tokAssetClass } nc pf = ⊥-elim (nc refl)
+validatorImpliesTransition par (tok , Holding) (Propose v pkh d) ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  rewrite sym (==nto≡ v v' (get (go continues (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf))))))) |
+  sym (==ito≡ pkh pkh' (get (go (eqNat v v') (go continues (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf)))))))) |
+  sym (==nto≡ d d' (get (go (pkh == pkh') (go (eqNat v v') (go continues (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf))))))))) |
+  (==lto≡ sigs' [] (get (go (d == d') (go (pkh == pkh') (go (eqNat v v') (go continues (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf)))))))))) |
+  (==nto≡ tok tok' (go (sigs' == []) (go (d == d') (go (pkh == pkh') (go (eqNat v v') (go continues (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf))))))))))
+  = TPropose (≤ᵇto≤' (get (go (eqNat outputVal inputVal) pf )))
+     (≤ᵇto≤' (get (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf)))) refl
+     refl (sym (≡ᵇto≡ (get pf)))
+     (≤ᵇto≤' (get (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf))))) refl
+     (get (go (notTooLate par d ctx) (go (v >= 2) (go (ltNat v inputVal || eqNat inputVal v) (go (eqNat outputVal inputVal) pf))))) refl refl
+     
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) (Add x) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  = ⊥-elim (4&&false (eqNat outputVal inputVal) (eqInteger x signature) (query x (authSigs par)) continues pf)
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) Pay ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  rewrite ==ito≡ pkh payTo (get (get (go continues (go ((lengthNat sigs) >= (nr par)) pf)))) |
+  sym (==nto≡ v payAmt (go (pkh == payTo) (get (go continues (go ((lengthNat sigs) >= (nr par)) pf))))) |
+  ==nto≡ tok tok' (go (inputVal == (addNat outputVal v)) (go (checkPayment pkh v ctx) (go continues (go ((lengthNat sigs) >= (nr par)) pf))))
+  = TPay (==nto≡ inputVal (addNat outputVal v) (get (go (checkPayment pkh v ctx) (go continues (go ((lengthNat sigs) >= (nr par)) pf)))))
+  (lengthNatToLength (nr par) sigs (get pf)) refl refl refl refl refl
+  (get (go ((lengthNat sigs) >= (nr par)) pf)) refl refl
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  rewrite ==nto≡ tok tok' (go (ltNat d time) (go continues (go (outputVal == inputVal) pf)))
+  = TCancel (<ᵇto< (get ((go continues (go (outputVal == inputVal) pf))))) refl refl
+  (sym (==nto≡ outputVal inputVal (get pf))) refl (get (go (outputVal == inputVal) pf)) refl refl
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  rewrite sym (==nto≡ v v' (get (go continues (go (query sig (authSigs par)) (go (sig == signature) (go (eqNat outputVal inputVal) pf)))))) |
+  sym (==ito≡ pkh pkh' (get (go (eqNat v v') (go continues (go (query sig (authSigs par)) (go (sig == signature) (go (eqNat outputVal inputVal) pf))))))) |
+  sym (==nto≡ d d' (get (go (pkh == pkh') (go (eqNat v v') (go continues (go (query sig (authSigs par)) (go (sig == signature) (go (eqNat outputVal inputVal) pf)))))))) |
+  (==lto≡ sigs' (insert sig sigs) (get (go (d == d') (go (pkh == pkh') (go (eqNat v v') (go continues (go (query sig (authSigs par)) (go (sig == signature) (go (eqNat outputVal inputVal) pf))))))))) |
+  (==nto≡ tok tok' (go (sigs' == (insert sig sigs)) (go (d == d') (go (pkh == pkh') (go (eqNat v v') (go continues (go (query sig (authSigs par)) (go (sig == signature) (go (eqNat outputVal inputVal) pf)))))))))
+  = TAdd (queryTo∈ (get (go (sig == signature) (go (outputVal == inputVal) pf))))
+  (sym (==ito≡ sig signature (get (go (outputVal == inputVal) pf)))) refl refl
+  (sym (==nto≡ outputVal inputVal (get pf))) refl
+  (get (go (query sig (authSigs par)) (go (sig == signature) (go (outputVal == inputVal) pf)))) refl refl
+  
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) Pay record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf
+  = ⊥-elim (2&&false (ltNat (nr par) (lengthNat sigs) || eqNat (lengthNat sigs) (nr par)) continues pf)
+validatorImpliesTransition par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf = ⊥-elim (2&&false (eqNat outputVal inputVal) continues pf)
 
--- (eqNat outputVal inputVal) (ltNat v inputVal || eqNat v inputVal) (ltNat 2 v || eqNat 2 v) {!!})
-validatorImpliesTransition par Holding (Propose v pkh d)
-  ctx@record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting v' pkh' d' sigs') ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  rewrite sym (pr6 (outputVal == inputVal) (v <= inputVal) (2 <= v) (notTooLate par d ctx) continues (pkh == pkh') (d == d') (sigs' == []) v v' pf)
-  | sym (pr7 (outputVal == inputVal) (v <= inputVal) (2 <= v) (notTooLate par d ctx) continues (v == v') (d == d') (sigs' == []) pkh pkh' pf)
-  | sym (pr8 (outputVal == inputVal) (v <= inputVal) (2 <= v) (notTooLate par d ctx) continues (v == v') (pkh == pkh') (sigs' == []) d d' pf)
-  | pr9 (outputVal == inputVal) (v <= inputVal) (2 <= v) (notTooLate par d ctx) continues (v == v') (pkh == pkh') (d == d') sigs' [] pf
-  = TPropose (≤ᵇto≤ (gett (go (eqNat outputVal inputVal) pf)))
-             (≤ᵇto≤ (gett (go (ltNat v inputVal || eqNat v inputVal) (go (eqNat outputVal inputVal) pf)))) refl
-             refl (sym (≡ᵇto≡ (gett pf)))
-             (≤ᵇto≤ (gett (go (2 <= v) (go (ltNat v inputVal || eqNat v inputVal) (go (eqNat outputVal inputVal) pf))))) refl
-             (gett (go (notTooLate par d ctx) (go (2 <= v) (go (ltNat v inputVal || eqNat v inputVal) (go (eqNat outputVal inputVal) pf)))))
 
-validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = ⊥-elim (4&&false (eqNat outputVal inputVal) (eqInteger sig signature) (query sig (authSigs par)) continues pf)
-validatorImpliesTransition par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting v' pkh' d' sigs') ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  rewrite ar5 (outputVal == inputVal) (sig == signature) (query sig (authSigs par)) continues (pkh == pkh') (d == d') (sigs' == (insert sig sigs)) v v' pf 
-  | ar6 (outputVal == inputVal) (sig == signature) (query sig (authSigs par)) continues (v == v') (d == d') (sigs' == (insert sig sigs)) pkh pkh' pf 
-  | ar7 (outputVal == inputVal) (sig == signature) (query sig (authSigs par)) continues (v == v') (pkh == pkh') (sigs' == (insert sig sigs)) d d' pf 
-  | ar8 (outputVal == inputVal) (sig == signature) (query sig (authSigs par)) continues (v == v') (pkh == pkh') (d == d') sigs' (insert sig sigs) pf
-  = TAdd (queryTo∈ (gett (go (sig == signature) (go (outputVal == inputVal) pf))))
-  (sym (≡ⁱto≡ (gett (go (outputVal == inputVal) pf)))) refl refl
-  (sym (≡ᵇto≡ (gett pf))) refl
-  (gett (go ( query sig (authSigs par)) (go (sig == signature) (go (outputVal == inputVal) pf))))
-validatorImpliesTransition par (Collecting v pkh d sigs) Pay
-  ctx@record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = TPay (sym (≡ⁱto≡ (go (inputVal == outputVal + v) (go (eqInteger pkh payTo && eqNat v payAmt) (go continues (go ((lengthNat sigs) >= (nr par)) pf))))))
-  (≡ᵇto≡ (gett (go (eqInteger pkh payTo && eqNat v payAmt) (go continues (go ((lengthNat sigs) >= (nr par)) pf)))))
-  (lengthNatToLength (nr par) sigs (gett pf)) refl refl
-  (sym (≡ᵇto≡ (go (pkh == payTo) (gett (go continues (go ((lengthNat sigs) >= (nr par)) pf))))))
-  (sym (≡ⁱto≡ (gett (gett (go continues (go ((lengthNat sigs) >= (nr par)) pf)))))) refl (gett (go ((lengthNat sigs) >= (nr par)) pf))
-validatorImpliesTransition par (Collecting v pkh d sigs) Pay
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting v' pkh' d' sigs') ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = ⊥-elim (2&&false (ltNat (nr par) (lengthNat sigs) || eqNat (nr par) (lengthNat sigs)) continues pf)
-validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = TCancel (<ᵇto< (go continues (go (outputVal == inputVal) pf))) refl refl
-  (sym (≡ᵇto≡ (gett pf))) refl (gett (go (outputVal == inputVal) pf))
-validatorImpliesTransition par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting v' pkh' d' sigs') ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues } pf
-  = ⊥-elim (2&&false (eqNat outputVal inputVal) continues pf)
-validatorImpliesTransition par Holding Close
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = outputLabel ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = True } pf
-  = ⊥-elim (&&false (ltNat inputVal 2) pf)
-validatorImpliesTransition par Holding Close
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = outputLabel ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = False } pf
-  = TClose refl (<ᵇto< (gett pf)) refl refl
+--agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
+--agdaPolicy addr oref _ ctx =
 
+mintingImpliesStart : ∀ {oV oA t s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> mint ctx ≡ 1
+                           -> (pf : agdaPolicy adr oref top ctx ≡ true)
+                           -> record {address = adr ; outputRef = oref } ⊢
+                           record { datum = outputDatum ctx ; value = outputVal ctx ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = continues ctx ;
+                           spends = inputRef ctx ; hasToken = hasTokenOut ctx ; mint = mint ctx ; token = tokAssetClass ctx}
+mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = .1 ; tokAssetClass = tokAssetClass } refl pf
+  = TStart refl refl (get pf) (==nto≡ oref inputRef (get (go continues pf)))
+  (==nto≡ tokAssetClass tok (get (go (oref == inputRef) (go continues pf))))
+  (go (tokAssetClass == tok) (go (oref == inputRef) (go continues pf)))
+mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , Collecting x x₁ x₂ x₃) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = .1 ; tokAssetClass = tokAssetClass } refl pf = ⊥-elim (2&&false continues (eqNat oref inputRef) pf)
+
+
+unNot : (b : Bool) -> not b ≡ true -> b ≡ false
+unNot false pf = refl
+
+bothImplyClose : ∀ {oV oA t s spn tok} (par : Params) (d : Datum) (i : Input) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> mint ctx ≡ -1
+               -> (p1 : agdaValidator par d Close ctx ≡ true)
+               -> (p2 : agdaPolicy adr oref top ctx ≡ true)
+               -> (par ⊢
+               record { datum = d ; value = (inputVal ctx) ;
+               outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+               spends = spn ; hasToken = hasTokenIn ctx ; mint = -1 ; token = tok}
+               ~[ Close ]~|
+               record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+               outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+               continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+               mint = mint ctx ; token = tokAssetClass ctx})
+bothImplyClose par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = false ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = false ; mint = .-1 ; tokAssetClass = tokAssetClass } refl p1 p2 = TClose refl (<ᵇto< (get p1)) refl refl refl refl refl
+bothImplyClose par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2
+bothImplyClose par (tok , Collecting x x₁ x₂ x₃) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2
 
 
 
@@ -1168,7 +911,7 @@ validatorImpliesTransition par Holding Close
 ≡to≡ᵇ {zero} refl = refl
 ≡to≡ᵇ {suc a} refl = ≡to≡ᵇ {a} refl
 
-≤to≤ᵇ : ∀ {a b} -> a ≤ b -> (a <ᵇ b || a ≡ᵇ b) ≡ true
+≤to≤ᵇ : ∀ {a b} -> a ≤ b -> (a <ᵇ b || b ≡ᵇ a) ≡ true
 ≤to≤ᵇ {b = zero} z≤n = refl
 ≤to≤ᵇ {b = suc b} z≤n = refl
 ≤to≤ᵇ (s≤s pf) = ≤to≤ᵇ pf
@@ -1197,7 +940,7 @@ l=l (x ∷ l) rewrite i=i x = l=l l
 ∈toQuery {sig} (here refl) rewrite i=i sig = refl
 ∈toQuery (there pf) rewrite ∈toQuery pf = ||true
 
-lengthToLengthNat : ∀ (n : ℕ) (l : List PubKeyHash) -> n ≤ length l -> (n <ᵇ lengthNat l || n ≡ᵇ lengthNat l) ≡ true
+lengthToLengthNat : ∀ (n : ℕ) (l : List PubKeyHash) -> n ≤ length l -> (n <ᵇ lengthNat l || lengthNat l ≡ᵇ n) ≡ true
 lengthToLengthNat zero [] z≤n = refl
 lengthToLengthNat zero (x ∷ l) z≤n = refl
 lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
@@ -1209,78 +952,72 @@ lengthToLengthNat (suc n) (x ∷ l) (s≤s pf) = lengthToLengthNat n l pf
 -- funciton going to bool (validator) and how to relate it to a transition function
 -- isomorphisim of relations of functions
 
-transitionImpliesValidator : ∀ {oV oA t s cont} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
-                           -> (pf : par ⊢
-                           record { label = l ; context = record { value = (inputVal ctx) ;
-                           outVal = oV ; outAdr = oA ; now = t ; tsig = s } ; continues = cont }
+transitionImpliesValidator : ∀ {oV oA t s tok spn mnt} (par : Params) (dat : Datum) (i : Input) (ctx : ScriptContext)
+                          -- -> i ≢ Close
+                           -> par ⊢
+                           record { datum = dat ; value = (inputVal ctx) ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+                           spends = spn ; hasToken = hasTokenIn ctx ; mint = mnt ; token = tok}
                            ~[ i ]~>
-                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
-                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx } ;
-                           continues = continuing ctx })
-                           -> agdaValidator par l i ctx ≡ true
+                           record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+                           continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+                           mint = mint ctx ; token = tokAssetClass ctx}
+                           -> agdaValidator par dat i ctx ≡ true
+transitionImpliesValidator par (tok , .Holding) (Propose v pkh d) record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Collecting v pkh d []) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TPropose p1 p2 refl refl refl p6 p7 refl refl refl)
+  rewrite v=v inputVal | v=v v | i=i pkh | v=v d | v=v tok | ≤to≤ᵇ p1 | ≤to≤ᵇ p2 | ≤to≤ᵇ p6 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) (Add sig) record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Collecting v pkh d (insert sig sigs)) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = .sig ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TAdd p1 refl refl refl refl p6 refl refl refl)
+  rewrite v=v inputVal | v=v v | i=i pkh | v=v d | v=v tok | l=l (insert sig sigs) | i=i sig | ∈toQuery p1 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) Pay record { inputVal = .(addNat outputVal v) ; outputVal = outputVal ; outputDatum = .(tok , Holding) ; time = time ; payTo = .pkh ; payAmt = .v ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TPay refl p2 refl refl refl refl p7 refl refl refl)
+  rewrite i=i pkh | v=v v | v=v (addNat outputVal v) | v=v tok | lengthToLengthNat (nr par) sigs p2 = refl
+transitionImpliesValidator par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .true ; mint = mint ; tokAssetClass = tokAssetClass } (TCancel p1 refl refl refl p5 refl refl refl)
+  rewrite v=v inputVal | v=v tok | <to<ᵇ p1 = refl
 
 
-transitionImpliesValidator par Holding (Propose v pkh d)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting _ _ _ []) ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = continues }
-           (TPropose p1 p2 p3 refl p5 p6 p7 refl)
-  rewrite ≡to≡ᵇ (sym p5) | ≤to≤ᵇ p1 | ≤to≤ᵇ p2 | ≤to≤ᵇ p6 | v=v v | i=i pkh | v=v d = refl
-transitionImpliesValidator par Holding Close
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = outputLabel ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = false }
-           (TClose p1 p2 p3 p4)
-  rewrite <to<ᵇ p2 = refl
-transitionImpliesValidator par (Collecting v pkh d sigs) (Add sig)
-  record { inputVal = inputVal ;
-           outputVal = outputVal ;
-           outputLabel = (Collecting .v .pkh .d .(insert sig sigs)) ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = .sig ;
-           continues = .true }
-           (TAdd p1 refl refl refl p5 p6 refl)
-  rewrite ≡to≡ᵇ (sym p5) | i=i sig | ∈toQuery p1 | v=v v | i=i pkh | v=v d | l=l (insert sig sigs) = refl
-transitionImpliesValidator par (Collecting v pkh d sigs) Pay
-  record { inputVal = .(addNat outputVal v) ;
-           outputVal = outputVal ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = .pkh ;
-           payAmt = .v ;
-           signature = .pkh ;
-           continues = .true }
-           (TPay refl refl p3 refl refl refl refl p8 refl)
-  rewrite i=i pkh | v=v v | lengthToLengthNat (nr par) sigs p3 | v=v (outputVal + v) = refl
-transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
-  record { inputVal = inputVal ;
-           outputVal = .(inputVal) ;
-           outputLabel = Holding ;
-           time = time ;
-           payTo = payTo ;
-           payAmt = payAmt ;
-           signature = signature ;
-           continues = .true }
-           (TCancel p1 refl p3 refl p5 refl)
-  rewrite v=v inputVal | <to<ᵇ p1 = refl
+startImpliesMinting : ∀ {oV oA t s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> record {address = adr ; outputRef = oref } ⊢
+                           record { datum = outputDatum ctx ; value = outputVal ctx ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = continues ctx ;
+                           spends = inputRef ctx ; hasToken = hasTokenOut ctx ; mint = mint ctx ; token = tokAssetClass ctx}
+                           -> agdaPolicy adr oref top ctx ≡ true
+startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = .(tokAssetClass , Holding) ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .true ; inputRef = .oref ; hasTokenIn = hasTokenIn ; hasTokenOut = .true ; mint = .1 ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl refl refl) rewrite v=v oref | v=v tokAssetClass = refl
 
 
 
+closeImpliesBoth : ∀ {oV oA t s spn tok} (par : Params) (d : Datum) (i : Input) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> (par ⊢
+               record { datum = d ; value = (inputVal ctx) ;
+               outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+               spends = spn ; hasToken = hasTokenIn ctx ; mint = -1 ; token = tok}
+               ~[ i ]~|
+               record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+               outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+               continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+               mint = mint ctx ; token = tokAssetClass ctx})
+               -> (agdaValidator par d Close ctx ≡ true × agdaPolicy adr oref top ctx ≡ true)
+closeImpliesBoth par (tok , Holding) .Close adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = .false ; inputRef = inputRef ; hasTokenIn = .true ; hasTokenOut = .false ; mint = .-1 ; tokAssetClass = tokAssetClass } (TClose refl p2 p3 refl refl refl refl) rewrite <to<ᵇ p2 = refl , refl
 
 
 
+{-par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = false ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = false ; mint = .-1 ; tokAssetClass = tokAssetClass } refl p1 p2 = TClose refl (<ᵇto< (get p1)) refl refl refl refl refl
+bothImplyClose par (tok , Holding) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2
+bothImplyClose par (tok , Collecting x x₁ x₂ x₃) i adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = .-1 ; tokAssetClass = tokAssetClass } refl () p2-}
+
+{-
+validatorImpliesTransition : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+                           -> i ≢ Close
+                           -> (pf : agdaValidator par d i ctx ≡ true)
+                           -> par ⊢
+                           record { datum = d ; value = (inputVal ctx) ;
+                           outVal = oV ; outAdr = oA ; now = t ; tsig = s ; continues = true ;
+                           spends = spn ; hasToken = hasTokenIn ctx ; mint = mnt ; token = tok}
+                           ~[ i ]~>
+                           record { datum = (outputDatum ctx) ; value = (outputVal ctx) ;
+                           outVal = payAmt ctx ; outAdr = payTo ctx ; now = time ctx ; tsig = signature ctx ;
+                           continues = continuing ctx ; spends = inputRef ctx ; hasToken = hasTokenOut ctx ;
+                           mint = mint ctx ; token = tokAssetClass ctx}-}
+
+{-
 ----------------------------------------------------------
 
 --Leftover code from previous attempts
@@ -1758,5 +1495,267 @@ transitionImpliesValidator par (Collecting v pkh d sigs) Cancel
   (TCancel p1 refl refl refl)
   rewrite v=v inputVal | <to<ᵇ p1 = refl
 
+
+-}
+-}
+
+
+{- MINSIG
+prop' : ∀ {v pkh d sigs} (s s' : State) (par : Params) (asigs asigs' asigs'' asigs''' : List PubKeyHash)
+         -> asigs ≡ (authSigs par)
+         -> asigs ≡ (asigs' ++ asigs'' ++ asigs''')
+         -> label s ≡ Collecting v pkh d sigs
+         -> label s' ≡ Collecting v pkh d (insertList asigs'' sigs)
+         -> outVal (context s) ≡ outVal (context s')
+         -> outAdr (context s) ≡ outAdr (context s')
+         -> now (context s) ≡ now (context s')
+         -> value (context s) ≡ value (context s')
+         -> tsig (context s') ≡ finalSig s (makeIs asigs'')
+         -> continues s ≡ true
+         -> continues s' ≡ true
+         -> par ⊢ s ~[ makeIs asigs'' ]~* s'
+
+prop' {v} {pkh} {d} {sigs}
+  record { label = .(Collecting v pkh d sigs) ;
+           context = record { value = .value₁ ;
+                              outVal = .outVal₁ ;
+                              outAdr = .outAdr₁ ;
+                              now = .now₁ ;
+                              tsig = tsig₁ } ;
+           continues = True }
+  record { label = .(Collecting v pkh d (insertList [] sigs)) ;
+           context = record { value = value₁ ;
+                              outVal = outVal₁ ;
+                              outAdr = outAdr₁ ;
+                              now = now₁ ;
+                              tsig = .(finalSig (record { label = Collecting v pkh d sigs ;
+                                                          context = record { value = value₁ ;
+                                                                             outVal = outVal₁ ;
+                                                                             outAdr = outAdr₁ ;
+                                                                             now = now₁ ;
+                                                                             tsig = tsig₁ } ;
+                                                          continues = true }) (makeIs [])) } ;
+           continues = True }
+  record { authSigs = .(sigs2 ++ [] ++ sigs3) ;
+           nr = nr₁ }
+  .(sigs2 ++ [] ++ sigs3) sigs2 [] sigs3 refl refl refl refl refl refl refl refl refl refl refl = root 
+  
+prop' {v} {pkh} {d} {sigs}
+  s1@(record { label = .(Collecting v pkh d sigs) ;
+               context = record { value = .value₁ ;
+                                  outVal = .outVal₁ ;
+                                  outAdr = .outAdr₁ ;
+                                  now = .now₁ ;
+                                  tsig = tsig₁ } })
+  s2@(record { label = .(Collecting v pkh d (insertList (x ∷ sigs3) sigs)) ;
+               context = record { value = value₁ ;
+                                  outVal = outVal₁ ;
+                                  outAdr = outAdr₁ ;
+                                  now = now₁ ;
+                                  tsig = .(finalSig s1 (makeIs (x ∷ sigs3))) } })
+  par@(record { authSigs = .(sigs2 ++ x ∷ sigs3 ++ sigs4) ; nr = nr₁ })
+  .(sigs2 ++ x ∷ sigs3 ++ sigs4) sigs2 (x ∷ sigs3) sigs4 refl refl refl refl refl refl refl refl refl refl refl
+  
+  = cons
+    (TAdd (∈lemma sigs2 (sigs3 ++ sigs4) x) refl refl refl refl refl refl)
+  
+    (prop' s' s2 par (sigs2 ++ x ∷ sigs3 ++ sigs4) (sigs2 ++ [ x ]) sigs3 sigs4 refl 
+          (appendLemma x sigs2 (sigs3 ++ sigs4)) refl refl refl refl refl refl
+          (finalSigLemma s1 s' x sigs3 refl) refl refl)
+    where
+      s' = record { label = Collecting v pkh d (insert x sigs) ;
+                    context = record { value = value₁ ;
+                                       outVal = outVal₁ ;
+                                       outAdr = outAdr₁ ;
+                                       now = now₁ ;
+                                       tsig = x }}
+                                       
+--Prop3 (Can add minimum nr of signatures 1 by 1)
+prop3 : ∀ { v pkh d sigs } (s s' : State) (par : Params) 
+        -> label s ≡ Collecting v pkh d sigs
+        -> label s' ≡ Collecting v pkh d (insertList (take (nr par) (authSigs par)) sigs)
+        -> outVal (context s) ≡ outVal (context s')
+        -> outAdr (context s) ≡ outAdr (context s')
+        -> now (context s) ≡ now (context s')
+        -> value (context s) ≡ value (context s')
+        -> tsig (context s') ≡ finalSig s (makeIs (take (nr par) (authSigs par)))
+        -> continues s ≡ true
+        -> continues s' ≡ true
+        -> par ⊢ s ~[ (makeIs (take (nr par) (authSigs par))) ]~* s'
+prop3 s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 = prop' s s' par (authSigs par) [] (take (nr par) (authSigs par)) (drop (nr par) (authSigs par)) refl (sym (take++drop≡id (nr par) (authSigs par))) p1 p2 p3 p4 p5 p6 p7 p8 p9
+
+
+--Prop3 (Can add minimum nr of signatures 1 by 1)
+prop3' : ∀ { v pkh d sigs } (s s' : State) (par : Params) 
+        -> label s ≡ Collecting v pkh d sigs
+        -> label s' ≡ Collecting v pkh d (insertList (drop (length (authSigs par) - nr par) (authSigs par)) sigs)
+        -> outVal (context s) ≡ outVal (context s')
+        -> outAdr (context s) ≡ outAdr (context s')
+        -> now (context s) ≡ now (context s')
+        -> value (context s) ≡ value (context s')
+        -> tsig (context s') ≡ finalSig s (makeIs (drop (length (authSigs par) - nr par) (authSigs par)))
+        -> continues s ≡ true
+        -> continues s' ≡ true
+        -> par ⊢ s ~[ (makeIs (drop (length (authSigs par) - nr par) (authSigs par))) ]~* s'
+prop3' s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 = prop s s' par (authSigs par) (take (length (authSigs par) - nr par) (authSigs par)) (drop (length (authSigs par) - nr par) (authSigs par)) refl (sym (take++drop≡id (monusNat (foldr (λ _ → suc) zero (authSigs par)) (nr par)) (authSigs par))) p1 p2 p3 p4 p5 p6 p7 p8 p9
+
+--prop s s' par (authSigs par) [] (authSigs par) refl refl p1 p2 p3 p4 p5 p6 p7 p8 p9
+
+prop2 : ∀ { v pkh d sigs } (s s' : State) (par : Params)
+          -> ValidS s
+          -> label s ≡ Collecting v pkh d sigs
+          -> label s' ≡ Holding
+          -> outVal (context s') ≡ v
+          -> outAdr (context s') ≡ pkh
+          -> value (context s) ≡ value (context s') + v
+          -> ValidP par
+          -> continues s ≡ true
+          -> continues s' ≡ true
+          -> tsig (context s') ≡ pkh
+          -> par ⊢ s ~[ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ]~* s'
+prop2 {d = d} {sigs = sigs}
+  s1@(record { label = .(Collecting (outVal context₁) (outAdr context₁) d sigs) ;
+               context = record { value = .(addNat (value context₁) (outVal context₁)) ;
+                                  outVal = outVal₁ ;
+                                  outAdr = outAdr₁ ;
+                                  now = now₁ ;
+                                  tsig = tsig₁ } })
+  s2@record { label = .Holding ; context = context₁ }
+  par (Col p1 p2 p3 p6) refl refl refl refl refl (Always p4 p5) refl refl refl
+  = lemmaMultiStep par s1 s' s2 (makeIs (take (nr par) (authSigs par))) [ Pay ]   
+    (prop3 s1 s' par refl refl refl refl refl refl refl refl refl)
+    (cons (TPay refl refl (≤-trans (takeLength p5) (uil (take (nr par) (authSigs par)) sigs (takeUnique p4))) refl refl refl refl refl refl) root)
+    --(≤-trans p5 (uil (authSigs par) sigs p4))
+      where
+        s' = record { label = Collecting (outVal context₁) (outAdr context₁) d (insertList (take (nr par) (authSigs par)) sigs) ;
+                       context = record { value = (addNat (value context₁) (outVal context₁)) ;
+                                          outVal = outVal₁ ;
+                                          outAdr = outAdr₁ ;
+                                          now = now₁ ;
+                                          tsig = finalSig (record { label = (Collecting (outVal context₁) (outAdr context₁) d sigs) ;
+                                                                    context = record { value = (addNat (value context₁) (outVal context₁)) ;
+                                                                              outVal = outVal₁ ;
+                                                                              outAdr = outAdr₁ ;
+                                                                              now = now₁ ;
+                                                                              tsig = tsig₁ } }) (makeIs (take (nr par) (authSigs par))) } }
+
+getSigNr : List Input -> Nat
+getSigNr [] = 0
+getSigNr ((Add x) ∷ xs) = 1 + getSigNr xs
+getSigNr (x ∷ xs) = getSigNr xs
+
+sigNrSum : ∀ (l1 l2 : List Input) -> getSigNr l1 + getSigNr l2 ≡ getSigNr (l1 ++ l2)
+sigNrSum [] l2 = refl
+sigNrSum (Propose x x₁ x₂ ∷ l1) l2 = sigNrSum l1 l2
+sigNrSum (Add x ∷ l1) l2 = cong suc (sigNrSum l1 l2)
+sigNrSum (Pay ∷ l1) l2 = sigNrSum l1 l2
+sigNrSum (Cancel ∷ l1) l2 = sigNrSum l1 l2
+sigNrSum (Close ∷ l1) l2 = sigNrSum l1 l2
+
+sigNrRewrite : ∀ (sigs : List PubKeyHash) -> getSigNr (makeIs (sigs)) ≡ length sigs
+sigNrRewrite [] = refl
+sigNrRewrite (x ∷ sigs) = cong suc (sigNrRewrite sigs)
+
+⊓Lemma : ∀ {n m} -> n ≤ m -> n ⊓ m ≡ n
+⊓Lemma {.zero} {m} z≤n = refl
+⊓Lemma {.(suc _)} {.(suc _)} (s≤s p) = cong suc (⊓Lemma p)
+
+sigNrLemma : ∀ {n : Nat} {sigs : List PubKeyHash} {is : List Input}
+  -> n ≤ length sigs
+  -> getSigNr is ≡ 0
+  -> getSigNr (makeIs (take n sigs) ++ is) ≤ n
+sigNrLemma {n} {sigs} {is} p1 p2 rewrite sym (sigNrSum (makeIs (take n sigs)) is) | sigNrRewrite (take n sigs)
+  | p2 | +-identityʳ (length (take n sigs)) | length-take n sigs | ⊓Lemma p1 = v≤v n
+
+--Strong Liquidity (For any state that is valid and has valid parameters,
+--there exists another state and some inputs containing at most n "honest
+--participants" signing Add transitions such that we can transition
+--there and have no value left in the contract)
+liquidity : ∀ (par : Params) (s : State) (pkh : PubKeyHash)
+          -> ValidS s -> ValidP par -> continues s ≡ true
+          -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') ×
+            ((value (context s') ≡ 0) × (getSigNr is ≤ nr par) ) )
+
+liquidity par s pkh (Stp p1) valid p2 rewrite p1 = ⊥-elim (get⊥ (sym p2))
+
+liquidity par
+  s@(record { label = .Holding ;
+              context = record { value = value ;
+                                 outVal = outVal ;
+                                 outAdr = outAdr ;
+                                 now = now ;
+                                 tsig = tsig }})
+  pkh (Hol refl) (Always p2 p3) pf with minValue <= value in eq
+...| false  = ⟨ s' , ⟨  [ Close ] , ⟨ cons (TClose refl (n≤ᵇto> eq) pf refl) root , ⟨ refl , z≤n ⟩ ⟩ ⟩ ⟩
+      where
+        s' = record { label = Holding ;
+                      context = record { value = zero ;
+                                         outVal = value ;
+                                         outAdr = pkh ;
+                                         now = now ;
+                                         tsig = tsig } ;
+                      continues = false }
+...| true = ⟨ s'' , ⟨ (Propose value pkh 0) ∷ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ,
+    ⟨ cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n pf refl)
+    (prop2 s' s'' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p2 p3) refl refl refl ) ,
+    ⟨ refl , sigNrLemma p3 refl ⟩ ⟩ ⟩ ⟩
+      where
+        s'' = record { label = Holding ;
+                      context = record { value = zero ;
+                                         outVal = value ;
+                                         outAdr = pkh ;
+                                         now = now ;
+                                         tsig = pkh } ;
+                      continues = true }
+        s' = record { label = Collecting value pkh 0 [] ;
+                       context = record { value = value ;
+                                          outVal = outVal ;
+                                          outAdr = outAdr ;
+                                          now = now ;
+                                          tsig = tsig } ;
+                      continues = true }
+
+
+
+liquidity par
+  s@(record { label = (Collecting v' pkh' d' sigs') ;
+             context = record { value = value ;
+                                outVal = outVal ;
+                                outAdr = outAdr ;
+                                now = now ;
+                                tsig = tsig } } )
+  pkh (Col refl p2 p3 p6) (Always p4 p5) pf with minValue <= value in eq
+...| false  = ⊥-elim (≤⇒≯ (≤-trans p3 p2) (n≤ᵇto> eq))
+
+...| true  = ⟨ s''' , ⟨ Cancel ∷ (Propose value pkh 0) ∷ ((makeIs (take (nr par) (authSigs par))) ++ [ Pay ]) ,
+    ⟨ cons (TCancel {s' = s'}
+    (s≤s (v≤v d')) refl refl refl pf refl)
+    (cons (TPropose (v≤v value) (≤ᵇto≤ eq) refl refl refl z≤n refl refl)
+    (prop2 s'' s''' par (Col refl (v≤v value) (≤ᵇto≤ eq) root) refl refl refl refl refl (Always p4 p5) refl refl refl)) ,
+    ⟨ refl , (sigNrLemma p5 refl) ⟩ ⟩ ⟩ ⟩
+      where
+        s''' = record { label = Holding ;
+                       context = record { value = zero ;
+                                          outVal = value ;
+                                          outAdr = pkh ;
+                                          now = now ;
+                                          tsig = pkh } ;
+                      continues = true }
+        s' = record { label = Holding ;
+                      context = record { value = value ;
+                                         outVal = outVal ;
+                                         outAdr = outAdr ;
+                                         now = suc d' ;
+                                         tsig = tsig } ;
+                      continues = true }
+        s'' = record { label = Collecting value pkh 0 [] ;
+                        context = record { value = value ;
+                                           outVal = outVal ;
+                                           outAdr = outAdr ;
+                                           now = 0 + 1 ;
+                                           tsig = tsig } ;
+                      continues = true }
+
+   
 
 -}
