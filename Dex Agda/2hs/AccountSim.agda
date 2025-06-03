@@ -16,23 +16,17 @@ AssetClass = Nat
 
 Label = List (PubKeyHash × Value)
 
-State = (AssetClass × Label)
+Datum = (AssetClass × Label)
 
 {-# COMPILE AGDA2HS Label #-}
-{-# COMPILE AGDA2HS State #-}
+{-# COMPILE AGDA2HS Datum #-}
 
 
 record ScriptContext : Set where
     field
-<<<<<<< HEAD
-        inputVal    : Integer
-        outputVal   : Integer
-        outputLabel : Label
-        signature   : PubKeyHash
-=======
         inputVal      : Integer
         outputVal     : Integer
-        outputDatum   : State
+        outputDatum   : Datum
         signature     : PubKeyHash
         continues     : Bool
         inputRef      : TxOutRef
@@ -40,7 +34,6 @@ record ScriptContext : Set where
         hasTokenOut   : Bool
         mint          : Integer
         tokAssetClass : AssetClass
->>>>>>> ebb61a072ac7971440fcd00679c6bee57036bdbe
 open ScriptContext public
 
 
@@ -70,7 +63,7 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 
-newDatum : ScriptContext -> State
+newDatum : ScriptContext -> Datum
 newDatum ctx = outputDatum ctx
 
 newToken : ScriptContext -> AssetClass
@@ -150,7 +143,7 @@ checkTokenOut tok ctx = hasTokenOut ctx
 continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
-agdaValidator : State -> Input -> ScriptContext -> Bool
+agdaValidator : Datum -> Input -> ScriptContext -> Bool
 agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && checkTokenOut tok ctx && continuing ctx &&
                                     newToken ctx == tok && (case inp of λ where
 
