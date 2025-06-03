@@ -43,9 +43,9 @@ sumVal [] = 0
 sumVal ((k , v) ∷ xs) =  v + sumVal xs
 
 
-record State : Set where
+record TState : Set where
   field
-    datum      : Datum
+    datum      : State
     value      : Value  
     tsig       : PubKeyHash
     continues  : Bool
@@ -53,7 +53,7 @@ record State : Set where
     hasToken   : Bool
     mint       : Integer
     token      : AssetClass
-open State
+open TState
 
 
 record MParams : Set where
@@ -62,7 +62,7 @@ record MParams : Set where
         outputRef : TxOutRef 
 open MParams public
 
-data _⊢_ : MParams -> State -> Set where
+data _⊢_ : MParams -> TState -> Set where
 
   TStart : ∀ {par s tok}
     -> datum s ≡ ( tok , [] )
@@ -75,7 +75,7 @@ data _⊢_ : MParams -> State -> Set where
     -> par ⊢ s
 
 --Transition Rules
-data _~[_]~>_ : State -> Input -> State -> Set where
+data _~[_]~>_ : TState -> Input -> TState -> Set where
  
   TOpen : ∀ {pkh s s' tok map}
     -> datum s ≡ (tok , map)
@@ -151,7 +151,7 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> s ~[ (Transfer from to val) ]~> s'
 
 --Multi-Step Transition
-data _~[_]~*_ : State -> List Input -> State -> Set where
+data _~[_]~*_ : TState -> List Input -> TState -> Set where
 
   root : ∀ { s }
     ------------------
@@ -179,7 +179,7 @@ data Unique : Label → Set where
 
 
 
-data Valid : State -> Set where
+data Valid : TState -> Set where
 
   Always : ∀ {s}
     -> value s ≡ sumVal (snd (datum s))
@@ -297,7 +297,7 @@ svLemma4 {from} {to} {vF} {vT} {val} (x ∷ l) p1 p2 p3 | false | false
          = cong (λ a → snd x + a) (svLemma4 l p1 p2 p3)
 
 
-fidelity : ∀ {s s' : State} {i : Input}
+fidelity : ∀ {s s' : TState} {i : Input}
          -> value s ≡ sumVal (snd (datum s))
          -> s ~[ i ]~> s'
          -> value s' ≡ sumVal (snd (datum s'))
@@ -311,7 +311,7 @@ fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues =
 fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Transfer _ _ _} pf (TTransfer refl p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13) rewrite p8 | p9 | pf = svLemma4 map p3 p4 p7
 --         rewrite p8 | pf | p7 = svLemma4 (snd (datum s)) p2 p3 p6
 
-fidelityMulti : ∀ {s s' : State} {is : List Input}
+fidelityMulti : ∀ {s s' : TState} {is : List Input}
   -> value s ≡ sumVal (snd (datum s))
   -> s ~[ is ]~* s'
   -> value s' ≡ sumVal (snd (datum s'))
@@ -394,7 +394,7 @@ delem {pkh} ((pkh' , v') ∷ label) (allCons {{i}} {{is}}) with pkh == pkh' in e
 ...| true = is 
 ...| false = allCons {{i}} {{delem label is}}
 
-validStateTransition : ∀ {s s' : State} {i}
+validStateTransition : ∀ {s s' : TState} {i}
   -> Valid s
   -> s ~[ i ]~> s'
   -> Valid s'
@@ -485,7 +485,7 @@ rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
 rewriteAdd b c p rewrite add≡ b c = p
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {sig spn mnt tok} (d : Datum) (i : Input) (ctx : ScriptContext)
+validatorImpliesTransition : ∀ {sig spn mnt tok} (d : State) (i : Input) (ctx : ScriptContext)
                            -> (pf : agdaValidator d i ctx ≡ true)
                            -> record
                                { datum = d
@@ -623,7 +623,7 @@ l=l (x ∷ l) rewrite i=i (fst x) | i=i (snd x) = l=l l
 
 
 
-transitionImpliesValidator : ∀ {sig spn mnt tok}  (d : Datum) (i : Input) (ctx : ScriptContext)
+transitionImpliesValidator : ∀ {sig spn mnt tok}  (d : State) (i : Input) (ctx : ScriptContext)
                            -> record
                                { datum = d
                                ; value = inputVal ctx
@@ -661,7 +661,7 @@ startImpliesMinting : ∀ {s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx
                            -> agdaPolicy adr oref top ctx ≡ true
 startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl refl refl) rewrite n=n oref | n=n tok = refl
 
-lemmaMultiStep : ∀ {s s' s'' : State} {is is' : List Input}
+lemmaMultiStep : ∀ {s s' s'' : TState} {is is' : List Input}
                    -> s  ~[ is  ]~* s'
                    -> s' ~[ is' ]~* s''
                    -> s  ~[ is ++ is' ]~* s''
@@ -679,7 +679,7 @@ makeL [] = []
 makeL ((a , b) ∷ l) = (a , emptyValue) ∷ (makeL l)
 
 
-lastSig : State -> PubKeyHash
+lastSig : TState -> PubKeyHash
 lastSig record { datum = (tok , []) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } = tsig
 lastSig record { datum = (tok , x ∷ []) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } = fst x
 lastSig record { datum = (tok , x ∷ y ∷ map) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } = lastSig record { datum = (tok , y ∷ map) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }
@@ -835,7 +835,7 @@ subValid : ∀ {x tok map v sig spn mnt tok' }
 subValid (Always x (allCons {{i}} {{is}})) = is
 
 
-prop1 : ∀ {tok} {map : Label} (s s' : State)
+prop1 : ∀ {tok} {map : Label} (s s' : TState)
         -> datum s ≡ (tok , map)
         -> datum s' ≡ (tok , [])
         -> value s' ≡ 0
@@ -880,7 +880,7 @@ prop1 record { datum = (tok , x ∷ map) ; value = value ; tsig = tsig ; continu
 
 
 
-liquidity : ∀ (s : State)
+liquidity : ∀ (s : TState)
           -> value s ≡ sumVal (snd (datum s))
           -> Valid s
           -> continues s ≡ true
