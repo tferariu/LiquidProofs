@@ -40,15 +40,7 @@ record Context : Set where
     tsig          : PubKeyHash
 open Context
 
---raname to somtething appropriate
-{-
-record State : Set where
-  field
-    label         : Label
-    context       : Context
-    continues     : Bool
-open State
--}
+
 
 record State : Set where
   field
@@ -65,23 +57,6 @@ record State : Set where
     token      : AssetClass
 open State
 
-{-
-record ScriptContext : Set where
-    field
-        inputVal      : Nat
-        outputVal     : Nat
-        outputDatum   : Datum
-        time          : Deadline
-        payTo         : PubKeyHash
-        payAmt        : Value
-        signature     : PubKeyHash
-        continues     : Bool
-        inputRef      : TxOutRef
-        hasTokenIn    : Bool
-        hasTokenOut   : Bool
-        mint          : Integer
-        tokAssetClass : AssetClass
-open ScriptContext public-}
 
 _∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
 x ∈ xs = Any (x ≡_) xs
@@ -91,13 +66,6 @@ x ∉ xs = ¬ (x ∈ xs)
 
 
 --Transition Rules
-
-
---agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
---agdaPolicy addr oref _ ctx =
-{-(eqNat oref inputRef &&
-              eqNat tokAssetClass tok-}
-
 
 record MParams : Set where
     field
@@ -116,7 +84,6 @@ data _⊢_ : MParams -> State -> Set where
     -> hasToken s ≡ true
     -------------------
     -> par ⊢ s
-
 
 
 data _⊢_~[_]~>_ : Params -> State -> Input -> State -> Set where
@@ -777,35 +744,6 @@ lengthNatToLength zero (x ∷ l) pf = z≤n
 lengthNatToLength (suc n) (x ∷ l) pf = s≤s (lengthNatToLength n l pf)
 
 
-{-
-record
-             { datum = tok , (Collecting value pkh 0 [])
-             ; value = value
-             ; outVal = outVal
-             ; outAdr = outAdr
-             ; now = suc (suc d')
-             ; tsig = tsig
-             ; continues = true
-             ; input = input
-             ; hasToken = true
-             ; mint = mint
-             ; token = token
-             }
-
-        inputVal      : Nat
-        outputVal     : Nat
-        outputDatum   : Datum
-        time          : Deadline
-        payTo         : PubKeyHash
-        payAmt        : Value
-        signature     : PubKeyHash
-        continues     : Bool
-        inputRef      : TxOutRef
-        hasTokenIn    : Bool
-        hasTokenOut   : Bool
-        mint          : Integer
-        tokAssetClass : AssetClass
--}
 
 --Validator returning true implies transition relation is inhabited
 validatorImpliesTransition : ∀ {oV oA t s tok spn mnt} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
@@ -867,8 +805,7 @@ validatorImpliesTransition par (tok , Collecting v pkh d sigs) Pay record { inpu
 validatorImpliesTransition par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; time = time ; payTo = payTo ; payAmt = payAmt ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = true ; hasTokenOut = true ; mint = mint ; tokAssetClass = tokAssetClass } nc pf = ⊥-elim (2&&false (eqNat outputVal inputVal) continues pf)
 
 
---agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
---agdaPolicy addr oref _ ctx =
+
 
 mintingImpliesStart : ∀ {oV oA t s} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> mint ctx ≡ 1
