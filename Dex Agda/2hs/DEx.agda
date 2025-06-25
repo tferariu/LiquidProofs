@@ -216,6 +216,9 @@ checkTokenIn tok ctx = (assetClassValueOf (inputVal ctx) tok) == 1
 checkTokenOut : AssetClass -> ScriptContext -> Bool
 checkTokenOut tok ctx = (assetClassValueOf (outputVal ctx) tok) == 1
 
+{-# COMPILE AGDA2HS checkMinValue #-}
+{-# COMPILE AGDA2HS checkTokenIn #-}
+{-# COMPILE AGDA2HS checkTokenOut #-}
 
 ratioCompare : Integer -> Integer -> Rational -> Bool
 ratioCompare a b r = a * (num r) <= b * (den r)
@@ -243,6 +246,11 @@ checkBuyer par amt pkh ctx = buyTo ctx == pkh &&
                              checkMinValue (buyVal ctx)
                              --buyAmt ctx == amt
 
+{-# COMPILE AGDA2HS checkBuyer #-}
+{-# COMPILE AGDA2HS checkPayment #-}
+{-# COMPILE AGDA2HS processPayment #-}
+{-# COMPILE AGDA2HS ratioCompare #-}
+
 {-
 checkClose : Params -> Label -> ScriptContext -> Bool
 checkClose par st ctx = payTo ctx == owner st &&
@@ -251,6 +259,9 @@ checkClose par st ctx = payTo ctx == owner st &&
 
 checkTokenBurned : AssetClass -> ScriptContext -> Bool
 checkTokenBurned tok ctx = mint ctx == -1
+
+{-# COMPILE AGDA2HS checkTokenBurned #-}
+
 
 agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
 agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ where
@@ -266,7 +277,7 @@ agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ 
   Close -> not (continuing ctx) && checkTokenBurned tok ctx &&
            not (checkTokenOut (newDatum ctx .fst) ctx) && checkSigned (owner lab) ctx )
            
-
+{-# COMPILE AGDA2HS agdaValidator #-}
 
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = mint ctx 
@@ -293,6 +304,11 @@ isInitial addr oref ctx = consumes oref ctx &&
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = continues ctx
 
+{-# COMPILE AGDA2HS consumes #-}
+{-# COMPILE AGDA2HS checkDatum #-}
+{-# COMPILE AGDA2HS checkValue #-}
+{-# COMPILE AGDA2HS isInitial #-}
+{-# COMPILE AGDA2HS continuingAddr #-}
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
@@ -305,4 +321,7 @@ agdaPolicy addr oref _ ctx =
 
 
 {-# COMPILE AGDA2HS agdaPolicy #-}
+
+
+
 

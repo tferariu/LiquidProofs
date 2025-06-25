@@ -510,6 +510,10 @@ finalEquiv = record { to = λ { {par , adr , oref , d , Close , ctx} x → bothI
 
 
 totalF : Argument -> Bool
+totalF (par , adr , oref , d , Update v r , ctx) = {!!}
+totalF (par , adr , oref , d , Exchange amt pkh , ctx) = {!!}
+totalF (par , adr , oref , d , Close , ctx) = {!!}
+{-
 totalF (par , adr , oref , d , i , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }) = agdaPolicy adr oref tt ctx
 totalF (par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Update v r) ctx
 totalF (par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Exchange amt pkh) ctx 
@@ -545,6 +549,7 @@ totalEquiv = record { to =
       {par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Update v r) ctx x ;
       {par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Exchange amt pkh) ctx x ;
       {par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → closeImpliesBoth par d adr oref tt ctx x } }
+      -}
 
 {-
 {par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +_ zero ; tokAssetClass = tokAssetClass₁ }} x → {!closeImpliesBoth!} ; {par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +[1+ N.suc n ] ; tokAssetClass = tokAssetClass₁ }} x → {!!} ; {par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = negsuc n ; tokAssetClass = tokAssetClass₁ }} x → {!!}

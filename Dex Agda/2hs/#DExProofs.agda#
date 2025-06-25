@@ -1,4 +1,4 @@
-open import DEx2
+open import DEx
 
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
@@ -29,7 +29,7 @@ open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup ; _<>_)
 
 
-module DExProofs3 where
+module DExProofs where
 
 
 
@@ -57,7 +57,7 @@ record MParams : Set where
         buyC   : AssetClass
 open MParams public
 
-data _⊢~[_]~>_ : MParams -> Input -> State -> Set where
+data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s l}
     -> datum s ≡ ((token s) , l)
@@ -67,7 +67,7 @@ data _⊢~[_]~>_ : MParams -> Input -> State -> Set where
     -> hasToken s ≡ true
     -> checkRational (ratio l) ≡ true
     -------------------
-    -> par ⊢~[ Start ]~>  s
+    -> par ⊢ s
 
 
 
@@ -156,12 +156,11 @@ data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
 get⊥ : true ≡ false -> ⊥
 get⊥ ()
 
-
 --State Validity Invariant
-validStateInitial : ∀ {i s par}
-  -> par ⊢~[ i ]~> s
+validStateInitial : ∀ {s par}
+  -> par ⊢ s
   -> ValidS s
-validStateInitial {i} {record { datum = .(token₁ , _) ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl p2 p3 p4 p5 p6) = Oth p6
+validStateInitial {record { datum = .(token₁ , _) ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl p2 p3 p4 p5 p6) = Oth p6
 
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
@@ -215,6 +214,7 @@ go true {b} pf = pf
 
 get : ∀ {a b : Bool} -> (a && b) ≡ true -> a ≡ true
 get {true} {true} pf = refl
+
 
 
 {-
@@ -318,8 +318,8 @@ getPar record { sellC = sellC ; buyC = buyC } adr oref = record
                                                           }
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
-                           -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
+validatorImpliesTransition : ∀ {adr oref} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+                           -> i ≢ Close
                            -> (pf : agdaValidator par d i ctx ≡ true)
                            -> getPar par adr oref  ⊢ getS d ctx ~[ i ]~> getS' ctx
 validatorImpliesTransition par d (Update v r) ctx p1 p2
@@ -362,51 +362,25 @@ validatorImpliesTransition par d (Exchange amt pkh) ctx p1 p2
   (go (checkTokenIn (d .fst) ctx) p2))))))
   (go (continuing ctx) ((go (checkBuyer par amt pkh ctx) (go (checkPayment par amt (d .snd) ctx) (go (newDatum ctx == ((d .fst) , (d .snd)))
   (go (oldValue ctx == newValue ctx <> (assetClassValue (sellC par) amt)) (go (checkTokenIn (d .fst) ctx) p2))))))))
-validatorImpliesTransition par d Close ctx (inj₁ ()) p2
-validatorImpliesTransition par d Close ctx (inj₂ ()) p2
-validatorImpliesTransition par d Start ctx p1 p2 = ⊥-elim (get⊥ (sym (go (checkTokenIn (d .fst) ctx) p2))) 
+validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 
 
 
-mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
-                           -> (pf : agdaPolicy adr oref Start ctx ≡ true)
-                           -> getPar par adr oref ⊢~[ Start ]~>  getS' ctx
-mintingImpliesStart adr oref ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p1 rewrite ==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p1)))))
-  = TStart refl (==ito≡ (go (isInitial adr oref ctx) (go (continuingAddr adr ctx) p1))) (get p1)
-    (==to≡ (get (get (go (continuingAddr adr ctx) p1))))
-    (subst (λ x -> checkTokenOut x ctx ≡ true ) (==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p1))))))
-    (go (checkDatum adr ctx) (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p1)))))
-    (go (ownAssetClass ctx == tok) (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p1)))))
 
-{-
-mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (i : Input) (ctx : ScriptContext)
-                           -> i ≡ Start
-                           -> (pf : agdaPolicy adr oref i ctx ≡ true)
-                           -> getPar par adr oref ⊢~[ i ]~>  getS' ctx
-mintingImpliesStart adr oref Close ctx () p2
-mintingImpliesStart adr oref Start ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p1 p2 rewrite ==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p2)))))
-  = TStart refl (==ito≡ (go (isInitial adr oref ctx) (go (continuingAddr adr ctx) p2))) (get p2)
-    (==to≡ (get (get (go (continuingAddr adr ctx) p2))))
-    (subst (λ x -> checkTokenOut x ctx ≡ true ) (==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p2))))))
-    (go (checkDatum adr ctx) (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p2)))))
-    (go (ownAssetClass ctx == tok) (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p2)))))
--}
-{-
-consumes oref ctx &&
-                          checkDatum addr ctx &&
-(get (go (consumes oref ctx) (go (continuingAddr adr ctx) {!p2!}))))
+mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> mint ctx ≢ -1
+                           -> (pf : agdaPolicy adr oref top ctx ≡ true)
+                           -> getPar par adr oref ⊢ getS' ctx
 mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 with mint ctx == -1 in eq
 mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | True rewrite ==ito≡ {mint'} {negsuc 0} eq = ⊥-elim (p1 refl) --rewrite p1 = ⊥-elim (get⊥ eq)
 mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | False with mint ctx == 1 in eq'
-mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | False | True rewrite ==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (go (continuingAddr adr ctx) {!!})))) = {!!}
-{-TStart refl (==ito≡ eq') (get p2) (==to≡ (get (go (continues) p2)))
+mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | False | True rewrite ==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2)))) = TStart refl (==ito≡ eq') (get p2) (==to≡ (get (go (continues) p2)))
                   (subst (λ x -> checkTokenOut x ctx ≡ true ) (==to≡ (get (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2)))))
                   (go (checkDatum adr ctx) (go (consumes oref ctx)
                   (go (continuingAddr adr ctx) p2))))
                   (go (ownAssetClass ctx == tok)
-                  (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2)))) -}
-mintingImpliesStart adr oref i ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | False | False = {!!} -}
---⊥-elim (get⊥ (sym {!!}))
+                  (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2))))
+mintingImpliesStart adr oref top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' ; tokAssetClass = tokAssetClass } p1 p2 | False | False = ⊥-elim (get⊥ (sym p2))
 
 --= TStart {!!} {!!} {!!} {!!} {!!} {!!}
 
@@ -418,42 +392,14 @@ mintingImpliesStart adr oref i ctx@record { inputVal = inputVal ; outputVal = ou
                   (go (continuingAddr adr ctx) p2))))
                   (go (ownAssetClass ctx == tok)
                   (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2))))-}
-                  
-
 
 t=f : ∀ (a : Bool) -> not a ≡ true -> a ≡ true -> true ≡ false
 t=f false p1 p2 = sym p2
 t=f true p1 p2 = sym p1
 
-
-bothImplyClose : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
-               -> (agdaValidator par d Close ctx && agdaPolicy adr oref Close ctx) ≡ true
+bothImplyClose : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
                -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
-bothImplyClose par d adr oref ctx p
-  = TClose (==to≡ (go (not (checkTokenOut (newDatum ctx .fst) ctx)) (go (eqInteger (mint ctx) (negsuc 0))
-    (go (not (continues ctx)) (go (eqInteger (assetClassValueOf (inputVal ctx) (fst d)) (+ 1)) (get p))))))
-    (==ito≡ (go (not (continues ctx)) (go (agdaValidator par d Close ctx) p))) refl (unNot (get (go (agdaValidator par d Close ctx) p)))
-    (get (get p)) (unNot (get (go (eqInteger (mint ctx) (negsuc 0))
-    (go (not (continues ctx)) (go (eqInteger (assetClassValueOf (inputVal ctx) (fst d)) (+ 1)) (get p))))))
-
-{-
-bothImplyClose : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (i : Input) (ctx : ScriptContext)
-               -> (agdaValidator par d i ctx && agdaPolicy adr oref i ctx) ≡ true
-               -> getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
-bothImplyClose par d adr oref (Update x x₁) ctx p = ⊥-elim (get⊥ (sym (go (agdaValidator par d (Update x x₁) ctx) p)))
-bothImplyClose par d adr oref (Exchange x x₁) ctx p = ⊥-elim (get⊥ (sym (go (agdaValidator par d (Exchange x x₁) ctx) p)))
-bothImplyClose par d adr oref Close ctx p
-  = TClose (==to≡ (go (not (checkTokenOut (newDatum ctx .fst) ctx)) (go (eqInteger (mint ctx) (negsuc 0))
-    (go (not (continues ctx)) (go (eqInteger (assetClassValueOf (inputVal ctx) (fst d)) (+ 1)) (get p))))))
-    (==ito≡ (go (not (continues ctx)) (go (agdaValidator par d Close ctx) p))) refl (unNot (get (go (agdaValidator par d Close ctx) p)))
-    (get (get p)) (unNot (get (go (eqInteger (mint ctx) (negsuc 0))
-    (go (not (continues ctx)) (go (eqInteger (assetClassValueOf (inputVal ctx) (fst d)) (+ 1)) (get p))))))
-bothImplyClose par d adr oref Start ctx p = ⊥-elim (get⊥ (sym (go (checkTokenIn (d .fst) ctx) (get p))))
--}
-{-
-not (continuing ctx) && checkTokenBurned tok ctx &&
-           not (checkTokenOut (newDatum ctx .fst) ctx) && checkSigned (owner lab) ctx 
-
 bothImplyClose par d adr oref top ctx p with mint ctx == 1 in eq
 bothImplyClose par d adr oref top ctx p | True 
   = ⊥-elim (get⊥ (t=f (continues ctx) (get (go (checkTokenIn (d .fst) ctx) (get p))) (get (go (agdaValidator par d Close ctx) p))))
@@ -465,9 +411,7 @@ bothImplyClose par d adr oref top ctx p | False | True
     (unNot (get (go (not (continuing ctx)) (go (checkTokenIn (d .fst) ctx) (get p)))))
 bothImplyClose par d adr oref top ctx p | False | False
   = ⊥-elim (get⊥ (sym (go (eqInteger (assetClassValueOf (inputVal ctx) (d .fst)) (+ 1)
-         && not (continues ctx) && false) p)))-}
-
---⊥-elim (neq (==ito≡ eq)) -- TClose {!!} {!!} {!!} {!!} {!!} {!!}
+         && not (continues ctx) && false) p)))
 
 ≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
 ≡to== {zero} refl = refl
@@ -499,20 +443,6 @@ v=v : ∀ (v : Value) -> (v == v) ≡ true
 v=v (MkMap x) = lst=lst x
 
 
-
-transitionImpliesValidator : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
-                           -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
-                           -> getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
-                           -> agdaValidator par d i ctx ≡ true
-transitionImpliesValidator par d (Update v r) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p (TUpdate refl refl refl p4 p5 p6 refl p8 p9)
-  rewrite p4 | p5 | p6 | p6 | p8 | p9 | n=n (owner (d .snd)) | v=v v | n=n (d .fst) | i=i (num r) | i=i (den r) = p6
-transitionImpliesValidator par d (Exchange amt pkh) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p (TExchange refl refl refl p4 p5 refl refl p8 p9 refl p11 p12)
-  rewrite p4 | p5 | p8 | p9 | p11 | p12
-    | v=v (addValue outputVal (MkMap ((sellC par , assetClassValueOf buyVal (sellC par)) ∷ []))) 
-    | n=n (d .fst) | i=i (num (ratio (d .snd))) | i=i (den (ratio (d .snd))) 
-    | n=n (owner (snd d)) | n=n pkh | i=i (assetClassValueOf buyVal (sellC par)) = p9
-
-{-
 transitionImpliesValidator : ∀ {adr oref} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
                            -> getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
                            -> agdaValidator par d i ctx ≡ true
@@ -523,109 +453,27 @@ transitionImpliesValidator par d (Exchange amt pkh) record { inputVal = inputVal
     | v=v (addValue outputVal (MkMap ((sellC par , assetClassValueOf buyVal (sellC par)) ∷ []))) 
     | n=n (d .fst) | i=i (num (ratio (d .snd))) | i=i (den (ratio (d .snd))) 
     | n=n (owner (snd d)) | n=n pkh | i=i (assetClassValueOf buyVal (sellC par)) = p9
--}
 
 
-startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
-                           -> getPar par adr oref ⊢~[ Start ]~> getS' ctx
-                           -> agdaPolicy adr oref Start ctx ≡ true
-startImpliesMinting adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl p5 p6) rewrite p5 | p6 | n=n oref | n=n tokAssetClass = refl 
-
-{-
-startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (i : Input) (ctx : ScriptContext)
-                           -> getPar par adr oref ⊢~[ i ]~> getS' ctx
-                           -> agdaPolicy adr oref i ctx ≡ true
-startImpliesMinting adr oref i record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl p5 p6) rewrite p5 | p6 | n=n oref | n=n tokAssetClass = refl 
--}
+startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+                           -> getPar par adr oref ⊢ getS' ctx
+                           -> agdaPolicy adr oref top ctx ≡ true
+startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl p5 p6) rewrite p5 | p6 | n=n oref | n=n tokAssetClass = refl 
 
 
-closeImpliesBoth : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
+closeImpliesBoth : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
-               -> ((agdaValidator par d Close ctx && agdaPolicy adr oref Close ctx) ≡ true)
-closeImpliesBoth par d adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TClose refl refl refl refl p5 p6) rewrite p5 | p6 | n=n (owner (d .snd)) = refl
-
-{-
-closeImpliesBoth : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (i : Input) (ctx : ScriptContext)
-               -> getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
-               -> ((agdaValidator par d i ctx && agdaPolicy adr oref i ctx) ≡ true)
-closeImpliesBoth par d adr oref i record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TClose refl refl refl refl p5 p6) rewrite p5 | p6 | n=n (owner (d .snd)) = refl --refl , refl
--}
+               -> ((agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true)
+closeImpliesBoth par d adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TClose refl refl refl refl p5 p6) rewrite p5 | p6 | n=n (owner (d .snd)) = refl --refl , refl
 
 --AParam = 
 
---Argument = Params × Address × TxOutRef × Datum × Input × ScriptContext
-
- -- (v : Value) (r : Rational) (amt : Integer) (pkh : PubKeyHash)
- 
-data Argument : Set where
-
-  Initial : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start
-    ----------------
-    -> Argument
-
-  Running : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-              {v r amt pkh}
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
-    ----------------
-    -> Argument
-
-  Final : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close
-    ----------------
-    -> Argument
-
+Argument = Params × Address × TxOutRef × Datum × Input × ScriptContext
 
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
-totalF : Argument -> Bool
-totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
-totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
-totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
-
-totalR : Argument -> Set
-totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
-totalR (Running par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
-totalR (Final par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
-
-totalEquiv : totalF ≈ totalR
-totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → mintingImpliesStart adr oref ctx x ;
-                               {Running par adr oref d i ctx p} x → validatorImpliesTransition par d i ctx p x ;
-                               {Final par adr oref d .Close ctx refl} x → bothImplyClose par d adr oref ctx x } ;
-                    from = λ { {Initial par adr oref d .Start ctx refl} x → startImpliesMinting adr oref ctx x ;
-                               {Running par adr oref d i ctx p} x → transitionImpliesValidator par d i ctx p x ;
-                               {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
-
-{-
-totalF : Argument -> Bool
-totalF (par , adr , oref , d , i@(Update v r) , ctx) = agdaValidator par d i ctx
-totalF (par , adr , oref , d , i@(Exchange amt pkh) , ctx) = agdaValidator par d i ctx
-totalF (par , adr , oref , d , i@Close , ctx) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
-totalF (par , adr , oref , d , i@Start , ctx) = agdaPolicy adr oref i ctx
-
-totalR : Argument -> Set
-totalR (par , adr , oref , d , i@(Update v r) , ctx) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
-totalR (par , adr , oref , d , i@(Exchange amt pkh) , ctx) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
-totalR (par , adr , oref , d , i@Close , ctx) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
-totalR (par , adr , oref , d , i@Start , ctx) = getPar par adr oref ⊢~[ i ]~> getS' ctx
-
-totalEquiv : totalF ≈ totalR
-totalEquiv = record { to = λ{ {par , adr , oref , d , i@(Update v r) , ctx} x → validatorImpliesTransition par d i ctx (λ ()) x ;
-                              {par , adr , oref , d , i@(Exchange amt pkh) , ctx} x → validatorImpliesTransition par d i ctx (λ ()) x ;
-                              {par , adr , oref , d , i@Close , ctx} x → bothImplyClose par d adr oref i ctx x ;
-                              {par , adr , oref , d , i@Start , ctx} x → mintingImpliesStart adr oref i ctx (λ ()) x } ;
-                      from = λ{ {par , adr , oref , d , i@(Update v r) , ctx} x → transitionImpliesValidator par d i ctx x ;
-                                {par , adr , oref , d , i@(Exchange amt pkh) , ctx} x → transitionImpliesValidator par d i ctx x ;
-                                {par , adr , oref , d , i@Close , ctx} x → closeImpliesBoth par d adr oref i ctx x ;
-                                {par , adr , oref , d , i@Start , ctx} x → startImpliesMinting adr oref i ctx x } }
-
--}
-
-
----------------------------------------------
-{-
 
 runtimeF : Argument -> Bool
 runtimeF (par , adr , oref , d , i@(Update x x₁) , ctx) = agdaValidator par d i ctx
@@ -654,24 +502,250 @@ finalF (par , adr , oref , d , Update x x₁ , ctx) = false
 finalF (par , adr , oref , d , Exchange x x₁ , ctx) = false
 finalF (par , adr , oref , d , Close , ctx) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx
 
-{-
-finalF (par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +_ zero ; tokAssetClass = tokAssetClass₁ }) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx
-finalF (par , adr , oref , d , Close , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +[1+ zero ] ; tokAssetClass = tokAssetClass₁ }) = false
-finalF (par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +[1+ N.suc n ] ; tokAssetClass = tokAssetClass₁ }) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx
-finalF (par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = negsuc n ; tokAssetClass = tokAssetClass₁ }) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx-}
-
 finalR : Argument -> Set
 finalR (par , adr , oref , d , i , ctx) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
 
 finalEquiv : finalF ≈ finalR
 finalEquiv = record { to = λ { {par , adr , oref , d , Close , ctx} x → bothImplyClose par d adr oref tt ctx x} ; from = λ { {par , adr , oref , d , Close , ctx} x →  closeImpliesBoth par d adr oref tt ctx x } }
-{-record { to = λ { {par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +_ zero ; tokAssetClass = tokAssetClass₁ }} x → bothImplyClose par d adr oref tt ctx (λ ()) x ; {par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +[1+ N.suc n ] ; tokAssetClass = tokAssetClass₁ }} x → bothImplyClose par d adr oref tt ctx (λ ()) x ; {par , adr , oref , d , Close , ctx@record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = negsuc n ; tokAssetClass = tokAssetClass₁ }} x → bothImplyClose par d adr oref tt ctx (λ ()) x } ; from = λ { {par , adr , oref , d , Close , ctx} p@(TClose refl refl refl refl x x') → closeImpliesBoth par d adr oref tt ctx p } }
--}
+
+
+totalF : Argument -> Bool
+totalF (par , adr , oref , d , Update v r , ctx) = {!!}
+totalF (par , adr , oref , d , Exchange amt pkh , ctx) = {!!}
+totalF (par , adr , oref , d , Close , ctx) = {!!}
+
+{-
+totalF (par , adr , oref , d , i , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }) = agdaPolicy adr oref tt ctx
+totalF (par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Update v r) ctx
+totalF (par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Exchange amt pkh) ctx 
+totalF (par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx
+totalF (par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Update v r) ctx
+totalF (par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = agdaValidator par d (Exchange amt pkh) ctx  
+totalF (par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = agdaValidator par d Close ctx && agdaPolicy adr oref tt ctx
 
 totalR : Argument -> Set
-totalR (par , adr , oref , d , i , record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = {!!}
-totalR (par , adr , oref , d , i , record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }) = {!!}
-totalR (par , adr , oref , d , i , record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc zero ; tokAssetClass = tokAssetClass }) = {!!}
-totalR (par , adr , oref , d , i , record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc (N.suc n) ; tokAssetClass = tokAssetClass }) = {!!}
+totalR (par , adr , oref , d , i , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS' ctx
+totalR (par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Update v r ]~> getS' ctx
+totalR (par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Exchange amt pkh ]~> getS' ctx
+totalR (par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
+totalR (par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Update v r ]~> getS' ctx
+totalR (par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Exchange amt pkh ]~> getS' ctx
+totalR (par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }) = getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
+
+
+totalEquiv : totalF ≈ totalR
+totalEquiv = record { to =
+  λ { {par , adr , oref , d , i , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }} x → mintingImpliesStart adr oref tt ctx (λ ()) x ;
+      {par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → validatorImpliesTransition par d (Update v r) ctx (λ ()) x ;
+      {par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → validatorImpliesTransition par d (Exchange amt pkh) ctx (λ ()) x ;
+      {par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → bothImplyClose par d adr oref tt ctx x ;
+      {par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → validatorImpliesTransition par d (Update v r) ctx (λ ()) x ;
+      {par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → validatorImpliesTransition par d (Exchange amt pkh) ctx (λ ()) x ;
+      {par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → bothImplyClose par d adr oref tt ctx x } ;
+                      from =
+  λ { {par , adr , oref , d , i , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ n ] ; tokAssetClass = tokAssetClass }} x → startImpliesMinting adr oref tt ctx x ;
+      {par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Update v r) ctx x ;
+      {par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Exchange amt pkh) ctx x ;
+      {par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +_ zero ; tokAssetClass = tokAssetClass }} x → closeImpliesBoth par d adr oref tt ctx x ;
+      {par , adr , oref , d , Update v r , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Update v r) ctx x ;
+      {par , adr , oref , d , Exchange amt pkh , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → transitionImpliesValidator par d (Exchange amt pkh) ctx x ;
+      {par , adr , oref , d , Close , ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = negsuc n ; tokAssetClass = tokAssetClass }} x → closeImpliesBoth par d adr oref tt ctx x } }
+      -}
+
+{-
+{par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +_ zero ; tokAssetClass = tokAssetClass₁ }} x → {!closeImpliesBoth!} ; {par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = +[1+ N.suc n ] ; tokAssetClass = tokAssetClass₁ }} x → {!!} ; {par , adr , oref , d , i , record { inputVal = inputVal₁ ; outputVal = outputVal₁ ; outputDatum = outputDatum₁ ; payTo = payTo₁ ; payVal = payVal₁ ; buyTo = buyTo₁ ; buyVal = buyVal₁ ; signature = signature₁ ; continues = continues₁ ; inputRef = inputRef₁ ; mint = negsuc n ; tokAssetClass = tokAssetClass₁ }} x → {!!}
+-}
+
+{-
+  record { to = λ { {(par , adr , oref , d , i , ctx)} y →
+                  validatorImpliesTransition par d i ctx {!!} ?}
+         ; from = λ { {(par , adr , oref , d , i , ctx)} y →
+                  transitionImpliesValidator par d i ctx ? }}-}
+
+{-record { to = λ { x → {!validatorImpliesTransition!}}
+                      ; from = λ x → transitionImpliesValidator {!!} {!!} {!!} {!!} {!!} }-}
+
+--record { to = {!!} ; from = {!!} }
+
+
+
+ --(go (checkDatum adr ctx) (go (consumes oref ctx) (go (continuingAddr adr ctx) p2)))
+{-
+(tok , lab) ≡
+      (tokAssetClass ,
+       record
+       { ratio =
+           record { num = _l.ratio.num_1084 ; den = _l.ratio.den_1085 }
+       ; owner = _l.owner_1083
+       })-}
+--(==to≡ {outputDatum ctx .fst} {d .fst} (get (get (go (newValue ctx == v) (go (checkMinValue v) (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2))))))))
+
+{-par l (Update val r) ctx pf
+  = TUpdate (==to≡ (get pf)) (==ito≡ (get (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+    (==lto≡ ctx (record { ratio = r ; owner = owner l }) (get (go (outputVal ctx == val)
+    (go (checkRational r) (go ((owner l) == (signature ctx)) pf)))))
+    (get (go ((owner l) == (signature ctx)) pf)) refl
+    (go (outputLabel ctx == record { ratio = r ; owner = owner l})
+    (go (outputVal ctx == val) (go (checkRational r) (go ((owner l) == (signature ctx)) pf))))
+validatorImpliesTransition par l (Exchange val pkh) ctx pf rewrite add≡ (outputVal ctx) val 
+  = TExchange (==ito≡ (get pf)) (==lto≡ ctx l (get (go (inputVal ctx == outputVal ctx + val) pf)))
+  (==to≡ (get (get (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf)))))
+  (rewriteMulCheck (ratio l) ctx val ((go (payTo ctx == owner l) (get
+  (go (outputLabel ctx == l) (go (inputVal ctx == outputVal ctx + val) pf))))))
+  (==to≡ (get (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))))
+  (==ito≡ (go (buyTo ctx == pkh) (get (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf)))))) refl
+  (go (checkBuyer par val pkh ctx) (go (checkPayment par val l ctx) (go (outputLabel ctx == l)
+  (go (inputVal ctx == outputVal ctx + val) pf))))
+validatorImpliesTransition par l Close ctx pf
+  = TClose (==to≡ (go (not (continues ctx)) pf)) refl (unNot (get pf))
+-}
+
+
+
+{-
+transitionImpliesValidator : ∀ {pA pT bA bT s} (par : Params) (l : Label) (i : Input) (ctx : ScriptContext)
+                           -> (pf : par ⊢
+                           record { label = l ; context = record { value = (inputVal ctx) ;
+                           payAmt = pA ; payTo = pT ; buyAmt = bA ; buyTo = bT ; tsig = s } ; continues = true }
+                           ~[ i ]~>
+                           record { label = (outputLabel ctx) ; context = record { value = (outputVal ctx) ;
+                           payAmt = payAmt ctx ; payTo = payTo ctx ;
+                           buyAmt = buyAmt ctx ; buyTo = buyTo ctx ; tsig = signature ctx } ;
+                           continues = continuing ctx})
+                           -> agdaValidator par l i ctx ≡ true
+transitionImpliesValidator par l (Update val r) ctx (TUpdate p1 p2 p3 p4 p5 p6)
+  rewrite ≡to== p1 | p4 | ≡to==i p2 | ≡to==l p3 = p6
+transitionImpliesValidator par l (Exchange val pkh) ctx (TExchange p1 p2 p3 p4 p5 p6 p7 p8)
+  rewrite add≡ (outputVal ctx) val | ≡to==i p1 | ≡to==l p2 | ≡to== p3 | mul≡ val (num (ratio l))
+  | mul≡ (payAmt ctx) (den (ratio l)) | ≡to== p5 | ≡to==i p6 | ≤ito<= p4 = p8
+transitionImpliesValidator par l Close ctx (TClose p1 p2 p3) rewrite p3 = ≡to== p1
+-}
+
+
+{-
+
+
+neg≡ : ∀ (a : Integer) -> negateInteger a ≡ - a
+neg≡ (pos zero) = refl
+neg≡ +[1+ n ] = refl
+neg≡ (negsuc zero) = refl
+neg≡ (negsuc (N.suc n)) = refl
+
+add≡ : ∀ (a b : Integer) -> addInteger a b ≡ a + b
+add≡ (pos zero) (pos zero) = refl
+add≡ (pos zero) +[1+ m ] = refl
+add≡ +[1+ n ] (pos zero) = refl
+add≡ +[1+ n ] +[1+ m ] = refl
+add≡ (pos zero) (negsuc zero) = refl
+add≡ (pos zero) (negsuc (N.suc m)) = refl
+add≡ +[1+ n ] (negsuc zero) = refl
+add≡ +[1+ n ] (negsuc (N.suc m)) with ltNat n (N.suc m)
+...| True = {!!} --neg≡ (pos (monusNat (N.suc m) n))
+...| False = {!!} --refl 
+add≡ (negsuc zero) (pos zero) = refl
+add≡ (negsuc zero) +[1+ m ] = refl
+add≡ (negsuc (N.suc n)) (pos zero) = refl
+add≡ (negsuc (N.suc n)) +[1+ m ] with ltNat m (N.suc n)
+...| True = {!!} --neg≡ (pos (monusNat (N.suc n) m))
+...| False = {!!} --refl
+add≡ (negsuc zero) (negsuc zero) = refl
+add≡ (negsuc zero) (negsuc (N.suc m)) = refl
+add≡ (negsuc (N.suc n)) (negsuc zero) = refl
+add≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
+
+
+mul≡ : ∀ (a b : Integer) -> mulInteger a b ≡ a * b
+mul≡ (pos zero) (pos zero) = refl
+mul≡ +[1+ n ] (pos zero) = {!!} --mul≡ (pos n) (pos zero)
+mul≡ (pos zero) +[1+ m ] = refl
+mul≡ +[1+ n ] +[1+ m ] = refl
+mul≡ (pos zero) (negsuc zero) = refl
+mul≡ +[1+ n ] (negsuc zero) = refl
+mul≡ (pos zero) (negsuc (N.suc m)) = refl
+mul≡ +[1+ n ] (negsuc (N.suc m)) = refl
+mul≡ (negsuc zero) (pos zero) = refl
+mul≡ (negsuc (N.suc n)) (pos zero) = {!!} -- mul≡ (negsuc n) (pos zero)
+mul≡ (negsuc zero) +[1+ m ] = refl
+mul≡ (negsuc (N.suc n)) +[1+ m ] = refl
+mul≡ (negsuc zero) (negsuc zero) = refl
+mul≡ (negsuc (N.suc n)) (negsuc zero) = refl
+mul≡ (negsuc zero) (negsuc (N.suc m)) = refl
+mul≡ (negsuc (N.suc n)) (negsuc (N.suc m)) = refl
+
+--rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
+--rewriteAdd b c p rewrite add≡ b c = p
+
+<=to≤ : ∀ {a b} -> (a N.<ᵇ b || a == b) ≡ true -> a N.≤ b
+<=to≤ {zero} {zero} pf = N.z≤n
+<=to≤ {zero} {suc b} pf = N.z≤n
+<=to≤ {suc a} {suc b} pf = N.s≤s (<=to≤ pf)
+
+≤≡lem : ∀ (a b : Nat) -> ltNat a (N.suc b) ≡ true -> (ltNat a b || eqNat a b) ≡ true
+≤≡lem zero zero pf = refl
+≤≡lem zero (N.suc b) pf = refl
+≤≡lem (N.suc a) (N.suc b) pf = ≤≡lem a b pf
+
+≤≡ : ∀ (a b : Nat) -> (a N.≤ᵇ b) ≡ true -> (ltNat a b || eqNat a b) ≡ true
+≤≡ zero zero pf = refl
+≤≡ zero (N.suc b) pf = refl
+≤≡ (N.suc a) (N.suc b) pf = ≤≡lem a b pf
+
+
+<=ito≤ : ∀ {a b : Integer} -> (ltInteger a b || eqInteger a b) ≡ true -> a ≤ b
+<=ito≤ {pos n} {pos m} pf = +≤+ (<=to≤ pf)
+<=ito≤ {negsuc n} {pos m} pf = -≤+
+<=ito≤ {negsuc n} {negsuc m} pf = {!!} ---≤- (<=to≤ pf)
+
+--------------
+≡to== : ∀ {a b : Nat} -> a ≡ b -> (a == b) ≡ true
+≡to== {zero} refl = refl
+≡to== {suc a} refl = ≡to== {a} refl
+
+n=n : ∀ (n : Nat) -> (n == n) ≡ true
+n=n zero = refl
+n=n (suc n) = n=n n
+
+≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
+≡to==i {pos n} refl = n=n n
+≡to==i {negsuc n} refl = n=n n
+
+i=i : ∀ (i : Int) -> (eqInteger i i) ≡ true
+i=i (pos zero) = refl
+i=i (pos (suc n)) = {!!} --i=i (pos n)
+i=i (negsuc zero) = refl
+i=i (negsuc (suc n)) = {!!} --i=i (pos n)
+
+≡to==l : ∀ {a b : Label} -> a ≡ b -> (a == b) ≡ true
+≡to==l {record { ratio = ratio ; owner = owner }} refl
+  rewrite i=i (num ratio) | i=i (den ratio) | n=n owner = refl
+
+≤to<= : ∀ {a b : Nat} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true
+≤to<= {b = zero} N.z≤n = refl
+≤to<= {b = N.suc b} N.z≤n = refl
+≤to<= (N.s≤s p) = ≤to<= p
+
+≤ito<= : ∀ {a b : Integer} -> a ≤ b -> (ltInteger a b || eqInteger a b) ≡ true
+≤ito<= (-≤- n≤m) = {!!} -- ≤to<= n≤m
+≤ito<= -≤+ = refl
+≤ito<= (+≤+ m≤n) = ≤to<= m≤n
+
+
+getS'm : ScriptContext -> State
+getS'm ctx = record
+             { datum = outputDatum ctx
+             ; value = outputVal ctx
+             ; payVal = payVal ctx
+             ; payTo = payTo ctx
+             ; buyVal = buyVal ctx
+             ; buyTo = buyTo ctx
+             ; tsig = signature ctx
+             ; continues = continues ctx
+             ; spends = inputRef ctx
+             ; hasToken = (assetClassValueOf (outputVal ctx) (tokAssetClass ctx)) == 1
+             ; mint = mint ctx
+             ; token = tokAssetClass ctx
+             }
 -}
 
