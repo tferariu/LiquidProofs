@@ -318,10 +318,14 @@ getPar record { sellC = sellC ; buyC = buyC } adr oref = record
                                                           }
 
 --Validator returning true implies transition relation is inhabited
-validatorImpliesTransition : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+
+validatorImpliesTransition : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum)
+                               (i : Input) (ctx : ScriptContext)
                            -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
-                           -> (pf : agdaValidator par d i ctx ≡ true)
+                           -> agdaValidator par d i ctx ≡ true
                            -> getPar par adr oref  ⊢ getS d ctx ~[ i ]~> getS' ctx
+
+
 validatorImpliesTransition par d (Update v r) ctx p1 p2
   = TUpdate (==to≡ (get (go (checkTokenIn (d .fst) ctx) p2)))
   (==vto≡ (get (go (checkMinValue v) (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2))))))
@@ -371,6 +375,8 @@ validatorImpliesTransition par d Start ctx p1 p2 = ⊥-elim (get⊥ (sym (go (ch
 mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
                            -> (pf : agdaPolicy adr oref Start ctx ≡ true)
                            -> getPar par adr oref ⊢~[ Start ]~>  getS' ctx
+
+
 mintingImpliesStart adr oref ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p1 rewrite ==to≡ {tokAssetClass} {tok} (get (get (go (consumes oref ctx) (get (go (continuingAddr adr ctx) p1)))))
   = TStart refl (==ito≡ (go (isInitial adr oref ctx) (go (continuingAddr adr ctx) p1))) (get p1)
     (==to≡ (get (get (go (continuingAddr adr ctx) p1))))
@@ -429,6 +435,7 @@ t=f true p1 p2 = sym p1
 bothImplyClose : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
                -> (agdaValidator par d Close ctx && agdaPolicy adr oref Close ctx) ≡ true
                -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
+               
 bothImplyClose par d adr oref ctx p
   = TClose (==to≡ (go (not (checkTokenOut (newDatum ctx .fst) ctx)) (go (eqInteger (mint ctx) (negsuc 0))
     (go (not (continues ctx)) (go (eqInteger (assetClassValueOf (inputVal ctx) (fst d)) (+ 1)) (get p))))))
@@ -500,10 +507,13 @@ v=v (MkMap x) = lst=lst x
 
 
 
-transitionImpliesValidator : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum) (i : Input) (ctx : ScriptContext)
+transitionImpliesValidator : ∀ {adr oref v r amt pkh} (par : Params) (d : Datum)
+                               (i : Input) (ctx : ScriptContext)
                            -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
                            -> getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
                            -> agdaValidator par d i ctx ≡ true
+
+
 transitionImpliesValidator par d (Update v r) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p (TUpdate refl refl refl p4 p5 p6 refl p8 p9)
   rewrite p4 | p5 | p6 | p6 | p8 | p9 | n=n (owner (d .snd)) | v=v v | n=n (d .fst) | i=i (num r) | i=i (den r) = p6
 transitionImpliesValidator par d (Exchange amt pkh) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } p (TExchange refl refl refl p4 p5 refl refl p8 p9 refl p11 p12)
@@ -529,6 +539,7 @@ transitionImpliesValidator par d (Exchange amt pkh) record { inputVal = inputVal
 startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
                            -> getPar par adr oref ⊢~[ Start ]~> getS' ctx
                            -> agdaPolicy adr oref Start ctx ≡ true
+                           
 startImpliesMinting adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl p5 p6) rewrite p5 | p6 | n=n oref | n=n tokAssetClass = refl 
 
 {-
@@ -542,6 +553,8 @@ startImpliesMinting adr oref i record { inputVal = inputVal ; outputVal = output
 closeImpliesBoth : ∀ (par : Params) (d : Datum) (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
                -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
                -> ((agdaValidator par d Close ctx && agdaPolicy adr oref Close ctx) ≡ true)
+
+
 closeImpliesBoth par d adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; payTo = payTo ; payVal = payVal ; buyTo = buyTo ; buyVal = buyVal ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint ; tokAssetClass = tokAssetClass } (TClose refl refl refl refl p5 p6) rewrite p5 | p6 | n=n (owner (d .snd)) = refl
 
 {-
@@ -556,29 +569,33 @@ closeImpliesBoth par d adr oref i record { inputVal = inputVal ; outputVal = out
 --Argument = Params × Address × TxOutRef × Datum × Input × ScriptContext
 
  -- (v : Value) (r : Rational) (amt : Integer) (pkh : PubKeyHash)
- 
-data Argument : Set where
-
-  Initial : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start
-    ----------------
-    -> Argument
-
-  Running : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-              {v r amt pkh}
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
-    ----------------
-    -> Argument
-
-  Final : ∀ (par : Params) (adr : Address) (oref : TxOutRef) (d : Datum) (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close
-    ----------------
-    -> Argument
-
 
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
+
+data Argument : Set where
+  Initial : ∀ (par : Params) (adr : Address)
+              (oref : TxOutRef) (d : Datum)
+              (i : Input) (ctx : ScriptContext)
+    -> i ≡ Start
+    ----------------
+    -> Argument
+
+  Running : ∀ {v r amt pkh}
+              (par : Params) (adr : Address)
+              (oref : TxOutRef) (d : Datum)
+              (i : Input) (ctx : ScriptContext)        
+    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
+    ----------------
+    -> Argument
+
+  Final : ∀ (par : Params) (adr : Address)
+            (oref : TxOutRef) (d : Datum)
+            (i : Input) (ctx : ScriptContext)
+    -> i ≡ Close
+    ----------------
+    -> Argument
 
 totalF : Argument -> Bool
 totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
