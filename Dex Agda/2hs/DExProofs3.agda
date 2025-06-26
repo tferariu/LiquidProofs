@@ -229,17 +229,21 @@ getS : Datum -> ScriptContext -> State
 getS d ctx = record
               { datum = d
               ; value = inputVal ctx
-              ; payVal = payVal ctx
-              ; payTo = payTo ctx
-              ; buyVal = buyVal ctx
-              ; buyTo = buyTo ctx
-              ; tsig = signature ctx
+              ; payVal = MkMap [] --payVal ctx
+              ; payTo = 0 --payTo ctx
+              ; buyVal = MkMap [] --buyVal ctx
+              ; buyTo = 0 --buyTo ctx
+              ; tsig =  0 --signature ctx
               ; continues = true --continues ctx
-              ; spends = inputRef ctx
+              ; spends = 0 --inputRef ctx
               ; hasToken = (assetClassValueOf (inputVal ctx) (fst d)) == 1
-              ; mint = mint ctx
-              ; token = tokAssetClass ctx
+              ; mint = 0 --mint ctx
+              ; token =  0 --tokAssetClass ctx
               }
+
+--capture what isn't needed
+--capture what changes only slightly
+
 {-
 record ScriptContext : Set where
     field
@@ -574,11 +578,13 @@ record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
+
+--write as 3 predicates
 data Argument : Set where
   Initial : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start
+    -> i ≡ Start --p1
     ----------------
     -> Argument
 
@@ -586,21 +592,57 @@ data Argument : Set where
               (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)        
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
+    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh) --p2
     ----------------
     -> Argument
 
   Final : ∀ (par : Params) (adr : Address)
             (oref : TxOutRef) (d : Datum)
             (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close
+    -> i ≡ Close --p3
     ----------------
     -> Argument
+
+
+--exactly 1 holds
+
+--input -> classifier one of 3 things
+--then ... with Classifier i
+--think about it
 
 totalF : Argument -> Bool
 totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
 totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
 totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
+
+--make adr + oref into mintParam
+
+
+
+data IRF : Set where
+  I : IRF
+  R : IRF
+  F : IRF
+
+record Argument' : Set where
+  field
+    par  : Params
+    adr  : Address
+    oref : TxOutRef
+    dat  : Datum
+    inp  : Input
+    ctx  : ScriptContext 
+open Argument'
+
+postulate Classifier : Input -> IRF
+
+--input : Argument -> 
+
+totalF' : Argument' -> Bool
+totalF' arg with Classifier (arg .inp)
+... | I = agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
+... | R = {!!} -- agdaValidator par d i ctx
+... | F = {!!} -- agdaValidator par d i ctx && agdaPolicy adr oref i ctx
 
 totalR : Argument -> Set
 totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
