@@ -29,7 +29,7 @@ open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup ; _<>_)
 
 
-module DExProofs3 where
+module DExProofsPredicate where
 
 
 
@@ -579,27 +579,52 @@ record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
         from : ∀ {a} -> R a        -> f a ≡ true
 
 
+
+
+data IsInitial : Input -> Set where
+
+  Ini : ∀ (i : Input)
+    -> i ≡ Start
+    -------------
+    -> IsInitial i
+    
+data IsRunning : Input -> Set where
+
+  Run : ∀ {v r amt pkh} (i : Input)
+    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
+    -------------
+    -> IsRunning i
+    
+data IsFinal : Input -> Set where
+
+  Fin : ∀ (i : Input)
+    -> i ≡ Close
+    -------------
+    -> IsFinal i
+
+
+
+
 --write as 3 predicates
 data Argument : Set where
   Initial : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start --p1
+    -> IsInitial i
     ----------------
     -> Argument
 
-  Running : ∀ {v r amt pkh}
-              (par : Params) (adr : Address)
+  Running : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)        
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh) --p2
+    -> IsRunning i
     ----------------
     -> Argument
 
   Final : ∀ (par : Params) (adr : Address)
             (oref : TxOutRef) (d : Datum)
             (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close --p3
+    -> IsFinal i
     ----------------
     -> Argument
 
@@ -620,19 +645,44 @@ totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy 
 
 
 
-
 totalR : Argument -> Set
 totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
 totalR (Running par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
 totalR (Final par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
 
 totalEquiv : totalF ≈ totalR
-totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → mintingImpliesStart adr oref ctx x ;
+totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx (Ini .Start refl)} p → mintingImpliesStart adr oref ctx p ;
+                               {Running par adr oref d i ctx (Run .i x)} p → validatorImpliesTransition par d i ctx x p ;
+                               {Final par adr oref d .Close ctx (Fin .Close refl)} p → bothImplyClose par d adr oref ctx p } ;
+                    from = λ { {Initial par adr oref d .Start ctx (Ini .Start refl)} p → startImpliesMinting adr oref ctx p ;
+                               {Running par adr oref d i ctx (Run .i x)} p → transitionImpliesValidator par d i ctx x p ;
+                               {Final par adr oref d .Close ctx (Fin .Close refl)} p → closeImpliesBoth par d adr oref ctx p } }
+
+
+
+propIni : ∀ (i : Input) -> IsInitial i ->  ((IsRunning i -> ⊥) × (IsFinal i -> ⊥) )
+propIni Start (Ini .Start refl) = (λ { (Run .Start (inj₁ ())) ; (Run .Start (inj₂ ()))}) , λ { (Fin .Start ())}
+
+propRun : ∀ (i : Input) -> IsRunning i ->  ((IsInitial i -> ⊥) × (IsFinal i -> ⊥) )
+propRun (Update v r) (Run .(Update v r) (inj₁ refl)) = (λ { (Ini .(Update v r) ())}) , λ { (Fin .(Update v r) ())}
+propRun (Exchange amt pkh) (Run .(Exchange amt pkh) (inj₂ refl)) = (λ { (Ini .(Exchange amt pkh) ()) }) , λ { (Fin .(Exchange amt pkh) ()) }
+propRun Close (Run .Close (inj₁ ()))
+propRun Close (Run .Close (inj₂ ()))
+propRun Start (Run .Start (inj₁ ()))
+propRun Start (Run .Start (inj₂ ()))
+
+propFin : ∀ (i : Input) -> IsFinal i ->  ((IsRunning i -> ⊥) × (IsInitial i -> ⊥) )
+propFin Close (Fin .Close refl) = (λ { (Run .Close (inj₁ ())) ; (Run .Close (inj₂ ()))}) , λ { (Ini .Close ())}
+
+
+
+{-
+totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx ? } x → mintingImpliesStart adr oref ctx x ;
                                {Running par adr oref d i ctx p} x → validatorImpliesTransition par d i ctx p x ;
                                {Final par adr oref d .Close ctx refl} x → bothImplyClose par d adr oref ctx x } ;
                     from = λ { {Initial par adr oref d .Start ctx refl} x → startImpliesMinting adr oref ctx x ;
                                {Running par adr oref d i ctx p} x → transitionImpliesValidator par d i ctx p x ;
-                               {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
+                               {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }-}
 
 
 

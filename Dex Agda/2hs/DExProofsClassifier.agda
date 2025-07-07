@@ -29,7 +29,7 @@ open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup ; _<>_)
 
 
-module DExProofs3 where
+module DExProofsClassifier where
 
 
 
@@ -617,10 +617,6 @@ totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy 
 
 --make adr + oref into mintParam
 
-
-
-
-
 totalR : Argument -> Set
 totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
 totalR (Running par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
@@ -635,13 +631,10 @@ totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → m
                                {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
 
 
-
-
-
-data IRF : Set where
-  I : IRF
-  R : IRF
-  F : IRF
+data Phase : Set where
+  Initial : Phase
+  Running : Phase
+  Final   : Phase
 
 record Argument' : Set where
   field
@@ -653,15 +646,47 @@ record Argument' : Set where
     ctx  : ScriptContext 
 open Argument'
 
-postulate Classifier : Input -> IRF
-
---input : Argument -> 
+Classifier : Argument' -> Phase
+Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Update x x₁) ; ctx = ctx } = Running
+Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Exchange x x₁) ; ctx = ctx } = Running
+Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx } = Final
+Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx } = Initial
 
 totalF' : Argument' -> Bool
-totalF' arg with Classifier (arg .inp)
-... | I = agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
-... | R = {!!} -- agdaValidator par d i ctx
-... | F = {!!} -- agdaValidator par d i ctx && agdaPolicy adr oref i ctx
+totalF' arg with Classifier arg
+... | Initial = agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
+... | Running = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) 
+... | Final = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) &&
+              agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
+
+totalR' : Argument' -> Set
+totalR' arg with Classifier arg
+... | Initial = getPar (arg .par) (arg .adr) (arg .oref) ⊢~[ (arg .inp) ]~> getS' (arg .ctx)
+... | Running = getPar (arg .par) (arg .adr) (arg .oref) ⊢
+                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
+... | Final = getPar (arg .par) (arg .adr) (arg .oref) ⊢
+                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx) 
+
+
+tE' : totalF' ≈ totalR'
+tE' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
+                        validatorImpliesTransition {amt = 0} {pkh = 0} par dat (Update v r) ctx (inj₁ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x →
+                        validatorImpliesTransition {v = MkMap []} {r = record { num = 0 ; den = 0 }} par dat (Exchange amt pkh) ctx (inj₂ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx }} x →
+                        bothImplyClose par dat adr oref ctx x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x →
+                        mintingImpliesStart adr oref ctx x } ; 
+               from = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
+                        transitionImpliesValidator {amt = 0} {pkh = 0} par dat (Update v r) ctx (inj₁ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x →
+                        transitionImpliesValidator {v = MkMap []} {r = record { num = 0 ; den = 0 }} par dat (Exchange amt pkh) ctx (inj₂ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx }} x →
+                        closeImpliesBoth par dat adr oref ctx x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x →
+                        startImpliesMinting adr oref ctx x } }
+
+
 
 
 
