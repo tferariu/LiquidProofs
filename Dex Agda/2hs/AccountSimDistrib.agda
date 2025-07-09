@@ -20,13 +20,22 @@ Datum = (AssetClass × PubKeyHash)
 {-# COMPILE AGDA2HS Datum #-}
 
 
+data Input : Set where
+  Close       : Input
+  Withdraw    : Value -> Input
+  Deposit     : Value -> Input
+  TransferOut : PubKeyHash -> Value -> Input
+  TransferIn  : PubKeyHash -> Value -> Input
+
+{-# COMPILE AGDA2HS Input #-}
+
 record ScriptContext : Set where
     field
         inputVal      : Integer
         outputVal     : Integer
         outputDatum   : Datum
         signature     : PubKeyHash
-        otherInputV   : Integer
+        otherInputRed : Input
         otherInputDat : Datum
         continues     : Bool
         inputRef      : TxOutRef
@@ -38,13 +47,6 @@ open ScriptContext public
 
 
 
-data Input : Set where
-  Close    : Input
-  Withdraw : Value -> Input
-  Deposit  : Value -> Input
-  Transfer : PubKeyHash -> Value -> Input
-
-{-# COMPILE AGDA2HS Input #-}
 
 
 newDatum : ScriptContext -> Datum
@@ -76,6 +78,22 @@ minValue = 2
 
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned pkh ctx = pkh == signature ctx
+
+checkOtherInputO : PubKeyHash -> ScriptContext -> Bool
+checkOtherInputO pkh ctx = case otherInputRed ctx of λ where
+    Close -> False
+    (Withdraw val) -> False
+    (Deposit val) -> False
+    (TransferOut to val) -> False
+    (TransferIn from val) -> snd (otherInputDat ctx) == pkh
+    
+checkOtherInputI : PubKeyHash -> ScriptContext -> Bool
+checkOtherInputI pkh ctx = case otherInputRed ctx of λ where
+    Close -> False
+    (Withdraw val) -> False
+    (Deposit val) -> False
+    (TransferOut to val) -> to == pkh
+    (TransferIn from val) -> False 
 
 {-
 checkWithdraw : Maybe Value -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
@@ -122,14 +140,21 @@ agdaValidator (tok , pkh) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
     Close -> checkSigned pkh ctx && oldValue ctx == emptyValue && not (continuing ctx)
     
-    (Withdraw val) -> checkSigned pkh ctx && newValue ctx == oldValue ctx - val &&
+    (Withdraw val) -> checkSigned pkh ctx && geq val emptyValue && geq (oldValue ctx) val &&
+                      newValue ctx == oldValue ctx - val &&
                       checkTokenOut tok ctx && continuing ctx && newToken ctx == tok
 
-    (Deposit val) -> checkSigned pkh ctx && newValue ctx == oldValue ctx + val &&
+    (Deposit val) -> checkSigned pkh ctx && geq val emptyValue && newValue ctx == oldValue ctx + val &&
                      checkTokenOut tok ctx && continuing ctx && newToken ctx == tok
 
-    (Transfer to val) -> checkSigned pkh ctx && newValue ctx == oldValue ctx - val &&
-                         checkTokenOut tok ctx && continuing ctx && newToken ctx == tok )
+    (TransferOut to val) -> checkSigned pkh ctx && geq val emptyValue && geq (oldValue ctx) val &&
+                         newValue ctx == oldValue ctx - val &&
+                         checkTokenOut tok ctx && continuing ctx && newToken ctx == tok &&
+                         checkOtherInputO to ctx 
+                         
+    (TransferIn from val) -> newValue ctx == oldValue ctx + val && geq val emptyValue && 
+                        checkTokenOut tok ctx && continuing ctx && newToken ctx == tok &&
+                        checkOtherInputI from ctx )
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
