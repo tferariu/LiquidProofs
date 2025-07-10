@@ -652,6 +652,14 @@ Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Exc
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx } = Final
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx } = Initial
 
+
+Classifier' : Argument' -> Phase
+Classifier' arg with arg .inp
+... | Update x x₁ = Running
+... | Exchange x x₁ = Running
+... | Close = Final
+... | Start = Initial
+
 totalF' : Argument' -> Bool
 totalF' arg with Classifier arg
 ... | Initial = agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
@@ -662,14 +670,23 @@ totalF' arg with Classifier arg
 totalR' : Argument' -> Set
 totalR' arg with Classifier arg
 ... | Initial = getPar (arg .par) (arg .adr) (arg .oref) ⊢~[ (arg .inp) ]~> getS' (arg .ctx)
-... | Running = getPar (arg .par) (arg .adr) (arg .oref) ⊢
-                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
-... | Final = getPar (arg .par) (arg .adr) (arg .oref) ⊢
-                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx) 
+... | Running = getPar (arg .par) (arg .adr) (arg .oref) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
+... | Final = getPar (arg .par) (arg .adr) (arg .oref) ⊢  getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx) 
 
 
-tE' : totalF' ≈ totalR'
-tE' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
+to' : {a : Argument'} → (totalF' a ≡ true) → totalR' a 
+to' {a} with Classifier a
+...| Initial = {!mintingImpliesStart!}
+...| Running = {!!}
+...| Final = {!!}
+
+totalEquiv'' : totalF' ≈ totalR'
+totalEquiv'' = record { to = {!to'!} ; from = {!!} }
+
+--record { to = λ { {a} x → {!!}} ; from = {!!} }
+
+totalEquiv' : totalF' ≈ totalR'
+totalEquiv' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
                         validatorImpliesTransition {amt = 0} {pkh = 0} par dat (Update v r) ctx (inj₁ refl) x ;
                         {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x →
                         validatorImpliesTransition {v = MkMap []} {r = record { num = 0 ; den = 0 }} par dat (Exchange amt pkh) ctx (inj₂ refl) x ;

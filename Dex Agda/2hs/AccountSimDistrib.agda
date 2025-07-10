@@ -133,27 +133,22 @@ continuing ctx = continues ctx
 agdaValidator : Datum -> Input -> ScriptContext -> Bool
 agdaValidator (tok , pkh) inp ctx = checkTokenIn tok ctx && (case inp of λ where
 
- --   (Open pkh) -> checkSigned pkh ctx && not (checkMembership (lookup pkh lab)) &&
- --                 newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
-
--- && checkTokenOut tok ctx && continuing ctx && newToken ctx == tok
-
     Close -> checkSigned pkh ctx && oldValue ctx == emptyValue && not (continuing ctx)
     
     (Withdraw val) -> checkSigned pkh ctx && geq val emptyValue && geq (oldValue ctx) val &&
                       newValue ctx == oldValue ctx - val &&
-                      checkTokenOut tok ctx && continuing ctx && newToken ctx == tok
+                      checkTokenOut tok ctx && continuing ctx && newDatum ctx == (tok , pkh)
 
     (Deposit val) -> checkSigned pkh ctx && geq val emptyValue && newValue ctx == oldValue ctx + val &&
-                     checkTokenOut tok ctx && continuing ctx && newToken ctx == tok
+                     checkTokenOut tok ctx && continuing ctx && newDatum ctx == (tok , pkh)
 
     (TransferOut to val) -> checkSigned pkh ctx && geq val emptyValue && geq (oldValue ctx) val &&
                          newValue ctx == oldValue ctx - val &&
-                         checkTokenOut tok ctx && continuing ctx && newToken ctx == tok &&
+                         checkTokenOut tok ctx && continuing ctx && newDatum ctx == (tok , pkh) &&
                          checkOtherInputO to ctx 
-                         
+      -- just sign both                   
     (TransferIn from val) -> newValue ctx == oldValue ctx + val && geq val emptyValue && 
-                        checkTokenOut tok ctx && continuing ctx && newToken ctx == tok &&
+                        checkTokenOut tok ctx && continuing ctx && newDatum ctx == (tok , pkh) &&
                         checkOtherInputI from ctx )
 
 {-# COMPILE AGDA2HS agdaValidator #-}

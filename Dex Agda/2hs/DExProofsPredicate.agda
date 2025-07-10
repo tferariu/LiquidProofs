@@ -574,38 +574,42 @@ closeImpliesBoth par d adr oref i record { inputVal = inputVal ; outputVal = out
 
  -- (v : Value) (r : Rational) (amt : Integer) (pkh : PubKeyHash)
 
+
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
-
-
-
 data IsInitial : Input -> Set where
-
   Ini : ∀ (i : Input)
     -> i ≡ Start
     -------------
     -> IsInitial i
     
 data IsRunning : Input -> Set where
-
   Run : ∀ {v r amt pkh} (i : Input)
     -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
     -------------
     -> IsRunning i
+
+--split this in 2
+
+data IsRunning' : Input -> Set where
+  Upd : ∀ {v r} (i : Input)
+    -> i ≡ (Update v r) 
+    -------------
+    -> IsRunning' i
+
+  Exc : ∀ {amt pkh} (i : Input)
+    -> i ≡ (Exchange amt pkh)
+    -----------------
+    -> IsRunning' i
     
 data IsFinal : Input -> Set where
-
   Fin : ∀ (i : Input)
     -> i ≡ Close
     -------------
     -> IsFinal i
 
-
-
-
---write as 3 predicates
 data Argument : Set where
   Initial : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
@@ -628,22 +632,12 @@ data Argument : Set where
     ----------------
     -> Argument
 
-
---exactly 1 holds
-
---input -> classifier one of 3 things
---then ... with Classifier i
---think about it
+--do once for all examples?
 
 totalF : Argument -> Bool
 totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
 totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
 totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
-
---make adr + oref into mintParam
-
-
-
 
 totalR : Argument -> Set
 totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
@@ -657,7 +651,6 @@ totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx (Ini .Start r
                     from = λ { {Initial par adr oref d .Start ctx (Ini .Start refl)} p → startImpliesMinting adr oref ctx p ;
                                {Running par adr oref d i ctx (Run .i x)} p → transitionImpliesValidator par d i ctx x p ;
                                {Final par adr oref d .Close ctx (Fin .Close refl)} p → closeImpliesBoth par d adr oref ctx p } }
-
 
 
 propIni : ∀ (i : Input) -> IsInitial i ->  ((IsRunning i -> ⊥) × (IsFinal i -> ⊥) )

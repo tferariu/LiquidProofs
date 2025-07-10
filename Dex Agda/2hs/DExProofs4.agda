@@ -574,17 +574,17 @@ closeImpliesBoth par d adr oref i record { inputVal = inputVal ; outputVal = out
 
  -- (v : Value) (r : Rational) (amt : Integer) (pkh : PubKeyHash)
 
+
+
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
-
---write as 3 predicates
 data Argument : Set where
   Initial : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start --p1
+    -> i ≡ Start 
     ----------------
     -> Argument
 
@@ -592,16 +592,36 @@ data Argument : Set where
               (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)        
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh) --p2
+    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
     ----------------
     -> Argument
 
   Final : ∀ (par : Params) (adr : Address)
             (oref : TxOutRef) (d : Datum)
             (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close --p3
+    -> i ≡ Close 
     ----------------
     -> Argument
+
+totalF : Argument -> Bool
+totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
+totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
+totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
+
+totalR : Argument -> Set
+totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
+totalR (Running par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
+totalR (Final par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
+
+totalEquiv : totalF ≈ totalR
+totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → mintingImpliesStart adr oref ctx x ;
+                               {Running par adr oref d i ctx p} x → validatorImpliesTransition par d i ctx p x ;
+                               {Final par adr oref d .Close ctx refl} x → bothImplyClose par d adr oref ctx x } ;
+                    from = λ { {Initial par adr oref d .Start ctx refl} x → startImpliesMinting adr oref ctx x ;
+                               {Running par adr oref d i ctx p} x → transitionImpliesValidator par d i ctx p x ;
+                               {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
+
+--make adr + oref into mintParam
 
 
 --exactly 1 holds
@@ -609,15 +629,6 @@ data Argument : Set where
 --input -> classifier one of 3 things
 --then ... with Classifier i
 --think about it
-
-totalF : Argument -> Bool
-totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
-totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
-totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
-
---make adr + oref into mintParam
-
-
 
 data Phase : Set where
   Initial : Phase
@@ -664,18 +675,7 @@ tE' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = d
                         {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x → {!!} } ; 
                from = {!!} }
 
-totalR : Argument -> Set
-totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
-totalR (Running par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~> getS' ctx
-totalR (Final par adr oref d i ctx x) = getPar par adr oref ⊢ getS d ctx ~[ i ]~| getS' ctx
 
-totalEquiv : totalF ≈ totalR
-totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → mintingImpliesStart adr oref ctx x ;
-                               {Running par adr oref d i ctx p} x → validatorImpliesTransition par d i ctx p x ;
-                               {Final par adr oref d .Close ctx refl} x → bothImplyClose par d adr oref ctx x } ;
-                    from = λ { {Initial par adr oref d .Start ctx refl} x → startImpliesMinting adr oref ctx x ;
-                               {Running par adr oref d i ctx p} x → transitionImpliesValidator par d i ctx p x ;
-                               {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
 
 {-
 totalF : Argument -> Bool

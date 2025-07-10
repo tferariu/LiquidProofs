@@ -37,7 +37,24 @@ open import Function.Base using (_∋_)
 module AccountSimDistribProofs where
 
 
+--S -Deposit-> S'
 
+--S' ≡ s' ??
+
+--s' -TransferIn-> s''
+-------------------------------
+--use inductive data type for state
+{-
+OutState
+InState
+
+designs: - S = record with everything
+         - S = sum type of records
+         - S s (two different types states)
+         - S only one state
+-}
+
+--lagda.md to document stuff as i go along
 
 record State : Set where
   field
@@ -73,23 +90,71 @@ data _⊢_ : MParams -> State -> Set where
     -------------------
     -> par ⊢ s
 
-{-
+
 --Transition Rules
 data _~[_]~>_ : State -> Input -> State -> Set where
  
-  TOpen : ∀ {pkh s s' tok map}
-    -> datum s ≡ (tok , map)
-    -> pkh ≡ tsig s'
-    -> lookup pkh map ≡ Nothing
-    -> datum s' ≡ (tok ,  insert pkh 0 map)
-    -> value s' ≡ value s 
+  TWithdraw : ∀ {pkh val s s' v tok map}
+    -> tsig s' ≡ snd (datum s)
+    -> val ≥ emptyValue
+    -> value s ≥ val
+    -> datum s' ≡ datum s 
+    -> value s' ≡ value s - val
     -> continues s ≡ true
     -> continues s' ≡ true
     -> hasToken s ≡ true
     -> hasToken s' ≡ true
     -------------------
-    -> s ~[ (Open pkh) ]~> s'
+    -> s ~[ (Withdraw val) ]~> s'
+    
+  TDeposit : ∀ {val s s'}
+    -> tsig s' ≡ snd (datum s)
+    -> val ≥ emptyValue
+    -> datum s' ≡ datum s 
+    -> value s' ≡ value s + val
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
+    -------------------
+    -> s ~[ (Deposit val) ]~> s'
 
+  TTransferOut : ∀ {from to val s s'}
+    -> tsig s' ≡ snd (datum s)
+    -> val ≥ emptyValue
+    -> value s ≥ val
+    -> datum s' ≡ datum s
+    -> value s' ≡ value s - val
+    -> othInpRed s ≡ TransferIn from val
+    -> from ≡ snd (datum s)
+    -> to ≡ snd (othInpDat s)
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
+    -------------------
+    -> s ~[ (TransferOut to val) ]~> s'
+
+  TTransferIn : ∀ {from to val s s'}
+ --   -> tsig s' ≡ snd (datum s)
+    -> val ≥ emptyValue
+    -> datum s' ≡ datum s
+    -> value s' ≡ value s + val
+    -> othInpRed s ≡ TransferOut to val
+    -> to ≡ snd (datum s)
+    -> from ≡ snd (othInpDat s)
+    -> continues s ≡ true
+    -> continues s' ≡ true
+    -> hasToken s ≡ true
+    -> hasToken s' ≡ true
+    -------------------
+    -> s ~[ (TransferIn from val) ]~> s'
+
+
+{-
+    othInpRed  : Input
+    othInpDat  : Datum
+    
   TClose : ∀ {pkh s s' tok map}
     -> datum s ≡ (tok , map)
     -> pkh ≡ tsig s'
@@ -102,54 +167,7 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> hasToken s' ≡ true
     -------------------
     -> s ~[ (Close pkh) ]~> s'
-
-  TWithdraw : ∀ {pkh val s s' v tok map}
-    -> datum s ≡ (tok , map)
-    -> pkh ≡ tsig s'
-    -> lookup pkh map ≡ Just v
-    -> val ≥ emptyValue
-    -> v ≥ val
-    -> datum s' ≡ (tok , (insert pkh (v - val) map))
-    -> value s' ≡ value s - val
-    -> continues s ≡ true
-    -> continues s' ≡ true
-    -> hasToken s ≡ true
-    -> hasToken s' ≡ true
-    -------------------
-    -> s ~[ (Withdraw pkh val) ]~> s'
     
-  TDeposit : ∀ {pkh val s s' v tok map}
-    -> datum s ≡ (tok , map)
-    -> pkh ≡ tsig s'
-    -> lookup pkh map ≡ Just v
-    -> val ≥ emptyValue
-    -> datum s' ≡ (tok , (insert pkh (v + val) map))
-    -> value s' ≡ value s + val
-    -> continues s ≡ true
-    -> continues s' ≡ true
-    -> hasToken s ≡ true
-    -> hasToken s' ≡ true
-    -------------------
-    -> s ~[ (Deposit pkh val) ]~> s'
-
-    
-  TTransfer : ∀ {from to val s s' vF vT tok map}
-    -> datum s ≡ (tok , map)
-    -> from ≡ tsig s'
-    -> lookup from map ≡ Just vF
-    -> lookup to map ≡ Just vT
-    -> val ≥ emptyValue
-    -> vF ≥ val
-    -> from ≢ to
-    -> datum s' ≡ (tok , (insert from (vF - val) (insert to (vT + val) map)))
-    -> value s' ≡ value s
-    -> continues s ≡ true
-    -> continues s' ≡ true
-    -> hasToken s ≡ true
-    -> hasToken s' ≡ true
-    -------------------
-    -> s ~[ (Transfer from to val) ]~> s'
-
 --Multi-Step Transition
 data _~[_]~*_ : State -> List Input -> State -> Set where
 
