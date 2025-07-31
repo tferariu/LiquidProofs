@@ -336,7 +336,7 @@ validatorImpliesTransition par d (Update v r) ctx p1 p2
   (==dto≡ (get (go (newValue ctx == v) (go (checkMinValue v) (go (checkRational r)
   (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))))))
   (get (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))
-  (get (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))) ? --refl
+  (get (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))) {!!} --refl
   (get (go (newDatum ctx == (d. fst , record {ratio = r ; owner = owner (snd d)}))
   (go (newValue ctx == v) (go (checkMinValue v) (go (checkRational r)
   (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))))))
