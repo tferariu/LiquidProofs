@@ -3,30 +3,36 @@ module MultiSig where
 open import Haskell.Prelude
 
 
+Placeholder = Nat
+POSIXTimeRange = Placeholder
+ScriptPurpose = Placeholder
+
+Address = Placeholder
+TxOutRef = Placeholder
+TokenName = Placeholder
+
 PubKeyHash = Integer
 Value = Nat
 Deadline = Nat
 AssetClass = Nat
-TxOutRef = Nat
-Address = Nat
 
 {-# COMPILE AGDA2HS Deadline #-}
 
-data Info : Set where
-  Holding : Info
-  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Info
-
-{-# COMPILE AGDA2HS Info #-}
-
-Label = (AssetClass × Info)
+data Label : Set where
+  Holding : Label
+  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Label
 
 {-# COMPILE AGDA2HS Label #-}
+
+Datum = (AssetClass × Label)
+
+{-# COMPILE AGDA2HS Datum #-}
 
 record ScriptContext : Set where
     field
         inputVal      : Nat
         outputVal     : Nat
-        outputDatum   : Label
+        outputDatum   : Datum
         time          : Deadline
         payTo         : PubKeyHash
         payAmt        : Value
@@ -86,7 +92,7 @@ expired d ctx = (time ctx) > d
 notTooLate : Params -> Deadline -> ScriptContext -> Bool
 notTooLate par d ctx = (time ctx) + (maxWait par) >= d
 
-newDatum : ScriptContext -> Label
+newDatum : ScriptContext -> Datum
 newDatum ctx = outputDatum ctx
 
 oldValue : ScriptContext -> Value
@@ -116,10 +122,7 @@ checkTokenIn tok ctx = hasTokenIn ctx
 checkTokenOut : AssetClass -> ScriptContext -> Bool
 checkTokenOut tok ctx = hasTokenOut ctx
 
-checkTokenBurned : AssetClass -> ScriptContext -> Bool
-checkTokenBurned tok ctx = mint ctx == -1
-
-agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
 agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
   (case ((checkTokenOut tok ctx) , lab , red) of λ where
     (True , Holding , (Propose v pkh d)) ->
@@ -146,8 +149,7 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
       (case (newDatum ctx) of λ where
         (tok' , Holding) -> expired d ctx && tok == tok'
         (tok' , (Collecting v' pkh' d' sigs')) -> False)
-    (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx) &&
-                                 checkTokenBurned tok ctx
+    (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx)
     _ -> False )
 
 

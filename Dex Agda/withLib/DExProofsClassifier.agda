@@ -29,7 +29,7 @@ open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup ; _<>_)
 
 
-module DExProofs4 where
+module DExProofsClassifier where
 
 
 
@@ -336,7 +336,7 @@ validatorImpliesTransition par d (Update v r) ctx p1 p2
   (==dto≡ (get (go (newValue ctx == v) (go (checkMinValue v) (go (checkRational r)
   (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))))))
   (get (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))
-  (get (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))) {!!} --refl
+  (get (go (checkRational r) (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))) refl
   (get (go (newDatum ctx == (d. fst , record {ratio = r ; owner = owner (snd d)}))
   (go (newValue ctx == v) (go (checkMinValue v) (go (checkRational r)
   (go (checkSigned (owner (snd d)) ctx) (go (checkTokenIn (d .fst) ctx) p2)))))))
@@ -574,17 +574,17 @@ closeImpliesBoth par d adr oref i record { inputVal = inputVal ; outputVal = out
 
  -- (v : Value) (r : Rational) (amt : Integer) (pkh : PubKeyHash)
 
-
-
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
+
+--write as 3 predicates
 data Argument : Set where
   Initial : ∀ (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)
-    -> i ≡ Start 
+    -> i ≡ Start --p1
     ----------------
     -> Argument
 
@@ -592,21 +592,30 @@ data Argument : Set where
               (par : Params) (adr : Address)
               (oref : TxOutRef) (d : Datum)
               (i : Input) (ctx : ScriptContext)        
-    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh)
+    -> i ≡ (Update v r) ⊎ i ≡ (Exchange amt pkh) --p2
     ----------------
     -> Argument
 
   Final : ∀ (par : Params) (adr : Address)
             (oref : TxOutRef) (d : Datum)
             (i : Input) (ctx : ScriptContext)
-    -> i ≡ Close 
+    -> i ≡ Close --p3
     ----------------
     -> Argument
+
+
+--exactly 1 holds
+
+--input -> classifier one of 3 things
+--then ... with Classifier i
+--think about it
 
 totalF : Argument -> Bool
 totalF (Initial par adr oref d i ctx x) = agdaPolicy adr oref i ctx
 totalF (Running par adr oref d i ctx x) = agdaValidator par d i ctx
 totalF (Final par adr oref d i ctx x) = agdaValidator par d i ctx && agdaPolicy adr oref i ctx
+
+--make adr + oref into mintParam
 
 totalR : Argument -> Set
 totalR (Initial par adr oref d i ctx x) = getPar par adr oref ⊢~[ i ]~> getS' ctx
@@ -621,14 +630,6 @@ totalEquiv = record { to = λ { {Initial par adr oref d .Start ctx refl} x → m
                                {Running par adr oref d i ctx p} x → transitionImpliesValidator par d i ctx p x ;
                                {Final par adr oref d .Close ctx refl} x → closeImpliesBoth par d adr oref ctx x } }
 
---make adr + oref into mintParam
-
-
---exactly 1 holds
-
---input -> classifier one of 3 things
---then ... with Classifier i
---think about it
 
 data Phase : Set where
   Initial : Phase
@@ -651,6 +652,14 @@ Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Exc
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx } = Final
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx } = Initial
 
+
+Classifier' : Argument' -> Phase
+Classifier' arg with arg .inp
+... | Update x x₁ = Running
+... | Exchange x x₁ = Running
+... | Close = Final
+... | Start = Initial
+
 totalF' : Argument' -> Bool
 totalF' arg with Classifier arg
 ... | Initial = agdaPolicy (arg .adr) (arg .oref) (arg .inp) (arg .ctx)
@@ -661,19 +670,40 @@ totalF' arg with Classifier arg
 totalR' : Argument' -> Set
 totalR' arg with Classifier arg
 ... | Initial = getPar (arg .par) (arg .adr) (arg .oref) ⊢~[ (arg .inp) ]~> getS' (arg .ctx)
-... | Running = getPar (arg .par) (arg .adr) (arg .oref) ⊢
-                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
-... | Final = getPar (arg .par) (arg .adr) (arg .oref) ⊢
-                       getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx) 
+... | Running = getPar (arg .par) (arg .adr) (arg .oref) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
+... | Final = getPar (arg .par) (arg .adr) (arg .oref) ⊢  getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx) 
 
 
-tE' : totalF' ≈ totalR'
-tE' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
+to' : {a : Argument'} → (totalF' a ≡ true) → totalR' a 
+to' {a} with Classifier a
+...| Initial = {!mintingImpliesStart!}
+...| Running = {!!}
+...| Final = {!!}
+
+totalEquiv'' : totalF' ≈ totalR'
+totalEquiv'' = record { to = {!to'!} ; from = {!!} }
+
+--record { to = λ { {a} x → {!!}} ; from = {!!} }
+
+totalEquiv' : totalF' ≈ totalR'
+totalEquiv' = record { to = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
                         validatorImpliesTransition {amt = 0} {pkh = 0} par dat (Update v r) ctx (inj₁ refl) x ;
-                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x → {!!} ;
-                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx }} x → {!!} ;
-                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x → {!!} } ; 
-               from = {!!} }
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x →
+                        validatorImpliesTransition {v = MkMap []} {r = record { num = 0 ; den = 0 }} par dat (Exchange amt pkh) ctx (inj₂ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx }} x →
+                        bothImplyClose par dat adr oref ctx x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x →
+                        mintingImpliesStart adr oref ctx x } ; 
+               from = λ { {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Update v r ; ctx = ctx }} x →
+                        transitionImpliesValidator {amt = 0} {pkh = 0} par dat (Update v r) ctx (inj₁ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Exchange amt pkh ; ctx = ctx }} x →
+                        transitionImpliesValidator {v = MkMap []} {r = record { num = 0 ; den = 0 }} par dat (Exchange amt pkh) ctx (inj₂ refl) x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx }} x →
+                        closeImpliesBoth par dat adr oref ctx x ;
+                        {record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Start ; ctx = ctx }} x →
+                        startImpliesMinting adr oref ctx x } }
+
+
 
 
 

@@ -1,31 +1,25 @@
 module AccountSim where
 
-type Label = [(PubKeyHash, Value)]
+type AccMap = [(PubKeyHash, Value)]
 
-type State = (AssetClass, Label)
+type Label = (AssetClass, AccMap)
 
 data Input = Open PubKeyHash
            | Close PubKeyHash
            | Withdraw PubKeyHash Value
            | Deposit PubKeyHash Value
            | Transfer PubKeyHash PubKeyHash Value
+           | Cleanup
 
-insert :: PubKeyHash -> Value -> Label -> Label
+insert :: PubKeyHash -> Value -> AccMap -> AccMap
 insert pkh val [] = [(pkh, val)]
 insert pkh val ((x, y) : xs)
   = if pkh == x then (pkh, val) : xs else (x, y) : insert pkh val xs
 
-delete :: PubKeyHash -> Label -> Label
+delete :: PubKeyHash -> AccMap -> AccMap
 delete pkh [] = []
 delete pkh ((x, y) : xs)
   = if pkh == x then xs else (x, y) : delete pkh xs
-
----
-lookup :: PubKeyHash → Label → Maybe Value
-lookup pkh []             = Nothing
-lookup pkh ((x , y) ∷ xs) 
-	= if pkh == x then Just y else lookup x xs
----
 
 checkMembership :: Maybe Value -> Bool
 checkMembership Nothing = False
@@ -36,57 +30,74 @@ checkEmpty Nothing = False
 checkEmpty (Just v) = v == emptyValue
 
 checkWithdraw ::
-              Maybe Value ->
-                PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkWithdraw Nothing _ _ _ _ = False
-checkWithdraw (Just v) pkh val lab ctx
+              AssetClass ->
+                Maybe Value ->
+                  PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkWithdraw tok Nothing _ _ _ _ = False
+checkWithdraw tok (Just v) pkh val lab ctx
   = geq val emptyValue &&
-      geq v val && newLabel ctx == insert pkh (v - val) lab
+      geq v val && newDatum ctx == (tok, insert pkh (v - val) lab)
 
 checkDeposit ::
-             Maybe Value ->
-               PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkDeposit Nothing _ _ _ _ = False
-checkDeposit (Just v) pkh val lab ctx
-  = geq val emptyValue && newLabel ctx == insert pkh (v + val) lab
+             AssetClass ->
+               Maybe Value ->
+                 PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkDeposit tok Nothing _ _ _ _ = False
+checkDeposit tok (Just v) pkh val lab ctx
+  = geq val emptyValue &&
+      newDatum ctx == (tok, insert pkh (v + val) lab)
 
 checkTransfer ::
-              Maybe Value ->
+              AssetClass ->
                 Maybe Value ->
-                  PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkTransfer Nothing _ _ _ _ _ _ = False
-checkTransfer (Just vF) Nothing _ _ _ _ _ = False
-checkTransfer (Just vF) (Just vT) from to val lab ctx
+                  Maybe Value ->
+                    PubKeyHash ->
+                      PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkTransfer tok Nothing _ _ _ _ _ _ = False
+checkTransfer tok (Just vF) Nothing _ _ _ _ _ = False
+checkTransfer tok (Just vF) (Just vT) from to val lab ctx
   = geq val 0 &&
       geq vF val &&
         from /= to &&
-          newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
+          newDatum ctx ==
+            (tok, insert from (vF - val) (insert to (vT + val) lab))
 
-agdaValidator :: State -> Input -> ScriptContext -> Bool
+agdaValidator :: Label -> Input -> ScriptContext -> Bool
 agdaValidator (tok, lab) inp ctx
   = checkTokenIn tok ctx &&
-      checkTokenOut tok ctx &&
-        continuing ctx &&
-          newToken ctx == tok &&
-            case inp of
-                Open pkh -> checkSigned pkh ctx &&
-                              not (checkMembership (lookup pkh lab)) &&
-                                newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
-                Close pkh -> checkSigned pkh ctx &&
-                               checkEmpty (lookup pkh lab) &&
-                                 newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
-                Withdraw pkh val -> checkSigned pkh ctx &&
-                                      checkWithdraw (lookup pkh lab) pkh val lab ctx &&
-                                        newValue ctx == oldValue ctx - val
-                Deposit pkh val -> checkSigned pkh ctx &&
-                                     checkDeposit (lookup pkh lab) pkh val lab ctx &&
-                                       newValue ctx == oldValue ctx + val
-                Transfer from to val -> checkSigned from ctx &&
-                                          checkTransfer (lookup from lab) (lookup to lab) from to
-                                            val
-                                            lab
-                                            ctx
-                                            && newValue ctx == oldValue ctx
+      case inp of
+          Open pkh -> checkTokenOut tok ctx &&
+                        continuing ctx &&
+                          checkSigned pkh ctx &&
+                            not (checkMembership (lookup pkh lab)) &&
+                              newDatum ctx == (tok, insert pkh 0 lab) &&
+                                newValue ctx == oldValue ctx
+          Close pkh -> checkTokenOut tok ctx &&
+                         continuing ctx &&
+                           checkSigned pkh ctx &&
+                             checkEmpty (lookup pkh lab) &&
+                               newDatum ctx == (tok, delete pkh lab) &&
+                                 newValue ctx == oldValue ctx
+          Withdraw pkh val -> checkTokenOut tok ctx &&
+                                continuing ctx &&
+                                  checkSigned pkh ctx &&
+                                    checkWithdraw tok (lookup pkh lab) pkh val lab ctx &&
+                                      newValue ctx + val == oldValue ctx
+          Deposit pkh val -> checkTokenOut tok ctx &&
+                               continuing ctx &&
+                                 checkSigned pkh ctx &&
+                                   checkDeposit tok (lookup pkh lab) pkh val lab ctx &&
+                                     newValue ctx == oldValue ctx + val
+          Transfer from to val -> checkTokenOut tok ctx &&
+                                    continuing ctx &&
+                                      checkSigned from ctx &&
+                                        checkTransfer tok (lookup from lab) (lookup to lab) from to
+                                          val
+                                          lab
+                                          ctx
+                                          && newValue ctx == oldValue ctx
+          Cleanup -> checkTokenBurned tok ctx &&
+                       not (checkTokenOut tok ctx) && not (continuing ctx) && lab == []
 
 getMintedAmount :: ScriptContext -> Integer
 getMintedAmount ctx = mint ctx
@@ -100,7 +111,7 @@ checkDatum addr ctx
         (tok, map) -> ownAssetClass ctx == tok && map == []
 
 checkValue :: Address -> ScriptContext -> Bool
-checkValue addr ctx = hasTokenOut ctx
+checkValue addr ctx = newValue ctx == 0 && hasTokenOut ctx
 
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx

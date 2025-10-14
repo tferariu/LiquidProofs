@@ -5,10 +5,18 @@ open import Haskell.Prelude
 variable
   k v : Set
 
+Placeholder = String
+POSIXTimeRange = Placeholder
+ScriptPurpose = Placeholder
+ThreadToken = Placeholder
+
 CurrencySymbol = Nat
 TokenName = Nat
+
 PubKeyHash = Nat 
+
 AssetClass = Nat
+
 Address = Nat
 TxOutRef = Nat
 
@@ -16,6 +24,12 @@ data Map (A B : Set) : Set where
  MkMap : List (A × B) -> Map A B
 
 Value = Map AssetClass Integer
+--Value = List (AssetClass × Integer)
+
+{-
+addSingleton : (AssetClass × Integer) -> Value -> Value
+addSingleton (ac , val) (MkMap []) = MkMap ((ac , val) ∷ [])
+addSingleton (ac , val) (MkMap ((ac' , val') ∷ vs)) = {!!}-}
 
 addValueAux : List (AssetClass × Integer) -> List (AssetClass × Integer) -> List (AssetClass × Integer)
 addValueAux [] [] = []
@@ -28,6 +42,32 @@ addValueAux v1@((ac , val) ∷ xs) v2@((ac' , val') ∷ ys)
 
 addValue : Value -> Value -> Value
 addValue (MkMap v1) (MkMap v2) = MkMap (addValueAux v1 v2)
+
+
+{-
+addValue (MkMap []) (MkMap []) = MkMap []
+addValue (MkMap []) (MkMap (v ∷ vs)) = MkMap (v ∷ vs)
+addValue (MkMap (v ∷ vs)) (MkMap []) = MkMap (v ∷ vs)
+addValue (MkMap ((ac , val) ∷ xs)) (MkMap ((ac' , val') ∷ ys)) 
+  = if (ac == ac') then addValue (MkMap xs) (MkMap ((ac , val + val') ∷ ys)) --MkMap ((ac , val + val') ∷ (addValue ? ?))
+                   else if (ac < ac') then {!!} --MkMap (ac , val) ∷ (addValue xs v2)
+                                       else {!!} --MkMap (ac' , val') ∷ (addValue v1 ys)) -}
+{-
+addValue : Value -> Value -> Value
+addValue [] [] = []
+addValue [] (v ∷ vs) = v ∷ vs
+addValue (v ∷ vs) [] = v ∷ vs
+addValue v1@((ac , val) ∷ xs) v2@((ac' , val') ∷ ys)
+  = if (ac == ac') then (ac , val + val') ∷ (addValue xs ys)
+                   else (if (ac < ac') then (ac , val) ∷ (addValue xs v2)
+                                       else (ac' , val') ∷ (addValue v1 ys))-}
+
+{-
+addValue : Value -> Value -> Value
+addValue a b = case currency a == currency b of λ where
+  True -> record { amount = amount a + amount b ; currency = currency a }
+  False -> a
+-}
 
 
 eqValue : Value -> Value -> Bool
@@ -65,15 +105,15 @@ denominator r = den r
 checkRational : Rational -> Bool
 checkRational r = (numerator r >= 0) && (denominator r > 0)
 
-record Info : Set where
+record Label : Set where
   field
     ratio  : Rational
     owner  : PubKeyHash
-open Info public
-
-
-Label = (AssetClass × Info)
+open Label public
 {-# COMPILE AGDA2HS Label #-}
+
+
+Datum = (AssetClass × Label)
 
 eqRational : Rational -> Rational -> Bool
 eqRational b c = (num b == num c) &&
@@ -88,20 +128,23 @@ instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
 
+--  iOrdRational : Ord Rational
+--  iOrdRational = ordFromLessThan ltRational
 
-eqInfo : Info -> Info -> Bool
-eqInfo b c = (ratio b == ratio c) &&
-             (owner b == owner c)
+
+eqLabel : Label -> Label -> Bool
+eqLabel b c = (ratio b == ratio c) &&
+              (owner b == owner c)
 
 instance
-  iEqInfo : Eq Info
-  iEqInfo ._==_ = eqInfo
+  iEqLabel : Eq Label
+  iEqLabel ._==_ = eqLabel
 
 record ScriptContext : Set where
     field
         inputVal      : Value
         outputVal     : Value
-        outputDatum   : Label
+        outputDatum   : Datum
         payTo         : PubKeyHash
         payVal        : Value
         buyTo         : PubKeyHash
@@ -133,7 +176,10 @@ open Params public
 
 {-# COMPILE AGDA2HS Params #-}
 
-newDatum : ScriptContext -> Label
+--newLabel : ScriptContext -> Label
+--newLabel ctx = outputLabel ctx
+
+newDatum : ScriptContext -> Datum
 newDatum ctx = outputDatum ctx
 
 oldValue : ScriptContext -> Value
@@ -145,6 +191,9 @@ newValue ctx = outputVal ctx
 continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
+--emptyValue : Value
+--emptyValue = 0
+
 ada : AssetClass
 ada = 0
 
@@ -155,6 +204,8 @@ assetClassValueOf : Value -> AssetClass -> Integer
 assetClassValueOf (MkMap []) ac = 0
 assetClassValueOf (MkMap ((ac' , amt) ∷ vs)) ac = if ac' == ac then amt else assetClassValueOf (MkMap vs) ac
 
+--checkValue : Value -> Bool
+--checkValue v = v >= minValue
 
 checkMinValue : Value -> Bool
 checkMinValue v = (assetClassValueOf v ada) >= 2
@@ -179,10 +230,12 @@ processPayment ac amt r (MkMap ((ac' , amt') ∷ vs))
   then ratioCompare amt amt' r
   else processPayment ac amt r (MkMap vs)
 
-checkPayment : Params -> Integer -> Info -> ScriptContext -> Bool
+checkPayment : Params -> Integer -> Label -> ScriptContext -> Bool
 checkPayment par amt l ctx = payTo ctx == owner l &&
                              ratioCompare amt (assetClassValueOf (payVal ctx) (buyC par)) (ratio l) &&
                              checkMinValue (payVal ctx)
+                              --ratioCompare amt (payAmt ctx) (ratio st)
+                              --processPayment (buyC par) amt (ratio l) (payVal ctx) &&
 
 assetClassValue : AssetClass -> Integer -> Value
 assetClassValue ac amt = MkMap ((ac , amt) ∷ [])
@@ -191,12 +244,18 @@ checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
 checkBuyer par amt pkh ctx = buyTo ctx == pkh &&
                              assetClassValueOf (buyVal ctx) (sellC par) == amt &&
                              checkMinValue (buyVal ctx)
+                             --buyAmt ctx == amt
 
 {-# COMPILE AGDA2HS checkBuyer #-}
 {-# COMPILE AGDA2HS checkPayment #-}
 {-# COMPILE AGDA2HS processPayment #-}
 {-# COMPILE AGDA2HS ratioCompare #-}
 
+{-
+checkClose : Params -> Label -> ScriptContext -> Bool
+checkClose par st ctx = payTo ctx == owner st &&
+                        payVal ctx == oldValue ctx
+-}
 
 checkTokenBurned : AssetClass -> ScriptContext -> Bool
 checkTokenBurned tok ctx = mint ctx == -1
@@ -204,7 +263,7 @@ checkTokenBurned tok ctx = mint ctx == -1
 {-# COMPILE AGDA2HS checkTokenBurned #-}
 
 
-agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
+agdaValidator : Params -> Datum -> Input -> ScriptContext -> Bool
 agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ where
   (Update v r) -> checkSigned (owner lab) ctx &&
                     checkRational r && checkMinValue v &&
@@ -232,9 +291,10 @@ ownAssetClass ctx = tokAssetClass ctx
 checkDatum : Address -> ScriptContext -> Bool
 checkDatum addr ctx = case (newDatum ctx) of λ where
   (tok , l) -> ownAssetClass ctx == tok && checkRational (ratio l)
+  --(tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
+checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx --hasTokenOut ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

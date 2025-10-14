@@ -1,0 +1,32 @@
+{-
+    
+    -> label s ≡ Holding
+    -> label s' ≡ Collecting v pkh d []
+    -> value s ≡ value s'
+
+--    -> par ⊢ s ~[ (Propose v pkh d) ]~> s'
+-}
+
+{-
+    -> tsig s' ≡ sig
+    -> label s ≡ Collecting v pkh d sigs
+    -> label s' ≡ Collecting v pkh d (insert sig sigs)
+    -> value s ≡ value s'
+    -> par ⊢ s ~[ (Add sig) ]~> s'
+
+ -}    
+
+{-
+    -> label s ≡ Collecting v pkh d sigs
+    -> label s' ≡ Holding
+    -> outVal s' ≡ v
+    -> outAdr s' ≡ pkh
+    -> par ⊢ s ~[ Pay ]~> s'       
+
+-}
+
+{-
+    -> par ⊢ s ~[ Cancel ]~> s'
+    -> label s ≡ Collecting v pkh d sigs
+    -> label s' ≡ Holding
+-}

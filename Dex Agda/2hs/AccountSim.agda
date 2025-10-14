@@ -1,3 +1,5 @@
+{-# OPTIONS --erased-matches #-}
+
 module AccountSim where
 
 open import Haskell.Prelude
@@ -9,24 +11,24 @@ ThreadToken = Placeholder
 
 Address = Nat
 
-PubKeyHash = Integer
+PubKeyHash = Nat
 Value = Integer
 TxOutRef = Nat
 AssetClass = Nat
 
-Label = List (PubKeyHash × Value)
+AccMap = List (PubKeyHash × Value)
 
-Datum = (AssetClass × Label)
+Label = (AssetClass × AccMap)
 
+{-# COMPILE AGDA2HS AccMap #-}
 {-# COMPILE AGDA2HS Label #-}
-{-# COMPILE AGDA2HS Datum #-}
 
 
 record ScriptContext : Set where
     field
         inputVal      : Integer
         outputVal     : Integer
-        outputDatum   : Datum
+        outputDatum   : Label
         signature     : PubKeyHash
         continues     : Bool
         inputRef      : TxOutRef
@@ -44,17 +46,18 @@ data Input : Set where
   Withdraw : PubKeyHash -> Value -> Input
   Deposit  : PubKeyHash -> Value -> Input
   Transfer : PubKeyHash -> PubKeyHash -> Value -> Input
+  Cleanup  : Input
 
 {-# COMPILE AGDA2HS Input #-}
 
 
-insert : PubKeyHash -> Value -> Label -> Label
+insert : PubKeyHash -> Value -> AccMap -> AccMap
 insert pkh val [] = ((pkh , val) ∷ [])
 insert pkh val ((x , y) ∷ xs) = if (pkh == x)
   then ((pkh , val) ∷ xs)
   else ((x , y) ∷ (insert pkh val xs))
   
-delete : PubKeyHash -> Label -> Label
+delete : PubKeyHash -> AccMap -> AccMap
 delete pkh [] = []
 delete pkh ((x , y) ∷ xs) = if (pkh == x)
   then xs
@@ -63,13 +66,13 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 
-newDatum : ScriptContext -> Datum
+newDatum : ScriptContext -> Label
 newDatum ctx = outputDatum ctx
 
 newToken : ScriptContext -> AssetClass
 newToken ctx = fst (outputDatum ctx)
 
-newLabel : ScriptContext -> Label
+newLabel : ScriptContext -> AccMap
 newLabel ctx = snd (outputDatum ctx)
 
 oldValue : ScriptContext -> Value
@@ -97,7 +100,7 @@ aux : Maybe Value -> Bool
 aux Nothing = False
 aux (Just _) = True
 
-checkMembership' : PubKeyHash -> Label -> Bool
+checkMembership' : PubKeyHash -> AccMap -> Bool
 checkMembership' pkh lab = case lookup pkh lab of λ where
   Nothing -> False
   (Just v) -> True
@@ -110,19 +113,24 @@ checkEmpty : Maybe Value -> Bool
 checkEmpty Nothing = False
 checkEmpty (Just v) = v == emptyValue
 
-checkWithdraw : Maybe Value -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkWithdraw Nothing _ _ _ _ = False
-checkWithdraw (Just v) pkh val lab ctx = geq val emptyValue && geq v val && (newLabel ctx == insert pkh (v - val) lab)
+checkWithdraw : AssetClass -> Maybe Value -> PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkWithdraw tok Nothing _ _ _ _ = False
+checkWithdraw tok (Just v) pkh val lab ctx = geq val emptyValue && geq v val && (newDatum ctx == (tok , insert pkh (v - val) lab))
 
-checkDeposit : Maybe Value -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkDeposit Nothing _ _ _ _ = False
-checkDeposit (Just v) pkh val lab ctx = geq val emptyValue && (newLabel ctx == insert pkh (v + val) lab)
+checkDeposit : AssetClass -> Maybe Value -> PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkDeposit tok Nothing _ _ _ _ = False
+checkDeposit tok (Just v) pkh val lab ctx = geq val emptyValue && (newDatum ctx == (tok , insert pkh (v + val) lab))
 
-checkTransfer : Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> Label -> ScriptContext -> Bool
-checkTransfer Nothing _ _ _ _ _ _ = False
-checkTransfer (Just vF) Nothing _ _ _ _ _ = False
-checkTransfer (Just vF) (Just vT) from to val lab ctx = geq val 0 && geq vF val && from /= to &&
-                         newLabel ctx == insert from (vF - val) (insert to (vT + val) lab)
+checkTransfer : AssetClass -> Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
+checkTransfer tok Nothing _ _ _ _ _ _ = False
+checkTransfer tok (Just vF) Nothing _ _ _ _ _ = False
+checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val 0 && geq vF val && from /= to &&
+                         newDatum ctx == (tok , insert from (vF - val) (insert to (vT + val) lab))
+
+
+checkTokenBurned : AssetClass -> ScriptContext -> Bool
+checkTokenBurned tok ctx = mint ctx == -1
+
 {-
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx-}
@@ -143,29 +151,32 @@ checkTokenOut tok ctx = hasTokenOut ctx
 continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
-agdaValidator : Datum -> Input -> ScriptContext -> Bool
-agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && checkTokenOut tok ctx && continuing ctx &&
-                                    newToken ctx == tok && (case inp of λ where
+agdaValidator : Label -> Input -> ScriptContext -> Bool
+agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ where
 
-    (Open pkh) -> checkSigned pkh ctx && not (checkMembership (lookup pkh lab)) &&
-                  newLabel ctx == insert pkh 0 lab && newValue ctx == oldValue ctx
+    (Open pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx &&
+                  not (checkMembership (lookup pkh lab)) &&
+                  newDatum ctx == (tok , insert pkh 0 lab) && newValue ctx == oldValue ctx
 
-    (Close pkh) -> checkSigned pkh ctx && checkEmpty (lookup pkh lab) &&
-                   newLabel ctx == delete pkh lab && newValue ctx == oldValue ctx
+    (Close pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx && checkEmpty (lookup pkh lab) &&
+                   newDatum ctx == (tok , delete pkh lab) && newValue ctx == oldValue ctx
 
-    (Withdraw pkh val) -> checkSigned pkh ctx && checkWithdraw (lookup pkh lab) pkh val lab ctx &&
-                          newValue ctx == oldValue ctx - val
+    (Withdraw pkh val) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx &&
+                          checkWithdraw tok (lookup pkh lab) pkh val lab ctx &&
+                          newValue ctx + val == oldValue ctx
 
-    (Deposit pkh val) -> checkSigned pkh ctx && checkDeposit (lookup pkh lab) pkh val lab ctx &&
+    (Deposit pkh val) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx &&
+                         checkDeposit tok (lookup pkh lab) pkh val lab ctx &&
                          newValue ctx == oldValue ctx + val
 
-    (Transfer from to val) -> checkSigned from ctx &&
-                              checkTransfer (lookup from lab) (lookup to lab) from to val lab ctx &&
-                              newValue ctx == oldValue ctx )
+    (Transfer from to val) -> checkTokenOut tok ctx && continuing ctx && checkSigned from ctx &&
+                              checkTransfer tok (lookup from lab) (lookup to lab) from to val lab ctx &&
+                              newValue ctx == oldValue ctx 
+
+    Cleanup -> checkTokenBurned tok ctx && not (checkTokenOut tok ctx) && not (continuing ctx) && lab == [] )
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
---use function composition?
 
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = mint ctx 
@@ -181,7 +192,7 @@ checkDatum addr ctx = case (newDatum ctx) of λ where
   (tok , map) -> ownAssetClass ctx == tok && map == []
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = hasTokenOut ctx
+checkValue addr ctx = newValue ctx == 0 && hasTokenOut ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&
