@@ -1,12 +1,16 @@
 open import AccountSim
 
+open import Lib
+open import ScriptContext Label
+
+
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 import Data.Nat as N
-open import Data.Integer 
-open import Data.Integer.Properties
-open import Agda.Builtin.Int
+--open import Data.Integer 
+--open import Data.Integer.Properties
+--open import Agda.Builtin.Int
 open import Agda.Builtin.Nat renaming (_==_ to eqNat; _<_ to ltNat; _+_ to addNat; _-_ to monusNat; _*_ to mulNat)
 open import Data.List hiding (lookup)
 open import Relation.Nullary
@@ -16,28 +20,22 @@ open import Data.Sum.Base
 
 open import Data.Product using ( ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩; _×_ to _xx_)
 
-open import Haskell.Prim hiding (⊥) 
-open import Haskell.Prim.Integer
-open import Haskell.Prim.Bool
-open import Haskell.Prim.Eq
-open import Haskell.Prim.Ord
-open import Haskell.Prim.Maybe
-open import Haskell.Prim.Tuple
-open import Haskell.Prim.Ord using (_<=_ ; _>=_)
-open import Haskell.Prim using (lengthNat)
-open import Haskell.Prelude using (lookup)
 
+open import Haskell.Prelude hiding (⊥)
 
 open import Function.Base using (_∋_)
+
 
 
 module AccountSimProofs where
 
 
-
-sumVal : AccMap -> Integer
+sumVal : AccMap -> Value
 sumVal [] = 0
-sumVal ((k , v) ∷ xs) =  v + sumVal xs
+sumVal ((k , v) ∷ xs) = v + sumVal xs 
+
+--asdf : Integer -> Integer
+--asdf a = a + a
 
 
 record State : Set where
@@ -79,7 +77,7 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> datum s ≡ (tok , map)
     -> pkh ≡ tsig s'
     -> lookup pkh map ≡ Nothing
-    -> datum s' ≡ (tok ,  insert pkh 0 map)
+    -> datum s' ≡ (tok ,  insert pkh emptyValue map)
     -> value s' ≡ value s 
     -> continues s ≡ true
     -> continues s' ≡ true
@@ -101,12 +99,13 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -------------------
     -> s ~[ (Close pkh) ]~> s'
 
+
   TWithdraw : ∀ {pkh val s s' v tok map}
     -> datum s ≡ (tok , map)
     -> pkh ≡ tsig s'
     -> lookup pkh map ≡ Just v
-    -> val ≥ emptyValue
-    -> v ≥ val
+    -> (val >= emptyValue) ≡ true
+    -> (v >= val) ≡ true
     -> datum s' ≡ (tok , (insert pkh (v - val) map))
     -> value s' + val ≡ value s
     -> continues s ≡ true
@@ -114,13 +113,14 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> hasToken s ≡ true
     -> hasToken s' ≡ true
     -------------------
-    -> s ~[ (Withdraw pkh val) ]~> s'
-    
+    -> s ~[ (Withdraw pkh val) ]~> s' {--}
+
+
   TDeposit : ∀ {pkh val s s' v tok map}
     -> datum s ≡ (tok , map)
     -> pkh ≡ tsig s'
     -> lookup pkh map ≡ Just v
-    -> val ≥ emptyValue
+    -> (val >= emptyValue) ≡ true
     -> datum s' ≡ (tok , (insert pkh (v + val) map))
     -> value s' ≡ value s + val
     -> continues s ≡ true
@@ -136,9 +136,9 @@ data _~[_]~>_ : State -> Input -> State -> Set where
     -> from ≡ tsig s'
     -> lookup from map ≡ Just vF
     -> lookup to map ≡ Just vT
-    -> val ≥ emptyValue
-    -> vF ≥ val
-    -> from ≢ to
+    -> (val >= emptyValue) ≡ true
+    -> (vF >= val) ≡ true
+    -> (from /= to) ≡ true
     -> datum s' ≡ (tok , (insert from (vF - val) (insert to (vT + val) map)))
     -> value s' ≡ value s
     -> continues s ≡ true
@@ -208,17 +208,18 @@ data Valid : State -> Set where
     -> Valid s
 
 
-sub : ∀ {a b c : ℤ} -> a ≡ b -> a ≡ c -> b ≡ c
+sub : ∀ {a b c : Value} -> a ≡ b -> a ≡ c -> b ≡ c
 sub refl refl = refl
 
 maybe⊥ : ∀ {x : Value} -> Nothing ≡ Just x -> ⊥
 maybe⊥ ()
 
+{-
 0+a : ∀ (a : Integer) -> +0 + a ≡ a
 0+a (pos n) = refl
 0+a (negsuc n) = refl
 
-svLemma1 : ∀ {pkh} (map : AccMap) -> lookup pkh map ≡ Nothing -> sumVal map ≡ sumVal (insert pkh +0 map)
+svLemma1 : ∀ {pkh} (map : AccMap) -> lookup pkh map ≡ Nothing -> sumVal map ≡ sumVal (insert pkh emptyValue map)
 svLemma1 [] p = refl
 svLemma1 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 ...| false = cong (λ a → snd x + a) (svLemma1 l p)
@@ -227,11 +228,11 @@ svLemma1 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 maybe≡ : ∀ {a b : Integer} -> Just a ≡ Just b → a ≡ b
 maybe≡ refl = refl
 
-svLemma2 : ∀ {pkh} (map : AccMap) -> lookup pkh map ≡ Just +0 -> sumVal map ≡ sumVal (delete pkh map)
+svLemma2 : ∀ {pkh} (map : AccMap) -> lookup pkh map ≡ Just emptyValue -> sumVal map ≡ sumVal (delete pkh map)
 svLemma2 [] p = refl
 svLemma2 {pkh} (x ∷ l) p with pkh == (fst x) in eq
 ...| false = cong (λ a → snd x + a) (svLemma2 l p)
-...| true rewrite (maybe≡ p) | 0+a (sumVal l) = refl
+...| true rewrite (maybe≡ p) = ? --| 0+a (sumVal l) = refl
 
 monusLT : ∀ (a b : Nat) -> ltNat a b ≡ true -> Internal.subNat a b ≡ - (+ monusNat b a)
 monusLT zero (N.suc b) pf = refl
@@ -240,7 +241,7 @@ monusLT (N.suc a) (N.suc b) pf = monusLT a b pf
 monusGT : ∀ (a b : Nat) -> ltNat a b ≡ false -> Internal.subNat a b ≡ + monusNat a b
 monusGT zero zero pf = refl
 monusGT (N.suc a) zero pf = refl
-monusGT (N.suc a) (N.suc b) pf = monusGT a b pf
+monusGT (N.suc a) (N.suc b) pf = monusGT a b pf 
 
 subN≡ : ∀ (a b : Nat) -> Internal.subNat a b ≡ a ⊖ b
 subN≡ a b with ltNat a b in eq
@@ -318,16 +319,23 @@ svLemma4 {from} {to} {vF} {vT} {val} (x ∷ l) p1 p2 p3 | false | false
 
 svLemma5 : ∀ {x v v1 pkh l} -> lookup pkh l ≡ Just v -> x + v1 ≡ sumVal l -> x ≡ sumVal (insert pkh (v + - v1) l)
 svLemma5 {x} {v} {v1} {pkh} {l} p1 p2 rewrite switchSides' {x} {v1} p2 | +-comm (- v1) (sumVal l) = svLemma3 l p1
+-}
 
 fidelity : ∀ {s s' : State} {i : Input}
          -> value s ≡ sumVal (snd (datum s))
          -> s ~[ i ]~> s'
          -> value s' ≡ sumVal (snd (datum s'))
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Open _} pf (TOpen refl p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf | p5 | p4 = {!!}
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Close _} pf (TClose refl p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf | p5 | p4 = {!!}
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Withdraw _ _} pf (TWithdraw refl refl p3 p4 p5 p6 p7 p8 p9 p10 p11) rewrite pf | p6 = {!!} --svLemma5 {pkh = State.tsig s'} {l = map} p3 p7
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Deposit _ _} pf (TDeposit refl p2 p3 p4 p5 p6 p7 p8 p9 p10) rewrite p5 | p6 | pf = {!!} --svLemma3 map p3
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Transfer _ _ _} pf (TTransfer refl p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13) rewrite p8 | p9 | pf = {!!} --svLemma4 map p3 p4 p7
+{-
 fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Open _} pf (TOpen refl p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf | p5 | p4 = svLemma1 map p3
 fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Close _} pf (TClose refl p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf | p5 | p4 = svLemma2 map p3
 fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Withdraw _ _} pf (TWithdraw refl refl p3 p4 p5 p6 p7 p8 p9 p10 p11) rewrite pf | p6 = svLemma5 {pkh = State.tsig s'} {l = map} p3 p7
 fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Deposit _ _} pf (TDeposit refl p2 p3 p4 p5 p6 p7 p8 p9 p10) rewrite p5 | p6 | pf = svLemma3 map p3
-fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Transfer _ _ _} pf (TTransfer refl p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13) rewrite p8 | p9 | pf = svLemma4 map p3 p4 p7
+fidelity {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {s'} {Transfer _ _ _} pf (TTransfer refl p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13) rewrite p8 | p9 | pf = svLemma4 map p3 p4 p7 -}
 
 fidelityMulti : ∀ {s s' : State} {is : List Input}
   -> value s ≡ sumVal (snd (datum s))
@@ -341,11 +349,12 @@ n=n : ∀ (n : Nat) -> eqNat n n ≡ true
 n=n zero = refl
 n=n (N.suc n) = n=n n
 
+{-
 i=i : ∀ (i : Value) -> (eqInteger i i) ≡ true
 i=i (pos zero) = refl
 i=i (pos (suc n)) = n=n n 
 i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = n=n n
+i=i (negsuc (suc n)) = n=n n -}
 
 
 ≤NtoleqN : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true 
@@ -366,25 +375,29 @@ geqNatLemma : ∀ (n : Nat) -> (n >= 0) ≡ true
 geqNatLemma zero = refl
 geqNatLemma (N.suc n) = refl
 
+{-
 diffSubLemma : ∀ (n m : Nat) -> 0 N.≤ m -> m N.≤ n ->
                geq (+ n - + m) emptyValue ≡ true
 diffSubLemma zero .zero N.z≤n N.z≤n = refl
 diffSubLemma (N.suc n) .zero N.z≤n N.z≤n = refl
 diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) with ltNat n m in eq
 diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | true = ⊥-elim (nope n m eq (≤NtoleqN p2))
-diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | false = geqNatLemma (monusNat n m) 
+diffSubLemma .(N.suc n) .(N.suc m) N.z≤n (N.s≤s {m} {n} p2) | false = geqNatLemma (monusNat n m)  -}
 
+{-
 diffLemma : ∀ (v v' : Value) -> v' ≤ v -> emptyValue ≤ v' -> geq (v - v') emptyValue ≡ true
 diffLemma v v' (-≤- n≤m) ()
 diffLemma v v' -≤+ ()
-diffLemma v v' (+≤+ {m} {n} 0≤m) (+≤+ m≤n) = diffSubLemma n m m≤n 0≤m
+diffLemma v v' (+≤+ {m} {n} 0≤m) (+≤+ m≤n) = diffSubLemma n m m≤n 0≤m-}
 
+{-
 geqPosLemma : ∀ (n : Nat) -> geq (+ n) emptyValue ≡ true
 geqPosLemma zero = refl
-geqPosLemma (N.suc n) = refl
+geqPosLemma (N.suc n) = refl -}
 
+{-
 sumLemma : ∀ (v v' : Value) -> emptyValue ≤ v' -> geq v emptyValue ≡ true -> geq (v + v') emptyValue ≡ true
-sumLemma (pos n) (pos m) p1 p2 = geqPosLemma (addNat n m)
+sumLemma (pos n) (pos m) p1 p2 = geqPosLemma (addNat n m) -}
 
 lem : ∀ {pkh} (map : AccMap) (v' : Value)
       -> geq v' emptyValue ≡ true 
@@ -422,6 +435,8 @@ validStateTransition : ∀ {s s' : State} {i}
   -> Valid s
   -> s ~[ i ]~> s'
   -> Valid s'
+validStateTransition = {!!}
+{-
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ 0 map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TOpen refl p2 p3 refl p5 p6 p7 p8 p9) = Oth (fidelity a1 t) (lem map 0 refl a2)
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(delete _ map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TClose refl p2 p3 refl p5 p6 p7 p8 p9) = Oth (fidelity a1 t) (delem map a2)
 validStateTransition {record { datum = tok , map ; value = v1 ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (v - val) map) ; value = v2 ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TWithdraw {val = val} {v = v} refl p2 p3 p4 p5 refl refl p8 p9 p10 p11) = Oth (fidelity a1 t) (lem map (v - val) (diffLemma v val p5 p4) a2)
@@ -432,6 +447,7 @@ validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ;
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TWithdraw x x₁ x₂ x₃ x₄ x₅ x₆ () x₈ x₉ x₁₀) 
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TDeposit x x₁ x₂ x₃ x₄ x₅ () x₇ x₈ x₉)
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TTransfer x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ () x₁₀ x₁₁ x₁₂)
+-}
 
 validStateTerminal : ∀ {s s' : State} {i}
   -> Valid s
@@ -467,11 +483,12 @@ leqNto≤N' {zero} {zero} pf = N.z≤n
 leqNto≤N' {zero} {suc b} pf = N.z≤n
 leqNto≤N' {suc a} {suc b} pf = N.s≤s (leqNto≤N' pf)
 
+{-
 geqto≤ : ∀ {a b} -> geq a b ≡ true -> a ≥ b
 geqto≤ {pos n} {pos m} pf = +≤+ (leqNto≤N' pf)
 geqto≤ {pos n} {negsuc m} pf = -≤+
 geqto≤ {negsuc n} {negsuc m} pf = -≤- (leqNto≤N pf)
-
+-}
 
 makeIs : AccMap -> List Input
 makeIs [] = []
@@ -507,10 +524,13 @@ n≤n : ∀ (n : Nat) -> n N.≤ n
 n≤n zero = N.z≤n
 n≤n (N.suc n) = N.s≤s (n≤n n)
 
+{-
 v≤v : ∀ (v : Value) -> v ≤ v
 v≤v (pos n) = +≤+ (n≤n n)
 v≤v (negsuc n) = -≤- (n≤n n)
+-}
 
+{-
 getGeq : ∀ {s x tok map v sig spn mnt tok'}
          -> s ≡ record
                  { datum = tok , x ∷ map
@@ -524,7 +544,7 @@ getGeq : ∀ {s x tok map v sig spn mnt tok'}
                  }
          -> Valid s
          -> snd x ≥ emptyValue
-getGeq refl (Oth x (allCons {{i}} {{is}})) = geqto≤ i
+getGeq refl (Oth x (allCons {{i}} {{is}})) = geqto≤ i -}
 
 ltLem : ∀ (n : Nat) -> ltNat n n ≡ false
 ltLem zero = refl
@@ -534,22 +554,23 @@ monusLem : ∀ (n : Nat) -> monusNat n n ≡ 0
 monusLem zero = refl
 monusLem (N.suc n) = monusLem n
 
+{-
 i-i : ∀ (i : Value) -> i - i ≡ emptyValue
 i-i (pos zero) = refl
 i-i +[1+ n ] = i-i (negsuc n)
-i-i (negsuc n) rewrite (ltLem n) | (monusLem n) = refl
+i-i (negsuc n) rewrite (ltLem n) | (monusLem n) = refl -}
 
 rewriteLabel : ∀ (pkh : PubKeyHash) (val : Value) (map : AccMap)
                -> (pkh , val - val) ∷ map ≡ (pkh , emptyValue) ∷ map
-rewriteLabel pkh val label rewrite (i-i val) = refl
+rewriteLabel pkh val label = {!!} --rewrite (i-i val) = refl
 
 
-
+{-
 minusLemma : ∀ (a b c : Value) -> a ≡ b + c -> a - c ≡ b
 minusLemma .(b + + n) b (pos n) refl rewrite +-assoc b (+ n) (- (+ n))
            | [+m]-[+n]≡m⊖n n n | n⊖n≡0 n | +-identityʳ b = refl
 minusLemma .(b + negsuc n) b (negsuc n) refl rewrite +-assoc b (negsuc n) (- (negsuc n))
-           | n⊖n≡0 (N.suc n) | +-identityʳ b = refl
+           | n⊖n≡0 (N.suc n) | +-identityʳ b = refl-}
 
 
 sameLastSig' : ∀ {tok x v tsig spends mint token v' spends' mint' token' tsig'} (map : AccMap)
@@ -607,8 +628,9 @@ sameLastSig [] = refl
 sameLastSig (x ∷ []) = refl
 sameLastSig (x ∷ y ∷ map) = sameLastSig' map
 
+{-
 refactor : ∀ (a b c : Value) -> a ≡ b + c -> c ≡ a - b
-refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p)
+refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p) -}
 
 subValid : ∀ {x tok map v sig spn mnt tok' }
   -> Valid (record
@@ -640,7 +662,9 @@ prop1 : ∀ {tok} {map : AccMap} (s s' : State)
         -> token s ≡ token s'
         -> Valid s
         -> s ~[ (makeIs map) ]~* s'
-        
+
+prop1 = {!!}
+{-
 prop1 record { datum = (tok , []) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } record { datum = (tok' , map') ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' } refl refl refl refl refl refl refl refl refl refl refl refl p = root
 prop1 record { datum = (tok , x ∷ map) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } s'@record { datum = (tok' , map') ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' } refl refl refl refl refl refl refl refl refl refl refl refl p
   = cons {s' = st} (TWithdraw refl refl (lookupProp1 (n=n (fst x)) refl) (getGeq refl p) (v≤v (snd x)) (deleteProp1 (n=n (fst x))  (rewriteLabel (fst x) (snd x) map)) (+-comm (sumVal map) (x .snd)) refl refl refl refl) 
@@ -667,7 +691,7 @@ prop1 record { datum = (tok , x ∷ map) ; value = value ; tsig = tsig ; continu
              ; mint = mint
              ; token = token
              }
-
+-}
 
 
 liquidity : ∀ (s : State)
@@ -692,6 +716,7 @@ liquidity s@record { datum = (tok , map) ; value = value ; tsig = tsig ; continu
        }
 
 
+{-
 ==pto≡ : ∀ (a b : PubKeyHash × Value) -> (a == b) ≡ true -> a ≡ b
 ==pto≡ (fst1 , snd1) (fst2 , snd2) pf
   rewrite (==to≡ fst1 fst2 (get pf))
@@ -700,7 +725,7 @@ liquidity s@record { datum = (tok , map) ; value = value ; tsig = tsig ; continu
 ==lto≡ : ∀ (a b : AccMap) -> (a == b) ≡ true -> a ≡ b
 ==lto≡ [] [] pf = refl
 ==lto≡ (x ∷ a) (y ∷ b) pf
-  rewrite (==pto≡ x y (get pf)) = cong (λ x → y ∷ x) ((==lto≡ a b (go (x == y) pf)))
+  rewrite (==pto≡ x y (get pf)) = cong (λ x → y ∷ x) ((==lto≡ a b (go (x == y) pf))) -}
 
 
 get⊥ : ∀ (n : Nat) -> not (eqNat n n) ≡ true -> ⊥
@@ -721,27 +746,30 @@ get⊥ (N.suc n) p = get⊥ n p
 &&4false true true true true ()
 
 --why?
+{-
 rewriteJust : ∀ {a : Maybe ℤ} {v v'} -> a ≡ Just v -> v ≡ v' -> a ≡ Just v'
-rewriteJust refl refl = refl
+rewriteJust refl refl = refl -}
 
+{-
 rewriteSubL : ∀ {l1 : AccMap} (l2 : AccMap) (pkh : PubKeyHash) (v1 v2 : Value) ->
              l1 ≡ insert pkh (subInteger v1 v2) l2 -> l1 ≡ insert pkh (v1 - v2) l2
-rewriteSubL l2 pkh v1 v2 p rewrite sub≡ v1 v2 = p
+rewriteSubL l2 pkh v1 v2 p = ? --rewrite sub≡ v1 v2 = p
 
 rewriteAddL : ∀ {l1 : AccMap} (l2 : AccMap) (pkh : PubKeyHash) (v1 v2 : Value) ->
              l1 ≡ insert pkh (addInteger v1 v2) l2 -> l1 ≡ insert pkh (v1 + v2) l2
-rewriteAddL l2 pkh v1 v2 p rewrite add≡ v1 v2 = p
+rewriteAddL l2 pkh v1 v2 p = ? --rewrite add≡ v1 v2 = p
 
 doubleRewrite : ∀ {l1 : AccMap} (l2 : AccMap) (from to : PubKeyHash) (vF vT val : Value) ->
              l1 ≡ insert from (subInteger vF val) (insert to (addInteger vT val) l2) ->
              l1 ≡ insert from (vF - val) (insert to (vT + val) l2)
-doubleRewrite l2 from to vF vT val p rewrite add≡ vT val | sub≡ vF val = p
+doubleRewrite l2 from to vF vT val p = ? --rewrite add≡ vT val | sub≡ vF val = p
 
 rewriteSub : ∀ {a} (b c : Value) -> a ≡ subInteger b c -> a ≡ b - c
-rewriteSub b c p rewrite sub≡ b c = p
+rewriteSub b c p = ? --rewrite sub≡ b c = p
 
 rewriteAdd : ∀ {a} (b c : Value) -> a ≡ addInteger b c -> a ≡ b + c
-rewriteAdd b c p rewrite add≡ b c = p
+rewriteAdd b c p = ? --rewrite add≡ b c = p
+-}
 
 getS : Label -> ScriptContext -> State
 getS d ctx = record
@@ -750,7 +778,7 @@ getS d ctx = record
                                ; tsig = 0 
                                ; continues = true
                                ; spends = 0
-                               ; hasToken = hasTokenIn ctx
+                               ; hasToken = (assetClassValueOf (inputVal ctx) (fst d)) == 1 --hasTokenIn ctx
                                ; mint = 0
                                ; token = 0
                                }
@@ -762,7 +790,7 @@ getS' ctx = record
                                ; tsig = signature ctx
                                ; continues = continuing ctx
                                ; spends = inputRef ctx
-                               ; hasToken = hasTokenOut ctx
+                               ; hasToken = (assetClassValueOf (inputVal ctx) (fst (outputDatum ctx))) == 1 --hasTokenOut ctx
                                ; mint = mint ctx
                                ; token = tokAssetClass ctx
                                }
@@ -772,8 +800,9 @@ validatorImpliesTransition : ∀ (l : Label) (i : Input) (ctx : ScriptContext)
                            -> i ≢ Cleanup
                            -> (pf : agdaValidator l i ctx ≡ true)
                            -> getS l ctx ~[ i ]~> getS' ctx
-                              
 
+validatorImpliesTransition = {!!}
+{-
 validatorImpliesTransition (tok , map) (Open pkh) ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } iv pf with lookup pkh map in eq
 ...| Nothing rewrite ==to≡ tok' tok (get (get (go (pkh == signature) (go continues (go hasTokenOut (go hasTokenIn pf))))))
              | ==lto≡ map' (insert pkh 0 map) (go (tok' == tok) (get (go (pkh == signature) 
@@ -841,23 +870,25 @@ validatorImpliesTransition (tok , map) (Transfer from to val) ctx@record { input
   (==ito≡ outputVal inputVal (go (checkTransfer tok (Just vF) (Just vT) from to val map ctx) (go (from == signature)
   (go continues (go hasTokenOut (go hasTokenIn pf))))))
   refl (get (go hasTokenOut (go hasTokenIn pf))) (get pf) (get (go hasTokenIn pf))
-validatorImpliesTransition (tok , map) Cleanup ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } iv pf = ⊥-elim (iv refl)
+validatorImpliesTransition (tok , map) Cleanup ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } iv pf = ⊥-elim (iv refl) -}
 
 mintingImpliesStart : ∀ (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> mint ctx ≡ 1
                            -> (pf : agdaPolicy adr oref top ctx ≡ true)
                            -> record {address = adr ; outputRef = oref } ⊢ getS' ctx
+mintingImpliesStart = {!!}
+{-
 mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = + 1 ; tokAssetClass = tokAssetClass } refl pf
   rewrite ==to≡ tokAssetClass tok (get (get (go (oref == inputRef) (go continues pf)))) |
   ==lto≡ l [] (go (tokAssetClass == tok) (get (go (oref == inputRef) (go continues pf))))
   = TStart refl
     (==ito≡ outputVal 0 (get (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf)))))
     refl (get pf) (==to≡ oref inputRef (get (go continues pf))) refl
-    (go (outputVal == 0) (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf))))
+    (go (outputVal == 0) (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf)))) -}
 
 l=l : ∀ (l : AccMap) -> (l == l) ≡ true
 l=l [] = refl
-l=l (x ∷ l) rewrite n=n (fst x) | i=i (snd x) = l=l l
+l=l (x ∷ l) = {!!} --rewrite n=n (fst x) | i=i (snd x) = l=l l
 
 unNot : (b : Bool) -> not b ≡ true -> b ≡ false
 unNot false pf = refl
@@ -867,7 +898,9 @@ bothImplyCleanup : ∀ (l : Label) (adr : Address) (oref : TxOutRef) (ctx : Scri
                    -> mint ctx ≡ -1
                    -> (agdaValidator l Cleanup ctx && agdaPolicy adr oref tt ctx) ≡ true
                    -> getS l ctx ~[ Cleanup ]~| getS' ctx
-bothImplyCleanup d adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = .(negsuc 0) ; tokAssetClass = tokAssetClass } refl pf = TCleanup (==lto≡ (snd d) [] (go (not continues) (go (not hasTokenOut) (go hasTokenIn (get pf))))) refl refl (unNot continues (get (go (not hasTokenOut) (go hasTokenIn (get pf))))) (get (get pf)) (unNot hasTokenOut (get (go hasTokenIn (get pf))))
+bothImplyCleanup = {!!}
+{-
+bothImplyCleanup d adr oref record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = .(negsuc 0) ; tokAssetClass = tokAssetClass } refl pf = TCleanup (==lto≡ (snd d) [] (go (not continues) (go (not hasTokenOut) (go hasTokenIn (get pf))))) refl refl (unNot continues (get (go (not hasTokenOut) (go hasTokenIn (get pf))))) (get (get pf)) (unNot hasTokenOut (get (go hasTokenIn (get pf)))) -}
 
 
 ≤NtoLeqN : ∀ {a b} -> a N.≤ b -> (ltNat a b || eqNat a b) ≡ true
@@ -880,18 +913,20 @@ bothImplyCleanup d adr oref record { inputVal = inputVal ; outputVal = outputVal
 ≤NtoLeqN' {b = N.suc b} N.z≤n = refl
 ≤NtoLeqN' (N.s≤s p) = ≤NtoLeqN' p
 
+{-
 ≤toGeq : ∀ {a b} -> a ≤ b -> geq b a ≡ true
 ≤toGeq (-≤- n≤m) = ≤NtoLeqN n≤m
 ≤toGeq -≤+ = refl
-≤toGeq (+≤+ m≤n) = ≤NtoLeqN' m≤n
+≤toGeq (+≤+ m≤n) = ≤NtoLeqN' m≤n -}
 
+{-
 ≢to/= : ∀ (a b : PubKeyHash) -> a ≢ b -> (a /= b) ≡ true
 ≢to/= zero zero pf = ⊥-elim (pf refl)
 ≢to/= zero (N.suc b) pf = refl
 ≢to/= (N.suc a) zero pf = refl
 ≢to/= (N.suc a) (N.suc b) pf with eqNat a b in eq
 ...| False = refl
-...| True rewrite ==to≡ a b eq = ⊥-elim (pf refl)
+...| True rewrite ==to≡ a b eq = ⊥-elim (pf refl) -}
 
 
 
@@ -899,23 +934,27 @@ bothImplyCleanup d adr oref record { inputVal = inputVal ; outputVal = outputVal
 transitionImpliesValidator : ∀ (l : Label) (i : Input) (ctx : ScriptContext)
                            -> getS l ctx ~[ i ]~> getS' ctx
                            -> agdaValidator l i ctx ≡ true
+transitionImpliesValidator = {!!}
+{-
 transitionImpliesValidator (tok , map) (Open pkh) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TOpen refl refl p3 refl refl p6 refl refl refl) rewrite p3 | n=n tok | n=n pkh | l=l (insert pkh 0 map) | i=i inputVal = refl
 transitionImpliesValidator (tok , map) (Close pkh) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TClose refl refl p3 refl refl p6 refl refl refl) rewrite p3 | n=n tok | n=n pkh | l=l (delete pkh map) | i=i inputVal = refl
 transitionImpliesValidator (tok , map) (Withdraw pkh val) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TWithdraw {v = v} refl refl p3 p4 p5 refl refl p8 refl refl refl) rewrite p3 | ≤toGeq p4 | ≤toGeq p5 | n=n tok | n=n pkh | add≡ outputVal val | i=i (outputVal + val) | sub≡ v val | l=l (insert pkh (v - val) map) = refl
 transitionImpliesValidator (tok , map) (Deposit pkh val) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TDeposit {v = v} refl refl p3 p4 refl refl p7 refl refl refl) rewrite p3 | ≤toGeq p4 | n=n tok | n=n pkh | add≡ inputVal val | i=i (inputVal + val) | add≡ v val | l=l (insert pkh (v + val) map) = refl
 transitionImpliesValidator (tok , map) (Transfer from to val) record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , map') ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TTransfer {vF = vF} {vT = vT} refl refl p3 p4 p5 p6 p7 refl refl p10 refl refl refl) rewrite p3 | p4 | ≤toGeq p5 | ≤toGeq p6 | ≢to/= from to p7 | n=n tok | n=n from | i=i inputVal | add≡ vT val | sub≡ vF val | l=l (insert from (vF + - val) (insert to (vT + val) map)) = refl
-
+-}
 
 startImpliesMinting : ∀ (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> record {address = adr ; outputRef = oref } ⊢ getS' ctx
                            -> agdaPolicy adr oref top ctx ≡ true
+startImpliesMinting = {!!}
+{-
 startImpliesMinting adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = mint ; tokAssetClass = tokAssetClass } (TStart refl refl refl refl refl refl refl) rewrite n=n oref | n=n tok = refl
-
+-}
 
 cleanupImpliesBoth : ∀ (l : Label) (adr : Address) (oref : TxOutRef) (ctx : ScriptContext)
   -> getS l ctx ~[ Cleanup ]~| getS' ctx
   -> (agdaValidator l Cleanup ctx && agdaPolicy adr oref tt ctx) ≡ true
-cleanupImpliesBoth d adr oref ctx (TCleanup refl refl refl refl refl refl) = refl
+cleanupImpliesBoth d adr oref ctx (TCleanup refl refl refl refl a b) = {!!} --refl
 
 
 data Phase : Set where
@@ -934,6 +973,8 @@ open Argument
 
 
 Classifier : Argument -> Phase
+Classifier = {!!}
+{-
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = (+_ zero) ; tokAssetClass = tokAssetClass } } = Running
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = +[1+ zero ] ; tokAssetClass = tokAssetClass } } = Initial
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = +[1+ N.suc n ] ; tokAssetClass = tokAssetClass } } = Running
@@ -944,7 +985,7 @@ Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = (Withdraw x x₁
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = (Deposit x x₁) ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = (negsuc zero) ; tokAssetClass = tokAssetClass } } = Running
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = (Transfer x x₁ x₂) ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = (negsuc zero) ; tokAssetClass = tokAssetClass } } = Running
 Classifier record { adr = adr ; oref = oref ; dat = dat ; inp = Cleanup ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = (negsuc zero) ; tokAssetClass = tokAssetClass } } = Terminal
-
+-}
 totalF : Argument -> Bool
 totalF arg with Classifier arg
 ... | Initial = agdaPolicy (arg .adr) (arg .oref) tt (arg .ctx)
@@ -962,7 +1003,7 @@ record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
-
+{-
 removeCleanup : ∀ (arg : Argument) -> (mint (ctx arg) ≢ (negsuc zero))
                -> (agdaValidator (arg .dat) (arg .inp) (arg .ctx) ≡ true)
                -> getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx)
@@ -971,7 +1012,7 @@ removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = (Clo
 removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = (Withdraw x x₁) ; ctx = ctx₁ } p1 p2 = validatorImpliesTransition dat₁ (Withdraw x x₁) ctx₁ (λ ()) p2
 removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = (Deposit x x₁) ; ctx = ctx₁ } p1 p2 = validatorImpliesTransition dat₁ (Deposit x x₁) ctx₁ (λ ()) p2
 removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = (Transfer x x₁ x₂) ; ctx = ctx₁ } p1 p2 = validatorImpliesTransition dat₁ (Transfer x x₁ x₂) ctx₁ (λ ()) p2
-removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = Cleanup ; ctx = ctx₁ } p1 p2 = ⊥-elim (p1 (==ito≡ (mint ctx₁) (negsuc 0) (get (go (hasTokenIn ctx₁) p2))))
+removeCleanup record { adr = adr₁ ; oref = oref₁ ; dat = dat₁ ; inp = Cleanup ; ctx = ctx₁ } p1 p2 = ⊥-elim (p1 (==ito≡ (mint ctx₁) (negsuc 0) (get ?)))
 
 
 
@@ -998,6 +1039,13 @@ totalEquiv' = record { to = λ { { arg@record { adr = adr ; oref = oref ; dat = 
                                 { arg@record { adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; hasTokenIn = hasTokenIn ; hasTokenOut = hasTokenOut ; mint = (negsuc (N.suc n)) ; tokAssetClass = tokAssetClass } } } x → transitionImpliesValidator dat inp ctx x } } 
 
 
+-}
+
+
+
+
+
+{-
 
 
 
@@ -1008,10 +1056,4 @@ totalEquiv' = record { to = λ { { arg@record { adr = adr ; oref = oref ; dat = 
 
 
 
-
-
-
-
-
-
-
+-}
