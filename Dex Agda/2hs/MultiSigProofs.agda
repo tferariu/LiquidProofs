@@ -166,7 +166,6 @@ data Unique {a : Set} : List a → Set where
 ≡ᵇto≡ {zero} {zero} pf = refl
 ≡ᵇto≡ {suc a} {suc b} pf = cong suc (≡ᵇto≡ pf)
 
-
 ≡ⁱto≡ : ∀ {a b : Int} -> (a == b) ≡ true -> a ≡ b
 ≡ⁱto≡ {pos n} {pos m} pf = cong pos (≡ᵇto≡ pf)
 ≡ⁱto≡ {negsuc n} {negsuc m} pf = cong negsuc (≡ᵇto≡ pf)
