@@ -2,7 +2,7 @@ open import Haskell.Prelude
 open import Lib
 open import Value
 
-module DEx where
+module Validators.DEx where
 
 
 checkRational : Rational -> Bool

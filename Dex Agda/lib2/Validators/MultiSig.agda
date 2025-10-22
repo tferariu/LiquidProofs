@@ -2,7 +2,7 @@ open import Haskell.Prelude
 open import Lib
 open import SimpleValue
 
-module MultiSig where
+module Validators.MultiSig where
 
 data Info : Set where
   Holding : Info

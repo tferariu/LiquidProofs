@@ -1,4 +1,4 @@
-open import DEx
+open import Validators.DEx
 open import Lib
 open import Value
 open import ScriptContext Label Value
@@ -34,7 +34,7 @@ open import Haskell.Prelude using (lookup ; _<>_)
 
 open import ProofLib
 
-module DExProofs where
+module Proofs.DExProofs where
 
 
 

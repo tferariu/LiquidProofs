@@ -1,4 +1,4 @@
-open import MultiSig
+open import Validators.MultiSig
 open import Lib
 open import SimpleValue
 open import ScriptContext Label Value
@@ -38,7 +38,7 @@ open import Haskell.Prelude using (lookup)
 
 open import ProofLib
 
-module MultiSigProofs where
+module Proofs.MultiSigProofs where
 
 record Context : Set where
   field

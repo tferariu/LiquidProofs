@@ -1,4 +1,4 @@
-open import AccountSim
+open import Validators.AccountSim
 open import Lib
 open import SimpleValue
 open import ScriptContext Label Value
@@ -35,7 +35,7 @@ open import Function.Base using (_∋_)
 
 open import ProofLib
 
-module AccountSimProofs where
+module Proofs.AccountSimProofs where
 
 sumVal : AccMap -> Integer
 sumVal [] = 0

@@ -3,7 +3,7 @@ open import Lib
 open import SimpleValue
 
 
-module AccountSim where
+module Validators.AccountSim where
 
 
 AccMap = List (PubKeyHash × Value)
