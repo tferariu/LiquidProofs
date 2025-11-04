@@ -123,18 +123,9 @@ data _⊢_~[_]~|_ : MParams -> State -> Input -> State -> Set where
     -> par ⊢ s ~[ Close ]~| s'
     
 
---Valid State
-data ValidS : State -> Set where
 
-  Stp : ∀ {s}
-    -> continues s ≡ false
-    ----------------
-    -> ValidS s
-
-  Oth : ∀ {s}
-    -> checkRational (ratio (snd (datum s))) ≡ true
-    ----------------
-    -> ValidS s
+Valid : State -> Set 
+Valid s = checkRational (ratio (snd (datum s))) ≡ true × continues s ≡ true × hasToken s ≡ true
 
 
 --Multi-Step Transition
@@ -160,17 +151,18 @@ data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
 --State Validity Invariant
 validStateInitial : ∀ {s par}
   -> par ⊢ s
-  -> ValidS s
-validStateInitial {record { datum = .(token₁ , _) ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl p2 p3 p4 p5 p6) = Oth p6
+  -> Valid s
+validStateInitial {record { datum = .(token₁ , _) ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl p2 p3 p4 p5 p6) = p6 , p3 , p5
 
 validStateTransition : ∀ {s s' : State} {i par}
-  -> ValidS s
+  -> Valid s
   -> par ⊢ s ~[ i ]~> s'
-  -> ValidS s'
-validStateTransition {s} {s' = record { datum = .(fst (datum s) , record { ratio = _ ; owner = owner (snd (datum s)) }) ; value = value₁ ; payVal = payVal₁ ; payTo = payTo₁ ; buyVal = buyVal₁ ; buyTo = buyTo₁ ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} iv (TUpdate p1 p2 refl p4 p5 p6 p7 p8 p9) = Oth p4
-validStateTransition (Stp x) (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) rewrite x = ⊥-elim (get⊥ (sym p9))
-validStateTransition (Oth x) (TExchange p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12) rewrite sym p2 = Oth x
+  -> Valid s'
+validStateTransition v (TUpdate x x₁ refl x₃ x₄ x₅ x₆ x₇ x₈) = x₃ , x₆ , x₈
+validStateTransition (fst , snd , thd) (TExchange x refl x₂ x₃ x₄ x₅ x₆ x₇ x₈ x₉ x₁₀ x₁₁) = fst , x₉ , x₁₁
 
+
+{- deprecated
 validStateFinal : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~| s'
@@ -183,15 +175,14 @@ validStateMulti : ∀ {s s' : State} {is par}
   -> ValidS s'
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
-validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x
+validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x-}
 
 
 liquidity : ∀ (par : MParams) (s : State) 
-          -> ValidS s -> continues s ≡ true -> hasToken s ≡ true
+          -> Valid s
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ MkMap []) )
 
-liquidity par s (Stp x) p2 rewrite p2 = ⊥-elim (get⊥ x)
-liquidity par s (Oth x) p2 p3 = ⟨ s' , ⟨  Close ∷ [] , (fin (TClose refl refl p2 refl p3 refl) root , refl) ⟩ ⟩
+liquidity par s (p1 , p2 , p3) = ⟨ s' , ⟨  Close ∷ [] , (fin (TClose refl refl p2 refl p3 refl) root , refl) ⟩ ⟩
   where
     s' = record
           { datum = datum s

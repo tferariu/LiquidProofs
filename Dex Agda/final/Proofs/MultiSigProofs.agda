@@ -166,14 +166,9 @@ data Unique {a : Set} : List a → Set where
 data ValidS : State -> Set where
 
   Hol : ∀ {s tok}
-    -> datum s ≡ (tok , Holding)
+    -> datum s ≡ (tok , Holding) 
+    -> continues s ≡ true
     -> hasToken s ≡ true
-    ----------------
-    -> ValidS s
-
-  Stp : ∀ {s}
-    -> continues s ≡ false
-    -> hasToken s ≡ false
     ----------------
     -> ValidS s
 
@@ -181,7 +176,8 @@ data ValidS : State -> Set where
     -> datum s ≡ ( tok , Collecting v pkh d sigs )
     -> value s ≥ v
     -> v ≥ minValue
-    -> Unique sigs
+    -> Unique sigs   
+    -> continues s ≡ true
     -> hasToken s ≡ true
     --------------------------------
     -> ValidS s
@@ -250,21 +246,21 @@ insertPreservesUniqueness {sig} {(x ∷ xs)} (p :: ps) with sig == x in eq
 validStateInitial : ∀ {s par}
   -> par ⊢ s
   -> ValidS s
-validStateInitial (TStart p1 p2 p3 p4 p5 p6) = Hol p1 p6
+validStateInitial (TStart p1 p2 p3 p4 p5 p6) = Hol p1 p3 p6
 
 validStateTransition : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~> s'
   -> ValidS s'
-validStateTransition iv (TPropose p1 (+≤+ m≤n) p3 p4 p5 p6 p7 p8 p9 p10) rewrite p5 = Col p4 p1 (+≤+ m≤n) root p10
-validStateTransition {s} (Hol pf pf') (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) = ⊥-elim (diffLabels (datum s) pf p3)
-validStateTransition (Stp pf pf') (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) rewrite pf = ⊥-elim (get⊥ (sym p6))
-validStateTransition (Col pf1 pf2 pf3 pf4 pf5) (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) 
+validStateTransition iv (TPropose p1 (+≤+ m≤n) p3 p4 p5 p6 p7 p8 p9 p10) rewrite p5 = Col p4 p1 (+≤+ m≤n) root p8 p10
+validStateTransition {s} (Hol pf pf' pf'') (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) = ⊥-elim (diffLabels (datum s) pf p3)
+validStateTransition (Col pf1 pf2 pf3 pf4 pf5 pf6) (TAdd p1 p2 p3 p4 p5 p6 p7 p8 p9) 
                      rewrite pf1 | sameValue p3 | p5 | sameSigs p3
-                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4) p9
-validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9 p10) = Hol p4 p10
-validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6 p7 p8) = Hol p3 p8
+                     = Col p4 pf2 pf3 (insertPreservesUniqueness pf4) p7 p9
+validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9 p10) = Hol p4 p8 p10
+validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6 p7 p8) = Hol p3 p6 p8
 
+{-deprecated
 validStateFinal : ∀ {s s' : State} {i par}
   -> ValidS s
   -> par ⊢ s ~[ i ]~| s'
@@ -278,7 +274,7 @@ validStateMulti : ∀ {s s' : State} {is par}
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
 validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x
-
+-}
 
 
 --Prop1 sub-lemmas and helper functions
@@ -447,14 +443,9 @@ uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l1) -> (length (insertList l1 l
 uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
 
 --Valid Parameters
-data ValidP : MParams -> Set where
-
-  Always : ∀ {par}
-    -> Unique (authSigs par)
-    -> length (authSigs par) N.≥ nr par
-    ------------------
-    -> ValidP par
-
+ValidP : MParams -> Set 
+ValidP par = Unique (authSigs par) × length (authSigs par) N.≥ nr par
+  
 --Multi-Step lemma
 lemmaMultiStep : ∀ (par : MParams) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is  ]~* s'
@@ -483,7 +474,7 @@ prop2 : ∀ { v pkh d sigs tok } (s s' : State) (par : MParams)
 
 prop2 {d = d} {sigs = sigs} {tok = tok}
   s1@record { datum = .(tok , Collecting outVal outAdr d sigs) ; value = .(value + outVal) ; outVal = oV ; outAdr = oA ; now = now ; tsig = tsig ; continues = .true ; spends = spends ; hasToken = .true ; mint = mint ; token = token }
-  s2@record { datum = .(tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = n ; tsig = outAdr ; continues = .true ; spends = spn ; hasToken = .true ; mint = m ; token = tok' } par (Col p1 p2 p3 p4 p7) refl refl refl refl refl (Always p5 p6) refl refl refl refl refl
+  s2@record { datum = .(tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = n ; tsig = outAdr ; continues = .true ; spends = spn ; hasToken = .true ; mint = m ; token = tok' } par (Col p1 p2 p3 p4 p7 p8) refl refl refl refl refl (p5 , p6) refl refl refl refl refl
   = lemmaMultiStep par s1 s' s2 (makeIs (authSigs par)) [ Pay ]
     (prop1 s1 s' par refl refl refl refl refl refl refl refl refl refl refl refl refl refl)
     (cons (TPay refl (N.≤-trans p6 (uil (authSigs par) sigs p5)) refl refl refl refl refl refl refl refl) root)
@@ -542,13 +533,12 @@ takeUnique {suc a} {x ∷ l} (p :: ps) = ∉take p :: (takeUnique ps)
 --there exists another state and some inputs such that we can transition
 --there and have no value left in the contract)
 liquidity : ∀ (par : MParams) (s : State) (pkh : PubKeyHash) 
-          -> ValidS s -> ValidP par -> continues s ≡ true
+          -> ValidS s -> ValidP par
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ 0) )
           
-liquidity par s pkh (Stp p1 p4) p2 p3 rewrite p1 = ⊥-elim (get⊥ (sym p3))
 liquidity par
-  s@record { datum = (tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Hol refl p) (Always p2 p3) p4 with minValue <= value in eq
-...| false = ⟨ s' , ⟨ [ Close ] , ((fin (TClose refl (≤to> eq) p4 refl p refl refl) root) , refl) ⟩ ⟩ 
+  s@record { datum = (tok , Holding) ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Hol refl p p') (p2 , p3) with minValue <= value in eq
+...| false = ⟨ s' , ⟨ [ Close ] , ((fin (TClose refl (≤to> eq) p refl p' refl refl) root) , refl) ⟩ ⟩ 
      where
        s' : State
        s' = record
@@ -564,8 +554,8 @@ liquidity par
              ; mint = -1
              ; token = tok } 
 ...| true  = ⟨ s'' , ⟨ ((Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ])) ,
-             (cons (TPropose ≤-refl (≤ᵇto≤ eq) refl refl refl N.z≤n p4 refl p refl) 
-             (prop2 s' s'' par (Col refl ≤-refl (≤ᵇto≤ eq) root refl) refl refl refl refl (sym (+-identityˡ value)) (Always p2 p3) refl refl refl refl refl) , refl) ⟩ ⟩ 
+             (cons (TPropose ≤-refl (≤ᵇto≤ eq) refl refl refl N.z≤n p refl p' refl) 
+             (prop2 s' s'' par (Col refl ≤-refl (≤ᵇto≤ eq) root refl refl) refl refl refl refl (sym (+-identityˡ value)) (p2 , p3) refl refl refl refl refl) , refl) ⟩ ⟩ 
      where
        s'' = record
               { datum = tok , Holding
@@ -593,12 +583,12 @@ liquidity par
              ; mint = mint
              ; token = token
              }
-liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Col refl p2 p3 p4 p5) (Always p6 p7) p8 with minValue <= value in eq
+liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = value ; outVal = outVal ; outAdr = outAdr ; now = now ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Col refl p2 p3 p4 p5 p6) (p7 , p8) with minValue <= value in eq
 ...| false  = ⊥-elim (≤⇒≯ (≤-trans p3 p2) (≤to> eq)) 
 ...| true  = ⟨ s''' , ⟨ (Cancel ∷ (Propose value pkh 0) ∷ ((makeIs (authSigs par)) ++ [ Pay ])) ,
-             ((cons (TCancel  {s' = s'} (N.s≤s N.≤-refl) refl refl refl p8 refl p5 refl) 
+             ((cons (TCancel  {s' = s'} (N.s≤s N.≤-refl) refl refl refl p5 refl p6 refl) 
              (cons (TPropose ≤-refl (≤ᵇto≤ eq) refl refl refl N.z≤n refl refl refl refl) 
-             (prop2 s'' s''' par (Col refl ≤-refl (≤ᵇto≤ eq) root refl) refl refl refl refl (sym (+-identityˡ value)) (Always p6 p7) refl refl refl refl refl))) , refl) ⟩ ⟩
+             (prop2 s'' s''' par (Col refl ≤-refl (≤ᵇto≤ eq) root refl refl) refl refl refl refl (sym (+-identityˡ value)) (p7 , p8) refl refl refl refl refl))) , refl) ⟩ ⟩
      where
        s''' = record
               { datum = tok , Holding
