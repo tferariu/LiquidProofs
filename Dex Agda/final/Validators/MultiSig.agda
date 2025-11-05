@@ -32,7 +32,6 @@ record Params : Set where
         maxWait : Deadline
 open Params public
 
-
 {-# COMPILE AGDA2HS Params #-}
 
 query : PubKeyHash -> List PubKeyHash -> Bool
@@ -44,8 +43,6 @@ insert pkh [] = (pkh ∷ [])
 insert pkh (x ∷ l') = if (pkh == x)
   then (x ∷ l')
   else (x ∷ (insert pkh l'))
-
---interesting complication if using "x == pkh -> x :: l'" instead
 
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}

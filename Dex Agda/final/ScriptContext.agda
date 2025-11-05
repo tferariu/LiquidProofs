@@ -87,22 +87,6 @@ hasTokenOut = ScriptContext.tokenOut
 now : ScriptContext -> Deadline
 now = ScriptContext.time
 
-{-
-        inputVal      : Value
-        outputVal     : Value
-        outputDatum   : Label
-        payAdr1       : PubKeyHash
-        payVal1       : Value
-        payAdr2       : PubKeyHash
-        payVal2       : Value
-        signature     : PubKeyHash
-        continues     : Bool
-        inputRef      : TxOutRef
-        mint          : Integer
-        tokAssetClass : AssetClass
-        hasTokenIn    : Bool
-        hasTokenOut   : Bool
-        time          : Deadline-}
         
 checkSigned : PubKeyHash -> ScriptContext -> Bool
 checkSigned sig ctx = sig == ScriptContext.signature ctx
