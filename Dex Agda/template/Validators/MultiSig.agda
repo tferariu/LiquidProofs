@@ -6,7 +6,7 @@ module Validators.MultiSig where
 
 data Info : Set where
   Holding : Info
-  Collecting : Value -> PubKeyHash -> Deadline -> List PubKeyHash -> Info
+  Collecting : Value -> PubKeyHash -> Nat -> List PubKeyHash -> Info
 
 {-# COMPILE AGDA2HS Info #-}
 
@@ -14,10 +14,78 @@ Label = (AssetClass × Info)
 
 {-# COMPILE AGDA2HS Label #-}
 
-open import ScriptContext Label Value
+record ScriptContext : Set where
+    field     
+        inputVal      : Value
+        outputVal     : Value
+        outputDatum   : Label
+        payments      : List (PubKeyHash × Value)
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        mint          : Integer
+        tokAssetClass : AssetClass
+        tokenIn       : Bool
+        tokenOut      : Bool
+        time          : Nat
+
+newDatum : ScriptContext -> Label
+newDatum ctx = ScriptContext.outputDatum ctx
+
+oldValue : ScriptContext -> Value
+oldValue ctx = ScriptContext.inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = ScriptContext.outputVal ctx
+
+continuing : ScriptContext -> Bool
+continuing ctx = ScriptContext.continues ctx
+
+getPayments : ScriptContext -> List (PubKeyHash × Value)
+getPayments = ScriptContext.payments
+
+getPayment : PubKeyHash -> List (PubKeyHash × Value) -> Value
+getPayment pkh [] = emptyValue
+getPayment pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment pkh xs
+
+getMintedAmount : ScriptContext -> Integer
+getMintedAmount ctx = ScriptContext.mint ctx 
+
+ownAssetClass : ScriptContext -> AssetClass
+ownAssetClass ctx = ScriptContext.tokAssetClass ctx
+
+checkTokenIn : AssetClass -> ScriptContext -> Bool
+checkTokenIn ac = ScriptContext.tokenIn
+
+checkTokenOut : AssetClass -> ScriptContext -> Bool
+checkTokenOut ac = ScriptContext.tokenOut
+        
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned sig ctx = sig == ScriptContext.signature ctx
+
+sig : ScriptContext -> PubKeyHash
+sig = ScriptContext.signature
+
+iRef : ScriptContext -> TxOutRef
+iRef = ScriptContext.inputRef
+
+checkTokenBurned : AssetClass -> ScriptContext -> Bool
+checkTokenBurned tok ctx = ScriptContext.mint ctx == -1
+
+consumes : TxOutRef -> ScriptContext -> Bool
+consumes oref ctx = oref == ScriptContext.inputRef ctx
+
+continuingAddr : Address -> ScriptContext -> Bool
+continuingAddr addr ctx = ScriptContext.continues ctx
+
+checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
+checkPayment pkh v ctx = getPayment pkh (getPayments ctx) == v
+
+now : ScriptContext -> Nat
+now = ScriptContext.time
 
 data Input : Set where
-  Propose : Value -> PubKeyHash -> Deadline -> Input
+  Propose : Value -> PubKeyHash -> Nat -> Input
   Add     : PubKeyHash -> Input
   Pay     : Input
   Cancel  : Input
@@ -29,7 +97,7 @@ record Params : Set where
     field
         authSigs  : List PubKeyHash
         nr : Nat
-        maxWait : Deadline
+        maxWait : Nat
 open Params public
 
 {-# COMPILE AGDA2HS Params #-}
@@ -48,20 +116,12 @@ insert pkh (x ∷ l') = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 
 
-checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment pkh v ctx = pkh == payAdr ctx && v == payVal ctx
+expired : Nat -> ScriptContext -> Bool
+expired d ctx = now ctx > d 
 
-expired : Deadline -> ScriptContext -> Bool
-expired d ctx = (now ctx) > d
+notTooLate : Params -> Nat -> ScriptContext -> Bool
+notTooLate par d ctx = (now ctx) + (maxWait par) >= d  
 
-notTooLate : Params -> Deadline -> ScriptContext -> Bool
-notTooLate par d ctx = (now ctx) + (maxWait par) >= d
-
-checkTokenIn : AssetClass -> ScriptContext -> Bool
-checkTokenIn tok ctx = hasTokenIn ctx
-
-checkTokenOut : AssetClass -> ScriptContext -> Bool
-checkTokenOut tok ctx = hasTokenOut ctx
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
@@ -104,7 +164,7 @@ checkDatum addr ctx = case (newDatum ctx) of λ where
   (tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = hasTokenOut ctx
+checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

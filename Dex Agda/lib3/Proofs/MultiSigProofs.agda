@@ -779,6 +779,19 @@ mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outp
 mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , Collecting x x₁ x₂ x₃) ; time = time ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = .1 ; tokAssetClass = tokAssetClass } refl pf = ⊥-elim (&&2false continues (eqNat oref inputRef) pf)
 
 
+bothImplyClose' : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> getMintedAmount ctx ≡ -1
+               -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
+               -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx
+bothImplyClose' par d@(tok , Holding) adr oref top ctx refl p with hasTokenOut ctx
+bothImplyClose' par d@(tok , Holding) adr oref top ctx refl p | True  = {!!}
+bothImplyClose' par d@(tok , Holding) adr oref top ctx refl p | False = {!!}
+bothImplyClose' par d@(tok , Collecting x x₁ x₂ x₃) adr oref top ctx refl p = {!!}
+
+{-with hasTokenOut ctx
+bothImplyClose' par d@(tok , map) adr oref top ctx refl p | True  = {!!}
+bothImplyClose' par d@(tok , map) adr oref top ctx refl p | False = {!!}
+-}
 bothImplyClose : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                -> getMintedAmount ctx ≡ -1
                -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
@@ -823,17 +836,16 @@ startImpliesMinting adr oref top record { outputDatum = .(tokAssetClass , Holdin
 
 
 
+closeImpliesBoth' : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> (getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx)
+               -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
+closeImpliesBoth' par (tok , map) adr oref top ctx (TClose refl b c refl refl refl refl) = {!!}
+
 closeImpliesBoth : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                -> (getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' ctx)
                -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
 closeImpliesBoth par (tok , Holding) adr oref top record { continues = .false ; tokenIn = .true ; tokenOut = .false ; mint = .-1 } (TClose refl p2 p3 refl refl refl refl) rewrite <to<ᵇ p2 = refl
 
-
-
-data Phase : Set where
-  Initial  : Phase
-  Running  : Phase
-  Terminal : Phase
 
 
 record Argument : Set where
@@ -846,7 +858,16 @@ record Argument : Set where
     ctx  : ScriptContext 
 open Argument
 
+
+data Phase : Set where
+  Initial  : Phase
+  Running  : Phase
+  Terminal : Phase
+
 Classifier : Argument -> Phase
+
+
+
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = (+_ zero) ; tokAssetClass = tokAssetClass } } = Running
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = +[1+ zero ] ; tokAssetClass = tokAssetClass } } = Initial
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = +[1+ (suc n) ] ; tokAssetClass = tokAssetClass } } = Running
@@ -858,6 +879,15 @@ Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Canc
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = record { mint = (negsuc zero) ; tokAssetClass = tokAssetClass } } = Terminal
 
 
+makePar : Argument -> MParams
+makePar arg = getPar (arg .par) (arg .adr) (arg .oref)
+
+makeS : Argument -> State
+makeS arg = getS (arg .dat) (arg .ctx)
+
+makeS' : Argument -> State
+makeS' arg = getS' (arg .ctx)
+
 
 totalF : Argument -> Bool
 totalF arg with Classifier arg
@@ -866,12 +896,11 @@ totalF arg with Classifier arg
 ... | Terminal = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) &&
                  agdaPolicy (arg .adr) (arg .oref) tt (arg .ctx)
 
-
 totalR : Argument -> Set
 totalR arg with Classifier arg
-... | Initial  = getPar (arg .par) (arg .adr) (arg .oref) ⊢ getS' (arg .ctx)
-... | Running  = getPar (arg .par) (arg .adr) (arg .oref) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .ctx) 
-... | Terminal =  getPar (arg .par) (arg .adr) (arg .oref) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .ctx)
+... | Initial  = makePar arg ⊢ makeS' arg
+... | Running  = makePar arg ⊢ makeS arg ~[ (arg .inp) ]~> makeS' arg
+... | Terminal = makePar arg ⊢ makeS arg ~[ (arg .inp) ]~| makeS' arg
 
 
 removeClose : ∀ (arg : Argument) -> (getMintedAmount (ctx arg) ≢ (negsuc zero))

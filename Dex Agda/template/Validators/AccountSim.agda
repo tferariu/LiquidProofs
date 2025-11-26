@@ -1,26 +1,10 @@
-{-# OPTIONS --erased-matches #-}
---{-# OPTIONS --no-eta-equality #-}
-
-module AccountSim where
-
 open import Haskell.Prelude
+open import Lib
+open import Value
 
-Placeholder = String
-POSIXTimeRange = Placeholder
-ScriptPurpose = Placeholder
-ThreadToken = Placeholder
 
-Address = Nat
+module Validators.AccountSim where
 
-PubKeyHash = Nat
-Value = Integer
-TxOutRef = Nat
-AssetClass = Nat
-
-{-# COMPILE AGDA2HS PubKeyHash #-}
-{-# COMPILE AGDA2HS Value #-}
-{-# COMPILE AGDA2HS TxOutRef #-}
-{-# COMPILE AGDA2HS AssetClass #-}
 
 AccMap = List (PubKeyHash × Value)
 
@@ -31,21 +15,75 @@ Label = (AssetClass × AccMap)
 
 
 record ScriptContext : Set where
-    field
-        inputVal      : Integer
-        outputVal     : Integer
+    field     
+        inputVal      : Value
+        outputVal     : Value
         outputDatum   : Label
+        payments      : List (PubKeyHash × Value)
         signature     : PubKeyHash
         continues     : Bool
         inputRef      : TxOutRef
-        hasTokenIn    : Bool
-        hasTokenOut   : Bool
         mint          : Integer
         tokAssetClass : AssetClass
-open ScriptContext public
+        tokenIn       : Bool
+        tokenOut      : Bool
+        time          : Nat
 
+newDatum : ScriptContext -> Label
+newDatum ctx = ScriptContext.outputDatum ctx
 
-{-# COMPILE AGDA2HS ScriptContext #-}
+oldValue : ScriptContext -> Value
+oldValue ctx = ScriptContext.inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = ScriptContext.outputVal ctx
+
+continuing : ScriptContext -> Bool
+continuing ctx = ScriptContext.continues ctx
+
+getPayments : ScriptContext -> List (PubKeyHash × Value)
+getPayments = ScriptContext.payments
+
+getPayment : PubKeyHash -> List (PubKeyHash × Value) -> Value
+getPayment pkh [] = emptyValue
+getPayment pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment pkh xs
+
+getMintedAmount : ScriptContext -> Integer
+getMintedAmount ctx = ScriptContext.mint ctx 
+
+ownAssetClass : ScriptContext -> AssetClass
+ownAssetClass ctx = ScriptContext.tokAssetClass ctx
+
+checkTokenIn : AssetClass -> ScriptContext -> Bool
+checkTokenIn ac = ScriptContext.tokenIn
+
+checkTokenOut : AssetClass -> ScriptContext -> Bool
+checkTokenOut ac = ScriptContext.tokenOut
+        
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned sig ctx = sig == ScriptContext.signature ctx
+
+sig : ScriptContext -> PubKeyHash
+sig = ScriptContext.signature
+
+iRef : ScriptContext -> TxOutRef
+iRef = ScriptContext.inputRef
+
+checkTokenBurned : AssetClass -> ScriptContext -> Bool
+checkTokenBurned tok ctx = ScriptContext.mint ctx == -1
+
+consumes : TxOutRef -> ScriptContext -> Bool
+consumes oref ctx = oref == ScriptContext.inputRef ctx
+
+continuingAddr : Address -> ScriptContext -> Bool
+continuingAddr addr ctx = ScriptContext.continues ctx
+
+checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
+checkPayment pkh v ctx = getPayment pkh (getPayments ctx) == v
+
+now : ScriptContext -> Nat
+now = ScriptContext.time
+
 
 data Input : Set where
   Open     : PubKeyHash -> Input
@@ -73,45 +111,7 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 
-newDatum : ScriptContext -> Label
-newDatum ctx = outputDatum ctx
 
-newToken : ScriptContext -> AssetClass
-newToken ctx = fst (outputDatum ctx)
-
-newLabel : ScriptContext -> AccMap
-newLabel ctx = snd (outputDatum ctx)
-
-oldValue : ScriptContext -> Value
-oldValue ctx = inputVal ctx
-
-newValue : ScriptContext -> Value
-newValue ctx = outputVal ctx
-
-geq : Value -> Value -> Bool
-geq val v = val >= v 
-
-gt : Value -> Value -> Bool
-gt val v = val > v
-
-emptyValue : Value
-emptyValue = 0
-
-minValue : Value
-minValue = 2
-
-
-{-# COMPILE AGDA2HS geq #-}
-{-# COMPILE AGDA2HS gt #-}
-{-# COMPILE AGDA2HS emptyValue #-}
-{-# COMPILE AGDA2HS minValue #-}
-
-checkSigned : PubKeyHash -> ScriptContext -> Bool
-checkSigned pkh ctx = pkh == signature ctx
-
-aux : Maybe Value -> Bool
-aux Nothing = False
-aux (Just _) = True
 
 checkMembership' : PubKeyHash -> AccMap -> Bool
 checkMembership' pkh lab = case lookup pkh lab of λ where
@@ -137,12 +137,9 @@ checkDeposit tok (Just v) pkh val lab ctx = geq val emptyValue && (newDatum ctx 
 checkTransfer : AssetClass -> Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
 checkTransfer tok Nothing _ _ _ _ _ _ = False
 checkTransfer tok (Just vF) Nothing _ _ _ _ _ = False
-checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val 0 && geq vF val && from /= to &&
+checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val emptyValue && geq vF val && from /= to &&
                          newDatum ctx == (tok , insert from (vF - val) (insert to (vT + val) lab))
 
-
-checkTokenBurned : AssetClass -> ScriptContext -> Bool
-checkTokenBurned tok ctx = mint ctx == -1
 
 {-
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
@@ -155,21 +152,12 @@ checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx-}
 {-# COMPILE AGDA2HS checkTransfer #-}
 --{-# COMPILE AGDA2HS checkPayment #-}
 
-checkTokenIn : AssetClass -> ScriptContext -> Bool
-checkTokenIn tok ctx = hasTokenIn ctx
-
-checkTokenOut : AssetClass -> ScriptContext -> Bool
-checkTokenOut tok ctx = hasTokenOut ctx
-
-continuing : ScriptContext -> Bool
-continuing ctx = continues ctx
-
 agdaValidator : Label -> Input -> ScriptContext -> Bool
 agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ where
 
     (Open pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx &&
                   not (checkMembership (lookup pkh lab)) &&
-                  newDatum ctx == (tok , insert pkh 0 lab) && newValue ctx == oldValue ctx
+                  newDatum ctx == (tok , insert pkh emptyValue lab) && newValue ctx == oldValue ctx
 
     (Close pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx && checkEmpty (lookup pkh lab) &&
                    newDatum ctx == (tok , delete pkh lab) && newValue ctx == oldValue ctx
@@ -188,39 +176,25 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
     Cleanup -> checkTokenBurned tok ctx && not (checkTokenOut tok ctx) && not (continuing ctx) && lab == [] )
 
---{-# COMPILE AGDA2HS agdaValidator #-}
+{-# COMPILE AGDA2HS agdaValidator #-}
 
-
-getMintedAmount : ScriptContext -> Integer
-getMintedAmount ctx = mint ctx 
-
-consumes : TxOutRef -> ScriptContext -> Bool
-consumes oref ctx = oref == inputRef ctx
-
-ownAssetClass : ScriptContext -> AssetClass
-ownAssetClass ctx = tokAssetClass ctx
 
 checkDatum : Address -> ScriptContext -> Bool
 checkDatum addr ctx = case (newDatum ctx) of λ where
   (tok , map) -> ownAssetClass ctx == tok && map == []
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = newValue ctx == 0 && hasTokenOut ctx
+checkValue addr ctx = newValue ctx == emptyValue && checkTokenOut (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&
                           checkDatum addr ctx &&
                           checkValue addr ctx
 
-continuingAddr : Address -> ScriptContext -> Bool
-continuingAddr addr ctx = continues ctx
 
-{-# COMPILE AGDA2HS consumes #-}
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
-{-# COMPILE AGDA2HS continuingAddr #-}
-{-# COMPILE AGDA2HS getMintedAmount #-}
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
@@ -231,5 +205,5 @@ agdaPolicy addr oref _ ctx =
   where
     amt = getMintedAmount ctx
 
---{-# COMPILE AGDA2HS agdaPolicy #-}
+{-# COMPILE AGDA2HS agdaPolicy #-}
 

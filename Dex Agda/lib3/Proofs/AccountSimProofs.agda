@@ -65,7 +65,7 @@ data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s tok}
     -> datum s ≡ ( tok , [] )
-    -> value s ≡ 0
+    -> value s ≡ emptyValue
     -> mint s ≡ 1
     -> continues s ≡ true
     -> outputRef par ≡ spends s
@@ -183,32 +183,17 @@ data _~[_]~*_ : State -> List Input -> State -> Set where
     -> s ~[ ((Cleanup) ∷ is) ]~* s'
 
 
-_∈_ : ∀ (x : PubKeyHash) (xs : AccMap) → Set
-x ∈ xs = Any (\y -> x ≡ fst y) xs
-
-_∉_ : ∀ (x : PubKeyHash) (xs : AccMap) → Set
-x ∉ xs = ¬ (x ∈ xs)
-
-
-data Unique : AccMap → Set where
-  root : Unique []
-  _::_ : {x : PubKeyHash} {v : Value} {map : AccMap} -> x ∉ map -> Unique map -> Unique ((x , v) ∷ map)
-
-
-
 data Valid : State -> Set where
 
   Stp : ∀ {s}
-    -> continues s ≡ false
+    -> s .continues ≡ false
     ----------------
     -> Valid s
 
   Oth : ∀ {s}
-    -> value s ≡ sumVal (snd (datum s))
-    -> All (\y -> geq (snd y) emptyValue ≡ true) (snd (datum s))
+    -> All (\ (_ , v) -> geq v emptyValue ≡ true) (snd (s .datum))
     ----------------
     -> Valid s
-
 
 svLemma1 : ∀ {pkh} (map : AccMap) -> lookup pkh map ≡ Nothing -> sumVal map ≡ sumVal (insert pkh +0 map)
 svLemma1 [] p = refl
@@ -324,37 +309,45 @@ delem {pkh} ((pkh' , v') ∷ label) (allCons {{i}} {{is}}) with pkh == pkh' in e
 validStateInitial : ∀ {s par}
   -> par ⊢ s
   -> Valid s
-validStateInitial {record { datum = .(_ , []) ; value = .0 ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl refl p3 p4 p5 p6 p7) = Oth refl allNil
+
+
+validStateInitial {record { datum = .(_ , []) ; value = .0 ; tsig = tsig₁ ; continues = continues₁ ; spends = spends₁ ; hasToken = hasToken₁ ; mint = mint₁ ; token = token₁ }} (TStart refl refl p3 p4 p5 p6 p7) = Oth allNil p4 p7
 
 validStateTransition : ∀ {s s' : State} {i}
   -> Valid s
   -> s ~[ i ]~> s'
   -> Valid s'
-validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ 0 map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TOpen refl p2 p3 refl p5 p6 p7 p8 p9) = Oth (fidelity a1 t) (lem map 0 refl a2)
-validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(delete _ map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TClose refl p2 p3 refl p5 p6 p7 p8 p9) = Oth (fidelity a1 t) (delem map a2)
-validStateTransition {record { datum = tok , map ; value = v1 ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (v - val) map) ; value = v2 ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TWithdraw {val = val} {v = v} refl p2 p3 p4 p5 refl refl p8 p9 p10 p11) = Oth (fidelity a1 t) (lem map (v - val) (diffLemma v val p5 p4) a2)
-validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (v + val) map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TDeposit {val = val} {v = v} refl p2 p3 p4 refl p6 p7 p8 p9 p10) = Oth (fidelity a1 t) (lem map (v + val) (sumLemma v val p4 (geqLem map v a2 p3)) a2)
-validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (vF - val) (insert _ (vT + val) map)) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a1 a2) t@(TTransfer {from} {to} {val} {vF = vF} {vT = vT} refl p2 p3 p4 p5 p6 p7 refl p9 p10 p11 p12 p13) = Oth (fidelity a1 t) (lem (insert to (vT + val) map) (vF - val) (diffLemma vF val p6 p5) (lem map (vT + val) (sumLemma vT val p5 (geqLem map vT a2 p4)) a2))
+
+
+validStateTransition p1 p2 = {!!}
+
+{-
+validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ 0 map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a2) t@(TOpen refl p2 p3 refl p5 p6 p7 p8 p9) = Oth (lem map 0 refl a2)
+validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(delete _ map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a2) t@(TClose refl p2 p3 refl p5 p6 p7 p8 p9) = Oth  (delem map a2)
+validStateTransition {record { datum = tok , map ; value = v1 ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (v - val) map) ; value = v2 ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a2) t@(TWithdraw {val = val} {v = v} refl p2 p3 p4 p5 refl refl p8 p9 p10 p11) = Oth (lem map (v - val) (diffLemma v val p5 p4) a2)
+validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (v + val) map) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a2) t@(TDeposit {val = val} {v = v} refl p2 p3 p4 refl p6 p7 p8 p9 p10) = Oth (lem map (v + val) (sumLemma v val p4 (geqLem map v a2 p3)) a2)
+validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = .tok , .(insert _ (vF - val) (insert _ (vT + val) map)) ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Oth a2) t@(TTransfer {from} {to} {val} {vF = vF} {vT = vT} refl p2 p3 p4 p5 p6 p7 refl p9 p10 p11 p12 p13) = Oth (lem (insert to (vT + val) map) (vF - val) (diffLemma vF val p6 p5) (lem map (vT + val) (sumLemma vT val p5 (geqLem map vT a2 p4)) a2))
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TOpen x x₁ x₂ x₃ x₄ () x₆ x₇ x₈)
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TClose x x₁ x₂ x₃ x₄ () x₆ x₇ x₈)
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TWithdraw x x₁ x₂ x₃ x₄ x₅ x₆ () x₈ x₉ x₁₀) 
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TDeposit x x₁ x₂ x₃ x₄ x₅ () x₇ x₈ x₉)
 validStateTransition {record { datum = tok , map ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token }} {record { datum = tok' , map' ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' }} (Stp refl) (TTransfer x x₁ x₂ x₃ x₄ x₅ x₆ x₇ x₈ () x₁₀ x₁₁ x₁₂)
+-}
 
 validStateTerminal : ∀ {s s' : State} {i}
   -> Valid s
   -> s ~[ i ]~| s'
   -> Valid s'
-validStateTerminal iv (TCleanup x x₂ x₃ x₄ x₅ x₆) = Stp x₄
+validStateTerminal iv (TCleanup x x₂ x₃ x₄ x₅ x₆) = Stp x₄ x₆ --Stp x₄
 
 validStateMulti : ∀ {s s' : State} {is}
   -> Valid s
   -> s ~[ is ]~* s'
   -> Valid s'
+  
 validStateMulti iv root = iv
 validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
-validStateMulti iv (fin (TCleanup x x₂ x₃ x₄ x₅ x₆)) = Stp x₄
-
+validStateMulti iv (fin x) = validStateTerminal iv x
 
 geqto≤ : ∀ {a b} -> geq a b ≡ true -> a ≥ b
 geqto≤ {pos n} {pos m} pf = +≤+ (leqNto≤N' pf)
@@ -404,7 +397,7 @@ getGeq : ∀ {s x tok map v sig spn mnt tok'}
                  }
          -> Valid s
          -> snd x ≥ emptyValue
-getGeq refl (Oth x (allCons {{i}} {{is}})) = geqto≤ i
+getGeq refl (Oth (allCons {{i}} {{is}}) a b ) = geqto≤ i
 
 i-i : ∀ (i : Integer) -> i - i ≡ emptyValue
 i-i (pos zero) = refl
@@ -484,7 +477,7 @@ subValid : ∀ {x tok map v sig spn mnt tok' }
              ; token = tok'
              })
   -> All (λ y → geq (snd y) emptyValue ≡ true) map
-subValid (Oth x (allCons {{i}} {{is}})) = is
+subValid (Oth (allCons {{i}} {{is}}) a b ) = is
 
 
 prop1 : ∀ {tok} {map : AccMap} (s s' : State)
@@ -507,7 +500,7 @@ prop1 record { datum = (tok , []) ; value = value ; tsig = tsig ; continues = co
 prop1 record { datum = (tok , x ∷ map) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } s'@record { datum = (tok' , map') ; value = value' ; tsig = tsig' ; continues = continues' ; spends = spends' ; hasToken = hasToken' ; mint = mint' ; token = token' } refl refl refl refl refl refl refl refl refl refl refl refl p
   = cons {s' = st} (TWithdraw refl refl (lookupProp1 (n=n (fst x)) refl) (getGeq refl p) ≤-refl (deleteProp1 (n=n (fst x))  (rewriteLabel (fst x) (snd x) map)) (+-comm (sumVal map) (x .snd)) refl refl refl refl) 
   (cons {s' = st'} (TClose refl refl (lookupProp1 (n=n (fst x)) refl) (deleteProp1 (n=n (fst x)) refl) refl refl refl refl refl)
-  (prop1 {tok} {map} st' s' refl refl refl (sameLastSig map) refl refl refl refl refl refl refl refl (Oth refl (subValid p))))
+  (prop1 {tok} {map} st' s' refl refl refl (sameLastSig map) refl refl refl refl refl refl refl refl (Oth (subValid p) refl refl )))
       where
       st = record
             { datum = tok , ((fst x , emptyValue) ∷ map)
@@ -533,12 +526,20 @@ prop1 record { datum = (tok , x ∷ map) ; value = value ; tsig = tsig ; continu
 
 
 liquidity : ∀ (s : State)
+          -> Valid s
+          -> s .continues ≡ true
+          -> s .hasToken ≡ true
+          -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value s' ≡ 0))
+
+liquidity = {!!}
+{-
+
+liquidity : ∀ (s : State)
           -> value s ≡ sumVal (snd (datum s))
           -> Valid s
           -> continues s ≡ true
           -> hasToken s ≡ true
           -> ∃[ s' ] ∃[ is ] ((s ~[ is ]~* s') × (value s' ≡ 0) )
-
 liquidity s@record { datum = (tok , map) ; value = value ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } p1 p2 p3 p4
   = ⟨ s' , ⟨ (makeIs map) , ((prop1 s s' refl refl refl refl p1 p3 p3 p4 p4 refl refl refl p2) , refl) ⟩ ⟩
   where
@@ -552,7 +553,7 @@ liquidity s@record { datum = (tok , map) ; value = value ; tsig = tsig ; continu
        ; mint = mint
        ; token = token
        }
-
+-}
 
 ==pto≡ : ∀ (a b : PubKeyHash × Value) -> (a == b) ≡ true -> a ≡ b
 ==pto≡ (fst1 , snd1) (fst2 , snd2) pf
@@ -666,7 +667,7 @@ validatorImpliesTransition (tok , map) (Withdraw pkh val) ctx iv pf | Just v | t
              (go (continuing ctx) (go (hasTokenOut ctx) (go (hasTokenIn ctx) pf)))))))))
              | rewriteSubL map pkh v val (==Lto≡ map' (insert pkh (subInteger v val) map)
              (go (tok' == tok) (go (geq v val) (go (geq val 0) (get (go (pkh == (sig ctx))
-             (go (continuing ctx) (go (hasTokenOut ctx) (go (hasTokenIn ctx) pf))))))))) | sym eq2
+             (go (continuing ctx) (go (hasTokenOut ctx) (go (hasTokenIn ctx) pf)))))))))
             = TWithdraw refl (==to≡ pkh (sig ctx) (get (go (continuing ctx) (go (hasTokenOut ctx) (go (hasTokenIn ctx) pf)))))
             eq (geqto≤ (get (get (go (pkh == (sig ctx)) (go (continuing ctx) (go (hasTokenOut ctx) (go (hasTokenIn ctx) pf)))))))
             (geqto≤ (get (go (geq val emptyValue) (get (go (pkh == (sig ctx))

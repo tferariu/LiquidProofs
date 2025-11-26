@@ -34,7 +34,6 @@ newValue ctx = outputVal ctx
 continuing : ScriptContext -> Bool
 continuing ctx = continues ctx
 
-
 payAdr : ScriptContext -> PubKeyHash
 payAdr = payAdr1
 

@@ -1,0 +1,16 @@
+rewrites:
+  - from: "ExampleTemplate.PubKeyHash"
+    to: "PubKeyHash"
+  - from: "ExampleTemplate.AssetClass"
+    to: "AssetClass"
+  - from: "ExampleTemplate.Value"
+    to: "Value"
+  - from: "ExampleTemplate.ScriptContext"
+    to: "ScriptContext"
+  - from: "ExampleTemplate.newValue"
+    to: "newValue"
+  - from: "ExampleTemplate.oldValue"
+    to: "oldValue"
+    
+    
+    

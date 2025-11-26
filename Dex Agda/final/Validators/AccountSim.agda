@@ -1,6 +1,6 @@
 open import Haskell.Prelude
 open import Lib
-open import SimpleValue
+open import Value
 
 
 module Validators.AccountSim where
@@ -74,7 +74,7 @@ checkDeposit tok (Just v) pkh val lab ctx = geq val emptyValue && (newDatum ctx 
 checkTransfer : AssetClass -> Maybe Value -> Maybe Value -> PubKeyHash -> PubKeyHash -> Value -> AccMap -> ScriptContext -> Bool
 checkTransfer tok Nothing _ _ _ _ _ _ = False
 checkTransfer tok (Just vF) Nothing _ _ _ _ _ = False
-checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val 0 && geq vF val && from /= to &&
+checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val emptyValue && geq vF val && from /= to &&
                          newDatum ctx == (tok , insert from (vF - val) (insert to (vT + val) lab))
 
 
@@ -100,7 +100,7 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
     (Open pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx &&
                   not (checkMembership (lookup pkh lab)) &&
-                  newDatum ctx == (tok , insert pkh 0 lab) && newValue ctx == oldValue ctx
+                  newDatum ctx == (tok , insert pkh emptyValue lab) && newValue ctx == oldValue ctx
 
     (Close pkh) -> checkTokenOut tok ctx && continuing ctx && checkSigned pkh ctx && checkEmpty (lookup pkh lab) &&
                    newDatum ctx == (tok , delete pkh lab) && newValue ctx == oldValue ctx
@@ -127,7 +127,7 @@ checkDatum addr ctx = case (newDatum ctx) of λ where
   (tok , map) -> ownAssetClass ctx == tok && map == []
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = newValue ctx == 0 && hasTokenOut ctx
+checkValue addr ctx = newValue ctx == emptyValue && hasTokenOut ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

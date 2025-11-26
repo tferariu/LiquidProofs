@@ -1,0 +1,9 @@
+rewrites:
+  - from: "PubKeyHash"
+    to: "PubKeyHash"
+  - from: "AssetClass"
+    to: "AssetClass"
+  - from: "Value"
+    to: "Value"
+  - from: "ScriptContext"
+    to: "ScriptContext"

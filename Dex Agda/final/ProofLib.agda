@@ -25,8 +25,9 @@ open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup)
 
-
 open import Function.Base using (_∋_)
+
+--open import Value
 
 module ProofLib where
 
@@ -34,12 +35,6 @@ module ProofLib where
 
 sub : ∀ {a b c : ℤ} -> a ≡ b -> a ≡ c -> b ≡ c
 sub refl refl = refl
-
-maybe⊥ : ∀ {x : Integer} -> Nothing ≡ Just x -> ⊥
-maybe⊥ ()
-
-maybe≡ : ∀ {a b : Integer} -> Just a ≡ Just b → a ≡ b
-maybe≡ refl = refl
 
 
 monusLT : ∀ (a b : Nat) -> ltNat a b ≡ true -> Internal.subNat a b ≡ - (+ monusNat b a)
@@ -68,6 +63,15 @@ add≡ (+_ n) (negsuc m) = subN≡ n (N.suc m)
 add≡ (negsuc n) (+_ m) = subN≡ m (N.suc n)
 add≡ (negsuc n) (negsuc m) = refl
 
+addComm : ∀ (a b : Integer) -> addInteger a b ≡ addInteger b a
+addComm a b rewrite add≡ a b | add≡ b a = +-comm a b
+
+addIdL : ∀ (a : Integer) -> addInteger 0 a ≡ a
+addIdL a rewrite add≡ 0 a = +-identityˡ a
+
+addIdR : ∀ (a : Integer) -> addInteger a 0 ≡ a
+addIdR a rewrite add≡ a 0 = +-identityʳ a
+
 sub≡ : ∀ (a b : Integer) -> subInteger a b ≡ a - b
 sub≡ (+_ n) (+_ m) rewrite ni≡ (+ m) = add≡ (+ n) (- (+ m))
 sub≡ (+_ n) (negsuc m) = refl
@@ -81,10 +85,10 @@ sub≡ (negsuc n) (negsuc m) = subN≡ (N.suc m) (N.suc n)
 
 ==ito≡ : ∀ (a b : Integer) -> (a == b) ≡ true -> a ≡ b
 ==ito≡ (pos n) (pos m) pf = cong (+_) (==to≡ n m pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf) 
+==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf)
 
 
-
+{-
 switchSides : ∀ {a b c : Integer} -> a - b ≡ c -> a ≡ b + c
 switchSides {a} {b} refl rewrite +-comm a (- b) | sym (+-assoc b (- b) a)
                          | +-inverseʳ b | +-identityˡ a = refl
@@ -92,7 +96,7 @@ switchSides {a} {b} refl rewrite +-comm a (- b) | sym (+-assoc b (- b) a)
 switchSides' : ∀ {a b c : Integer} -> a + b ≡ c -> a ≡ - b + c
 switchSides' {a} {b} refl rewrite +-comm a b | sym (+-assoc (- b) b a)
                          | +-inverseˡ b | +-identityˡ a = refl
-
+-}
 doubleMinus : ∀ (a b : Integer) -> a - - b ≡ a + b
 doubleMinus a b rewrite neg-involutive b = refl
 
@@ -315,6 +319,8 @@ t=f true p1 p2 = sym p1
 ≡to==i : ∀ {a b : Integer} -> a ≡ b -> (a == b) ≡ true
 ≡to==i {pos n} refl = n=n n
 ≡to==i {negsuc n} refl = n=n n
+
+
 
 {-
 

@@ -1,5 +1,5 @@
 {-# OPTIONS --erased-matches #-}
---{-# OPTIONS --no-eta-equality #-}
+{-# OPTIONS --no-eta-equality #-}
 
 module AccountSim where
 
@@ -188,7 +188,7 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
     Cleanup -> checkTokenBurned tok ctx && not (checkTokenOut tok ctx) && not (continuing ctx) && lab == [] )
 
---{-# COMPILE AGDA2HS agdaValidator #-}
+{-# COMPILE AGDA2HS agdaValidator #-}
 
 
 getMintedAmount : ScriptContext -> Integer
@@ -231,5 +231,5 @@ agdaPolicy addr oref _ ctx =
   where
     amt = getMintedAmount ctx
 
---{-# COMPILE AGDA2HS agdaPolicy #-}
+{-# COMPILE AGDA2HS agdaPolicy #-}
 

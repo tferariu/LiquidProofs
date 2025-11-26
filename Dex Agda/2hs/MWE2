@@ -1,0 +1,7 @@
+open import Haskell.Prelude
+
+module MWE2 where
+
+FooBar = Nat × Int
+
+{-# COMPILE AGDA2HS FooBar #-}

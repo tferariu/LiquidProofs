@@ -104,9 +104,6 @@ instance
   iOrdVal = record
     { OrdFromLessThan iOrdFromLessThanValue }
 
-  iZero : Has0 Value
-  iZero = record { emptyVal = emptyValue }
-
   iNumberValue : Number Value
   iNumberValue = record { Constraint = λ x → ⊤ ; fromNat = λ n → MkMap ((ada , (Integer.pos n)) ∷ []) }
 
