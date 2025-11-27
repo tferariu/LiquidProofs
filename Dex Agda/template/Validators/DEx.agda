@@ -4,11 +4,9 @@ open import Value
 
 module Validators.DEx where
 
-
-checkRational : Rational -> Bool
-checkRational r = (numerator r >= 0) && (denominator r > 0)
-
 record Info : Set where
+  no-eta-equality
+  pattern
   field
     ratio  : Rational
     owner  : PubKeyHash
@@ -24,10 +22,80 @@ instance
 
 
 Label = (AssetClass × Info)
+
+{-# COMPILE AGDA2HS Info #-}
 {-# COMPILE AGDA2HS Label #-}
 
+record ScriptContext : Set where
+    field     
+        inputVal      : Value
+        outputVal     : Value
+        outputDatum   : Label
+        payments      : List (PubKeyHash × Value)
+        signature     : PubKeyHash
+        continues     : Bool
+        inputRef      : TxOutRef
+        mint          : Integer
+        tokAssetClass : AssetClass
+        tokenIn       : Bool
+        tokenOut      : Bool
+        time          : Nat
 
-open import ScriptContext Label Value
+newDatum : ScriptContext -> Label
+newDatum ctx = ScriptContext.outputDatum ctx
+
+oldValue : ScriptContext -> Value
+oldValue ctx = ScriptContext.inputVal ctx
+
+newValue : ScriptContext -> Value
+newValue ctx = ScriptContext.outputVal ctx
+
+continuing : ScriptContext -> Bool
+continuing ctx = ScriptContext.continues ctx
+
+getPayment' : PubKeyHash -> List (PubKeyHash × Value) -> Value
+getPayment' pkh [] = emptyValue
+getPayment' pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment' pkh xs
+
+getPayment : PubKeyHash -> ScriptContext -> Value
+getPayment pkh ctx = getPayment' pkh (ScriptContext.payments ctx)
+
+getMintedAmount : ScriptContext -> Integer
+getMintedAmount ctx = ScriptContext.mint ctx 
+
+ownAssetClass : ScriptContext -> AssetClass
+ownAssetClass ctx = ScriptContext.tokAssetClass ctx
+
+checkTokenIn : AssetClass -> ScriptContext -> Bool
+checkTokenIn ac = ScriptContext.tokenIn
+
+checkTokenOut : AssetClass -> ScriptContext -> Bool
+checkTokenOut ac = ScriptContext.tokenOut
+        
+checkSigned : PubKeyHash -> ScriptContext -> Bool
+checkSigned sig ctx = sig == ScriptContext.signature ctx
+
+sig : ScriptContext -> PubKeyHash
+sig = ScriptContext.signature
+
+iRef : ScriptContext -> TxOutRef
+iRef = ScriptContext.inputRef
+
+checkTokenBurned : AssetClass -> ScriptContext -> Bool
+checkTokenBurned tok ctx = ScriptContext.mint ctx == -1
+
+consumes : TxOutRef -> ScriptContext -> Bool
+consumes oref ctx = oref == ScriptContext.inputRef ctx
+
+continuingAddr : Address -> ScriptContext -> Bool
+continuingAddr addr ctx = ScriptContext.continues ctx
+
+checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
+checkPayment pkh v ctx = getPayment pkh ctx == v
+
+now : ScriptContext -> Nat
+now = ScriptContext.time
+
 
 
 data Input : Set where
@@ -38,6 +106,8 @@ data Input : Set where
 {-# COMPILE AGDA2HS Input #-}
 
 record Params : Set where
+    no-eta-equality
+    pattern
     field
             sellC  : AssetClass
             buyC   : AssetClass
@@ -46,43 +116,19 @@ open Params public
 {-# COMPILE AGDA2HS Params #-}
 
 
-checkTokenIn : AssetClass -> ScriptContext -> Bool
-checkTokenIn tok ctx = (assetClassValueOf (oldValue ctx) tok) == 1
-
-checkTokenOut : AssetClass -> ScriptContext -> Bool
-checkTokenOut tok ctx = (assetClassValueOf (newValue ctx) tok) == 1
-
-
-{-# COMPILE AGDA2HS checkTokenIn #-}
-{-# COMPILE AGDA2HS checkTokenOut #-}
+checkRational : Rational -> Bool
+checkRational r = (numerator r >= 0) && (denominator r > 0)
 
 ratioCompare : Integer -> Integer -> Rational -> Bool
-ratioCompare a b r = a * (num r) <= b * (den r)
+ratioCompare a b r = a * (numerator r) <= b * (denominator r)
 
-processPayment : AssetClass -> Integer -> Rational -> Value -> Bool
-processPayment ac amt r (MkMap []) = False
-processPayment ac amt r (MkMap ((ac' , amt') ∷ vs))
-  = if ac == ac'
-  then ratioCompare amt amt' r
-  else processPayment ac amt r (MkMap vs)
-
-checkPayment : Params -> Integer -> Info -> ScriptContext -> Bool
-checkPayment par amt l ctx = payAdr ctx == owner l &&
-                             ratioCompare amt (assetClassValueOf (payVal ctx) (buyC par)) (ratio l) &&
-                             checkMinValue (payVal ctx)
+checkPaymentRatio : PubKeyHash -> Integer -> AssetClass -> Rational -> ScriptContext -> Bool
+checkPaymentRatio pkh amt ac r ctx = ratioCompare amt (assetClassValueOf (getPayment pkh ctx) ac) r && checkMinValue (getPayment pkh ctx)
 
 
-checkBuyer : Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx = buyAdr ctx == pkh &&
-                             assetClassValueOf (buyVal ctx) (sellC par) == amt &&
-                             checkMinValue (buyVal ctx)
-
-{-# COMPILE AGDA2HS checkBuyer #-}
-{-# COMPILE AGDA2HS checkPayment #-}
-{-# COMPILE AGDA2HS processPayment #-}
+{-# COMPILE AGDA2HS checkRational #-}
 {-# COMPILE AGDA2HS ratioCompare #-}
-
-{-# COMPILE AGDA2HS checkTokenBurned #-}
+{-# COMPILE AGDA2HS checkPaymentRatio #-}
 
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
@@ -94,7 +140,7 @@ agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ 
                     continuing ctx && checkTokenOut tok ctx
   (Exchange amt pkh) -> oldValue ctx == newValue ctx + (assetClassValue (sellC par) amt) &&
                         newDatum ctx == (tok , lab) &&
-                        checkPayment par amt lab ctx && checkBuyer par amt pkh ctx &&
+                        checkPaymentRatio (owner lab) amt (buyC par) (ratio lab) ctx && 
                         continuing ctx && checkTokenOut tok ctx
   Close -> not (continuing ctx) && checkTokenBurned tok ctx &&
            not (checkTokenOut (newDatum ctx .fst) ctx) && checkSigned (owner lab) ctx )
@@ -114,11 +160,9 @@ isInitial addr oref ctx = consumes oref ctx &&
                           checkValue addr ctx
 
 
-{-# COMPILE AGDA2HS consumes #-}
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
-{-# COMPILE AGDA2HS continuingAddr #-}
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =

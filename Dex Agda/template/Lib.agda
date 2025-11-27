@@ -1,5 +1,3 @@
-{-# OPTIONS --no-eta-equality #-}
-
 open import Haskell.Prelude
 
 module Lib where
@@ -24,20 +22,20 @@ record Rational : Set where
 open Rational public
 
 numerator : Rational -> Integer
-numerator r = num r
+numerator r = Rational.num r
 
 denominator : Rational -> Integer
-denominator r = den r
+denominator r = Rational.den r
 
 
 
 eqRational : Rational -> Rational -> Bool
-eqRational b c = (num b == num c) &&
-                 (den b == den c) 
+eqRational b c = (numerator b == numerator c) &&
+                 (denominator b == denominator c) 
 
 
 ltRational : Rational -> Rational -> Bool
-ltRational b c = num b * den c < num c * den b
+ltRational b c = numerator b * denominator c < numerator c * denominator b
 
 
 instance
@@ -45,6 +43,7 @@ instance
   iEqRational ._==_ = eqRational
 
 
+{-
 {-# COMPILE AGDA2HS CurrencySymbol #-}
 {-# COMPILE AGDA2HS TokenName #-}
 {-# COMPILE AGDA2HS PubKeyHash #-}
@@ -53,7 +52,4 @@ instance
 {-# COMPILE AGDA2HS TxOutRef #-}
 {-# COMPILE AGDA2HS ada #-}
 {-# COMPILE AGDA2HS Map #-}
-{-# COMPILE AGDA2HS Rational #-}
-{-# COMPILE AGDA2HS numerator #-}
-{-# COMPILE AGDA2HS denominator #-}
-
+-}

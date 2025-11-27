@@ -127,10 +127,8 @@ assetClassValueOf (MkMap ((ac' , amt) ∷ vs)) ac = if ac' == ac then amt else a
 assetClassValue : AssetClass -> Integer -> Value
 assetClassValue ac amt = MkMap ((ac , amt) ∷ [])
 
---move this?
 checkMinValue : Value -> Bool
 checkMinValue v = (assetClassValueOf v ada) >= 5
---{-# COMPILE AGDA2HS checkMinValue #-}
 
 
 sumLemma : ∀ (v1 v2 : Value) -> geq v1 emptyValue ≡ True -> geq v2 emptyValue ≡ True -> geq (addValue v1 v2) emptyValue ≡ True

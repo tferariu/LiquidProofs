@@ -168,8 +168,8 @@ minusLemma .(b + negsuc n) b (negsuc n) refl rewrite +-assoc b (negsuc n) (- (ne
 refactor : ∀ (a b c : Integer) -> a ≡ b + c -> c ≡ a - b
 refactor a b c p rewrite +-comm b c = sym (minusLemma a c b p)
 
-unNot : (b : Bool) -> not b ≡ true -> b ≡ false
-unNot false pf = refl
+unNot : {b : Bool} -> not b ≡ true -> b ≡ false
+unNot {false} pf = refl
 
 get⊥ : true ≡ false -> ⊥
 get⊥ ()
@@ -180,7 +180,7 @@ n≠n n p rewrite n=n n = get⊥ p
 /=to≢ : ∀ (a b : Nat) -> (a /= b) ≡ true -> a ≢ b
 /=to≢ zero (N.suc b) pf = λ ()
 /=to≢ (N.suc a) zero pf = λ ()
-/=to≢ (N.suc a) (N.suc b) pf = λ { refl → n≠n a (unNot (eqNat a a) pf)}
+/=to≢ (N.suc a) (N.suc b) pf = λ { refl → n≠n a (unNot pf)}
 
 &&false : ∀ (a : Bool) -> (a && false) ≡ true -> ⊥
 &&false true ()

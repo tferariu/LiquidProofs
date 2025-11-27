@@ -41,12 +41,12 @@ newValue ctx = ScriptContext.outputVal ctx
 continuing : ScriptContext -> Bool
 continuing ctx = ScriptContext.continues ctx
 
-getPayments : ScriptContext -> List (PubKeyHash × Value)
-getPayments = ScriptContext.payments
+getPayment' : PubKeyHash -> List (PubKeyHash × Value) -> Value
+getPayment' pkh [] = emptyValue
+getPayment' pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment' pkh xs
 
-getPayment : PubKeyHash -> List (PubKeyHash × Value) -> Value
-getPayment pkh [] = emptyValue
-getPayment pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment pkh xs
+getPayment : PubKeyHash -> ScriptContext -> Value
+getPayment pkh ctx = getPayment' pkh (ScriptContext.payments ctx)
 
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = ScriptContext.mint ctx 
@@ -79,7 +79,7 @@ continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = ScriptContext.continues ctx
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment pkh v ctx = getPayment pkh (getPayments ctx) == v
+checkPayment pkh v ctx = getPayment pkh ctx == v
 
 now : ScriptContext -> Nat
 now = ScriptContext.time

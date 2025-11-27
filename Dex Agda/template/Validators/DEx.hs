@@ -1,6 +1,11 @@
-module DEx where
+module Validators.DEx where
 
-data Label = Label{ratio :: Rational, owner :: PubKeyHash}
+import Lib (Address, AssetClass, PubKeyHash, Rational, TxOutRef, denominator, numerator)
+import Value (Value, assetClassValue, assetClassValueOf, checkMinValue)
+
+data Info = Info{ratio :: Rational, owner :: PubKeyHash}
+
+type Label = (AssetClass, Info)
 
 data Input = Update Value Rational
            | Exchange Integer PubKeyHash
@@ -8,43 +13,20 @@ data Input = Update Value Rational
 
 data Params = Params{sellC :: AssetClass, buyC :: AssetClass}
 
-checkMinValue :: Value -> Bool
-checkMinValue v = assetClassValueOf v ada >= 2
-
-checkTokenIn :: AssetClass -> ScriptContext -> Bool
-checkTokenIn tok ctx = assetClassValueOf (inputVal ctx) tok == 1
-
-checkTokenOut :: AssetClass -> ScriptContext -> Bool
-checkTokenOut tok ctx = assetClassValueOf (outputVal ctx) tok == 1
+checkRational :: Rational -> Bool
+checkRational r = numerator r >= 0 && denominator r > 0
 
 ratioCompare :: Integer -> Integer -> Rational -> Bool
-ratioCompare a b r = a * num r <= b * den r
+ratioCompare a b r = a * numerator r <= b * denominator r
 
-processPayment ::
-               AssetClass -> Integer -> Rational -> Value -> Bool
-processPayment ac amt r (MkMap []) = False
-processPayment ac amt r (MkMap ((ac', amt') : vs))
-  = if ac == ac' then ratioCompare amt amt' r else
-      processPayment ac amt r (MkMap vs)
+checkPaymentRatio ::
+                  PubKeyHash ->
+                    Integer -> AssetClass -> Rational -> ScriptContext -> Bool
+checkPaymentRatio pkh amt ac r ctx
+  = ratioCompare amt (assetClassValueOf (getPayments pkh ctx) ac) r
+      && checkMinValue (getPayments pkh ctx)
 
-checkPayment :: Params -> Integer -> Label -> ScriptContext -> Bool
-checkPayment par amt l ctx
-  = payTo ctx == owner l &&
-      ratioCompare amt (assetClassValueOf (payVal ctx) (buyC par))
-        (ratio l)
-        && checkMinValue (payVal ctx)
-
-checkBuyer ::
-           Params -> Integer -> PubKeyHash -> ScriptContext -> Bool
-checkBuyer par amt pkh ctx
-  = buyTo ctx == pkh &&
-      assetClassValueOf (buyVal ctx) (sellC par) == amt &&
-        checkMinValue (buyVal ctx)
-
-checkTokenBurned :: AssetClass -> ScriptContext -> Bool
-checkTokenBurned tok ctx = mint ctx == (-1)
-
-agdaValidator :: Params -> Datum -> Input -> ScriptContext -> Bool
+agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par (tok, lab) red ctx
   = checkTokenIn tok ctx &&
       case red of
@@ -52,22 +34,18 @@ agdaValidator par (tok, lab) red ctx
                           checkRational r &&
                             checkMinValue v &&
                               newValue ctx == v &&
-                                newDatum ctx == (tok, Label r (owner lab)) &&
+                                newDatum ctx == (tok, Info r (owner lab)) &&
                                   continuing ctx && checkTokenOut tok ctx
           Exchange amt pkh -> oldValue ctx ==
-                                newValue ctx <> assetClassValue (sellC par) amt
+                                newValue ctx + assetClassValue (sellC par) amt
                                 &&
                                 newDatum ctx == (tok, lab) &&
-                                  checkPayment par amt lab ctx &&
-                                    checkBuyer par amt pkh ctx &&
-                                      continuing ctx && checkTokenOut tok ctx
+                                  checkPaymentRatio (owner lab) amt (buyC par) (ratio lab) ctx &&
+                                    continuing ctx && checkTokenOut tok ctx
           Close -> not (continuing ctx) &&
                      checkTokenBurned tok ctx &&
                        not (checkTokenOut (fst (newDatum ctx)) ctx) &&
                          checkSigned (owner lab) ctx
-
-consumes :: TxOutRef -> ScriptContext -> Bool
-consumes oref ctx = oref == inputRef ctx
 
 checkDatum :: Address -> ScriptContext -> Bool
 checkDatum addr ctx
@@ -80,9 +58,6 @@ checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx
   = consumes oref ctx && checkDatum addr ctx && checkValue addr ctx
-
-continuingAddr :: Address -> ScriptContext -> Bool
-continuingAddr addr ctx = continues ctx
 
 agdaPolicy :: Address -> TxOutRef -> () -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx

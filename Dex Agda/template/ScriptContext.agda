@@ -1,7 +1,6 @@
 open import Haskell.Prelude
 open import Lib
 
-module ScriptContext (Label : Set) (Value : Set) {{iZero : Has0 Value}} where
 
 record ScriptContext : Set where
     field     

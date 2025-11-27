@@ -1,3 +1,4 @@
+
 open import Haskell.Prelude
 open import Lib
 open import Value
@@ -13,6 +14,7 @@ data Info : Set where
 Label = (AssetClass × Info)
 
 {-# COMPILE AGDA2HS Label #-}
+
 
 record ScriptContext : Set where
     field     
@@ -41,12 +43,12 @@ newValue ctx = ScriptContext.outputVal ctx
 continuing : ScriptContext -> Bool
 continuing ctx = ScriptContext.continues ctx
 
-getPayments : ScriptContext -> List (PubKeyHash × Value)
-getPayments = ScriptContext.payments
+getPayment' : PubKeyHash -> List (PubKeyHash × Value) -> Value
+getPayment' pkh [] = emptyValue
+getPayment' pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment' pkh xs
 
-getPayment : PubKeyHash -> List (PubKeyHash × Value) -> Value
-getPayment pkh [] = emptyValue
-getPayment pkh ((pkh' , v) ∷ xs) = if pkh == pkh' then v else getPayment pkh xs
+getPayment : PubKeyHash -> ScriptContext -> Value
+getPayment pkh ctx = getPayment' pkh (ScriptContext.payments ctx)
 
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = ScriptContext.mint ctx 
@@ -79,7 +81,7 @@ continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = ScriptContext.continues ctx
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment pkh v ctx = getPayment pkh (getPayments ctx) == v
+checkPayment pkh v ctx = getPayment pkh ctx == v
 
 now : ScriptContext -> Nat
 now = ScriptContext.time
@@ -94,6 +96,7 @@ data Input : Set where
 {-# COMPILE AGDA2HS Input #-}
 
 record Params : Set where
+    no-eta-equality
     field
         authSigs  : List PubKeyHash
         nr : Nat
@@ -122,6 +125,8 @@ expired d ctx = now ctx > d
 notTooLate : Params -> Nat -> ScriptContext -> Bool
 notTooLate par d ctx = (now ctx) + (maxWait par) >= d  
 
+{-# COMPILE AGDA2HS expired #-}
+{-# COMPILE AGDA2HS notTooLate #-}
 
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
@@ -172,6 +177,9 @@ isInitial addr oref ctx = consumes oref ctx &&
                           checkValue addr ctx
 
 
+{-# COMPILE AGDA2HS checkDatum #-}
+{-# COMPILE AGDA2HS checkValue #-}
+{-# COMPILE AGDA2HS isInitial #-}
 
 agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref _ ctx =
