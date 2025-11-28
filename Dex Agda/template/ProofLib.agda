@@ -27,7 +27,7 @@ open import Haskell.Prelude using (lookup)
 
 open import Function.Base using (_∋_)
 
---open import Value
+open import Lib
 
 module ProofLib where
 
@@ -88,15 +88,6 @@ sub≡ (negsuc n) (negsuc m) = subN≡ (N.suc m) (N.suc n)
 ==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf)
 
 
-{-
-switchSides : ∀ {a b c : Integer} -> a - b ≡ c -> a ≡ b + c
-switchSides {a} {b} refl rewrite +-comm a (- b) | sym (+-assoc b (- b) a)
-                         | +-inverseʳ b | +-identityˡ a = refl
-
-switchSides' : ∀ {a b c : Integer} -> a + b ≡ c -> a ≡ - b + c
-switchSides' {a} {b} refl rewrite +-comm a b | sym (+-assoc (- b) b a)
-                         | +-inverseˡ b | +-identityˡ a = refl
--}
 doubleMinus : ∀ (a b : Integer) -> a - - b ≡ a + b
 doubleMinus a b rewrite neg-involutive b = refl
 
@@ -321,40 +312,12 @@ t=f true p1 p2 = sym p1
 ≡to==i {negsuc n} refl = n=n n
 
 
-
-{-
-
-get⊥ : ∀ (n : Nat) -> not (eqNat n n) ≡ true -> ⊥
-get⊥ (N.suc n) p = get⊥ n p
-
-==to≡ : ∀ (a b : Nat) -> (a == b) ≡ true -> a ≡ b
-==to≡ zero zero p = refl
-==to≡ (Nat.suc a) (Nat.suc b) p = cong Nat.suc (==to≡ a b p)
-
-==ito≡ : ∀ (a b : Integer) -> (a == b) ≡ true -> a ≡ b
-==ito≡ (pos n) (pos m) pf = cong (+_) (==to≡ n m pf)
-==ito≡ (negsuc n) (negsuc m) pf = cong negsuc (==to≡ n m pf)
+==rto≡ : ∀ {a b : Rational} -> (a == b) ≡ true -> a ≡ b
+==rto≡ r1@{record { num = num₁ ; den = den₁ }} r2@{record { num = num₂ ; den = den₂ }} pf
+  rewrite ==ito≡ (numerator r1) (numerator r2) (get pf)
+  | ==ito≡ (denominator r1) (denominator r2) (go (eqInteger (numerator r1) (numerator r2)) pf) = refl
 
 
-
-n=n : ∀ (n : Nat) -> eqNat n n ≡ true
-n=n zero = refl
-n=n (N.suc n) = n=n n
-
-i=i : ∀ (i : Value) -> (eqInteger i i) ≡ true
-i=i (pos zero) = refl
-i=i (pos (suc n)) = n=n n 
-i=i (negsuc zero) = refl
-i=i (negsuc (suc n)) = n=n n
-
-
-
-
-
-{-
-=/=ito≢ : ∀ {a b : Int} -> (a == b) ≡ false -> a ≢ b
-=/=ito≢ {pos n} {pos .n} pf refl rewrite n=n n = get⊥ pf
-=/=ito≢ {negsuc n} {negsuc .n} pf refl rewrite n=n n = get⊥ pf
--}
-
--}
+lst=lst : ∀ (lst : List (Nat × Integer)) -> (lst == lst) ≡ true
+lst=lst [] = refl
+lst=lst (x ∷ lst) rewrite n=n (x .fst) | i=i (x .snd) = lst=lst lst

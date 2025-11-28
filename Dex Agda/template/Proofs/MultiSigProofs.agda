@@ -782,7 +782,7 @@ bothImplyClose : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef
                -> getMintedAmount ctx ≡ -1
                -> (agdaValidator par d Close ctx && agdaPolicy adr oref top ctx) ≡ true
                -> getPar par adr oref ⊢ getS d ctx ~[ Close ]~| getS' d ctx
-bothImplyClose par d@(tok , Holding) adr oref top ctx@record { tokenOut = false ; mint = .-1 } refl p = TClose refl (get (go (checkTokenIn tok ctx) (get p))) refl (unNot (continuing ctx) (go (agdaValidator par d Close ctx) p)) (get (get p)) refl refl
+bothImplyClose par d@(tok , Holding) adr oref top ctx@record { tokenOut = false ; mint = .-1 } refl p = TClose refl (get (go (checkTokenIn tok ctx) (get p))) refl (unNot (go (agdaValidator par d Close ctx) p)) (get (get p)) refl refl
 bothImplyClose par (tok , Holding) adr oref top ctx@record { tokenOut = true ; mint = .-1 } refl p = ⊥-elim (&&false (checkTokenIn tok ctx) (get p))
 bothImplyClose par (tok , Collecting x x₁ x₂ x₃) adr oref top ctx@record { tokenOut = false ; mint = .-1 } refl p = ⊥-elim (&&false (checkTokenIn tok ctx) (get p))
 bothImplyClose par (tok , Collecting x x₁ x₂ x₃) adr oref top ctx@record { tokenOut = true ; mint = .-1 } refl p = ⊥-elim (&&false (checkTokenIn tok ctx) (get p))

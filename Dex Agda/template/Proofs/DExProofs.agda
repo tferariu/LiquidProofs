@@ -233,21 +233,6 @@ getS' (tok , lab) ctx = record
 
 
 
-==rto≡ : ∀ {a b : Rational} -> (a == b) ≡ true -> a ≡ b
-==rto≡ r1@{record { num = num₁ ; den = den₁ }} r2@{record { num = num₂ ; den = den₂ }} pf
-  rewrite ==ito≡ (numerator r1) (numerator r2) (get pf)
-  | ==ito≡ (denominator r1) (denominator r2) (go (eqInteger (numerator r1) (numerator r2)) pf) = refl
-
-
-
-==pto≡ : {a b : (AssetClass × Integer)} -> (a == b) ≡ true -> a ≡ b
-==pto≡ {ac , amt} {ac' , amt'} pf rewrite (==to≡ ac ac' (get pf)) | (==ito≡ amt amt' (go (ac == ac') pf)) = refl
-
-==v'to≡ : {m m' : List (AssetClass × Integer)} -> (m == m') ≡ true -> m ≡ m'
-==v'to≡ {[]} {[]} p = refl
-==v'to≡ {x ∷ m} {y ∷ m'} pf rewrite (==pto≡ {x} {y} (get pf))= cong (λ z → y ∷ z) (==v'to≡ (go (x == y) pf))
-
-
 ==Lto≡ : ∀ (l l' : Info)
        -> (l == l') ≡ true
        -> l ≡ l' 
@@ -334,11 +319,6 @@ bothImplyClose par d adr oref top ctx p | False | False
 ≡to==l : ∀ {a b : Info} -> a ≡ b -> (a == b) ≡ true
 ≡to==l {record { ratio = ratio ; owner = owner }} refl
   rewrite i=i (num ratio) | i=i (den ratio) | n=n owner = refl
-
-lst=lst : ∀ (lst : List (Nat × Integer)) -> (lst == lst) ≡ true
-lst=lst [] = refl
-lst=lst (x ∷ lst) rewrite n=n (x .fst) | i=i (x .snd) = lst=lst lst
-
 
 
 transitionImpliesValidator : ∀ {adr oref} (par : Params) (d : Label) (i : Input) (ctx : ScriptContext)

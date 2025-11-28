@@ -41,15 +41,3 @@ ltRational b c = numerator b * denominator c < numerator c * denominator b
 instance
   iEqRational : Eq Rational
   iEqRational ._==_ = eqRational
-
-
-{-
-{-# COMPILE AGDA2HS CurrencySymbol #-}
-{-# COMPILE AGDA2HS TokenName #-}
-{-# COMPILE AGDA2HS PubKeyHash #-}
-{-# COMPILE AGDA2HS AssetClass #-}
-{-# COMPILE AGDA2HS Address #-}
-{-# COMPILE AGDA2HS TxOutRef #-}
-{-# COMPILE AGDA2HS ada #-}
-{-# COMPILE AGDA2HS Map #-}
--}

@@ -766,7 +766,7 @@ bothImplyCleanup : ∀ (l : Label) (adr : Address) (oref : TxOutRef) (ctx : Scri
                    -> getMintedAmount ctx ≡ -1
                    -> (agdaValidator l Cleanup ctx && agdaPolicy adr oref tt ctx) ≡ true
                    -> getS l ctx ~[ Cleanup ]~| getS' ctx
-bothImplyCleanup d adr oref ctx refl pf = TCleanup (==Lto≡ (snd d) [] (go (not (continuing ctx)) (go (not (checkTokenOut (d . fst) ctx)) (go (checkTokenIn (d . fst) ctx) (get pf))))) refl refl (unNot (continuing ctx) (get (go (not (checkTokenOut (d . fst) ctx)) (go (checkTokenIn (d . fst) ctx) (get pf))))) (get (get pf)) (unNot (checkTokenOut (d . fst) ctx) (get (go (checkTokenIn (d . fst) ctx) (get pf))))
+bothImplyCleanup d adr oref ctx refl pf = TCleanup (==Lto≡ (snd d) [] (go (not (continuing ctx)) (go (not (checkTokenOut (d . fst) ctx)) (go (checkTokenIn (d . fst) ctx) (get pf))))) refl refl (unNot (get (go (not (checkTokenOut (d . fst) ctx)) (go (checkTokenIn (d . fst) ctx) (get pf))))) (get (get pf)) (unNot (get (go (checkTokenIn (d . fst) ctx) (get pf))))
 
 -- (==Lto≡ (snd d) [] (go (not (continuing ctx)) (go (not (checkTokenOut tok ctx)) (go (checkTokenIn tok ctx) (get pf)))))
 
