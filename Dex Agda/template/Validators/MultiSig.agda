@@ -80,6 +80,15 @@ consumes oref ctx = oref == ScriptContext.inputRef ctx
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = ScriptContext.continues ctx
 
+newDatumAddr : Address -> ScriptContext -> Label
+newDatumAddr adr ctx = newDatum ctx
+
+newValueAddr : Address -> ScriptContext -> Value
+newValueAddr adr ctx = newValue ctx
+
+checkTokenOutAddr : Address -> AssetClass -> ScriptContext -> Bool
+checkTokenOutAddr adr = checkTokenOut
+
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
@@ -164,12 +173,12 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
 
 
 checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = case (newDatum ctx) of λ where
+checkDatum addr ctx = case (newDatumAddr addr ctx) of λ where
   (tok , Holding) -> ownAssetClass ctx == tok
   (tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
+checkValue addr ctx = checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

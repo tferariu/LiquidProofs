@@ -1,4 +1,4 @@
-open import Haskell.Prelude
+open import Haskell.Prelude hiding (lookup)
 open import Lib
 open import Value
 
@@ -78,6 +78,15 @@ consumes oref ctx = oref == ScriptContext.inputRef ctx
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = ScriptContext.continues ctx
 
+newDatumAddr : Address -> ScriptContext -> Label
+newDatumAddr adr ctx = newDatum ctx
+
+newValueAddr : Address -> ScriptContext -> Value
+newValueAddr adr ctx = newValue ctx
+
+checkTokenOutAddr : Address -> AssetClass -> ScriptContext -> Bool
+checkTokenOutAddr adr = checkTokenOut
+
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
@@ -108,15 +117,16 @@ delete pkh ((x , y) ∷ xs) = if (pkh == x)
   then xs
   else ((x , y) ∷ (delete pkh xs))
 
+lookup : PubKeyHash -> AccMap -> Maybe Value
+lookup pkh [] = Nothing
+lookup pkh ((x , y) ∷ xs) = if (pkh == x)
+  then Just y
+  else lookup pkh xs
+
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
+{-# COMPILE AGDA2HS lookup #-}
 
-
-
-checkMembership' : PubKeyHash -> AccMap -> Bool
-checkMembership' pkh lab = case lookup pkh lab of λ where
-  Nothing -> False
-  (Just v) -> True
 
 checkMembership : Maybe Value -> Bool
 checkMembership Nothing = False
@@ -140,17 +150,11 @@ checkTransfer tok (Just vF) Nothing _ _ _ _ _ = False
 checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val emptyValue && geq vF val && from /= to &&
                          newDatum ctx == (tok , insert from (vF - val) (insert to (vT + val) lab))
 
-
-{-
-checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
-checkPayment pkh v ctx = pkh == payTo ctx && v == payAmt ctx-}
-
 {-# COMPILE AGDA2HS checkMembership #-}
 {-# COMPILE AGDA2HS checkEmpty #-}
 {-# COMPILE AGDA2HS checkWithdraw #-}
 {-# COMPILE AGDA2HS checkDeposit #-}
 {-# COMPILE AGDA2HS checkTransfer #-}
---{-# COMPILE AGDA2HS checkPayment #-}
 
 agdaValidator : Label -> Input -> ScriptContext -> Bool
 agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ where
@@ -180,11 +184,11 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
 
 checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = case (newDatum ctx) of λ where
+checkDatum addr ctx = case (newDatumAddr addr ctx) of λ where
   (tok , map) -> ownAssetClass ctx == tok && map == []
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = newValue ctx == emptyValue && checkTokenOut (ownAssetClass ctx) ctx
+checkValue addr ctx = newValueAddr addr ctx == minValue && checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

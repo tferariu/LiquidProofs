@@ -1,7 +1,7 @@
 module Validators.AccountSim where
 
 import Lib (Address, AssetClass, PubKeyHash, TxOutRef)
-import Value (Value, emptyValue, geq)
+import Value (Value, emptyValue, geq, minValue)
 
 type AccMap = [(PubKeyHash, Value)]
 
@@ -23,6 +23,11 @@ delete :: PubKeyHash -> AccMap -> AccMap
 delete pkh [] = []
 delete pkh ((x, y) : xs)
   = if pkh == x then xs else (x, y) : delete pkh xs
+
+lookup :: PubKeyHash -> AccMap -> Maybe Value
+lookup pkh [] = Nothing
+lookup pkh ((x, y) : xs)
+  = if pkh == x then Just y else lookup pkh xs
 
 checkMembership :: Maybe Value -> Bool
 checkMembership Nothing = False
@@ -104,13 +109,13 @@ agdaValidator (tok, lab) inp ctx
 
 checkDatum :: Address -> ScriptContext -> Bool
 checkDatum addr ctx
-  = case newDatum ctx of
+  = case newDatumAddr addr ctx of
         (tok, map) -> ownAssetClass ctx == tok && map == []
 
 checkValue :: Address -> ScriptContext -> Bool
 checkValue addr ctx
-  = newValue ctx == emptyValue &&
-      checkTokenOut (ownAssetClass ctx) ctx
+  = newValueAddr addr ctx == minValue &&
+      checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx

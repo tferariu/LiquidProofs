@@ -31,6 +31,7 @@ record ScriptContext : Set where
         tokenOut      : Bool
         time          : Nat
 
+
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
 
@@ -79,6 +80,15 @@ consumes oref ctx = oref == ScriptContext.inputRef ctx
 
 continuingAddr : Address -> ScriptContext -> Bool
 continuingAddr addr ctx = ScriptContext.continues ctx
+
+newDatumAddr : Address -> ScriptContext -> Label
+newDatumAddr adr ctx = newDatum ctx
+
+newValueAddr : Address -> ScriptContext -> Value
+newValueAddr adr ctx = newValue ctx
+
+checkTokenOutAddr : Address -> AssetClass -> ScriptContext -> Bool
+checkTokenOutAddr adr = checkTokenOut
 
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v

@@ -105,6 +105,12 @@ rewrites:
     to: "now"
   - from: "Validators.AccountSim.ScriptContext.time"
     to: "time"
+  - from: "Validators.AccountSim.newDatumAddr"
+    to: "newDatumAddr"
+  - from: "Validators.AccountSim.newValueAddr"
+    to: "newValueAddr"
+  - from: "Validators.AccountSim.checkTokenOutAddr"
+    to: "checkTokenOutAddr"
     
   - from: "Validators.MultiSig.ScriptContext"
     to: "ScriptContext"
@@ -170,6 +176,12 @@ rewrites:
     to: "now"
   - from: "Validators.MultiSig.ScriptContext.time"
     to: "time"
+  - from: "Validators.MultiSig.newDatumAddr"
+    to: "newDatumAddr"
+  - from: "Validators.MultiSig.newValueAddr"
+    to: "newValueAddr"
+  - from: "Validators.MultiSig.checkTokenOutAddr"
+    to: "checkTokenOutAddr"
   
   
   - from: "Validators.DEx.ScriptContext"
@@ -236,6 +248,12 @@ rewrites:
     to: "now"
   - from: "Validators.DEx.ScriptContext.time"
     to: "time"
+  - from: "Validators.DEx.newDatumAddr"
+    to: "newDatumAddr"
+  - from: "Validators.DEx.newValueAddr"
+    to: "newValueAddr"
+  - from: "Validators.DEx.checkTokenOutAddr"
+    to: "checkTokenOutAddr"
     
    
   - from: "Validators.Template.ScriptContext"
@@ -304,5 +322,11 @@ rewrites:
     to: "time"
   - from: "Validators.Template.Placeholder"
     to: "Placeholder"
+  - from: "Validators.Template.newDatumAddr"
+    to: "newDatumAddr"
+  - from: "Validators.Template.newValueAddr"
+    to: "newValueAddr"
+  - from: "Validators.Template.checkTokenOutAddr"
+    to: "checkTokenOutAddr"
     
       

@@ -49,11 +49,12 @@ agdaValidator par (tok, lab) red ctx
 
 checkDatum :: Address -> ScriptContext -> Bool
 checkDatum addr ctx
-  = case newDatum ctx of
+  = case newDatumAddr addr ctx of
         (tok, l) -> ownAssetClass ctx == tok && checkRational (ratio l)
 
 checkValue :: Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
+checkValue addr ctx
+  = checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx

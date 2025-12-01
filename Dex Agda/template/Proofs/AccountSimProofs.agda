@@ -27,9 +27,6 @@ open import Haskell.Prim.Maybe
 open import Haskell.Prim.Tuple
 open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
-open import Haskell.Prelude using (lookup)
-
-
 open import Function.Base using (_∋_)
 
 open import ProofLib
@@ -64,7 +61,7 @@ data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s tok}
     -> datum s ≡ ( tok , [] )
-    -> value s ≡ emptyValue
+    -> value s ≡ minValue
     -> mint s ≡ 1
     -> continues s ≡ true
     -> outputRef par ≡ spends s
@@ -753,9 +750,9 @@ mintingImpliesStart : ∀ (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : S
 mintingImpliesStart adr oref top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , l) ; signature = signature ; continues = continues ; inputRef = inputRef ; tokenIn = hasTokenIn ; tokenOut =  hasTokenOut ; mint = + 1 ; tokAssetClass = tokAssetClass } refl pf
   rewrite ==to≡ tokAssetClass tok (get (get (go (oref == inputRef) (go continues pf)))) 
   | ==Lto≡ l [] (go (tokAssetClass == tok) (get (go (oref == inputRef) (go continues pf))))
-  = TStart refl (==vto≡ outputVal emptyValue (get (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf)))))
+  = TStart refl (==vto≡ outputVal minValue (get (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf)))))
     refl (get pf) (==to≡ oref inputRef (get (go continues pf))) refl
-    (go (outputVal == emptyValue) (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf))))
+    (go (outputVal == minValue) (go (tokAssetClass == tok && l == []) (go (oref == inputRef) (go continues pf))))
 
 
 l=l : ∀ (l : AccMap) -> (l == l) ≡ true
