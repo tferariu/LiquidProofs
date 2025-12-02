@@ -1,7 +1,7 @@
 module Validators.AccountSim where
 
 import Lib (Address, AssetClass, PubKeyHash, TxOutRef)
-import Value (Value, emptyValue, geq, minValue)
+import Value (Value, emptyValue, geq)
 
 type AccMap = [(PubKeyHash, Value)]
 
@@ -114,8 +114,7 @@ checkDatum addr ctx
 
 checkValue :: Address -> ScriptContext -> Bool
 checkValue addr ctx
-  = newValueAddr addr ctx == minValue &&
-      checkTokenOutAddr addr (ownAssetClass ctx) ctx
+  = checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx

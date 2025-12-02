@@ -28,7 +28,6 @@ subValue : Value -> Value -> Value
 subValue v1 v2 = addValue v1 (negValue v2)
 
 
-
 eqValue : Value -> Value -> Bool
 eqValue (MkMap x) (MkMap y) = x == y
 
@@ -49,6 +48,16 @@ emptyValue = MkMap []
 
 minValue : Value
 minValue = MkMap ((ada , 3) ∷ [])
+
+2xMinValue : Value
+2xMinValue = MkMap ((ada , 6) ∷ [])
+
+lovelaces : Value -> Integer
+lovelaces (MkMap []) = 0
+lovelaces (MkMap ((ac , amt) ∷ xs)) = if ac == ada then amt
+                                         else lovelaces (MkMap xs)
+
+
 
 instance
   iEqValue : Eq Value
@@ -111,7 +120,7 @@ postulate
   geqTrans : ∀ (a b c : Value) -> geq a b ≡ True -> geq b c ≡ True -> geq a c ≡ True
   sumLemma : ∀ (v1 v2 : Value) -> geq v1 emptyValue ≡ True -> geq v2 emptyValue ≡ True -> geq (addValue v1 v2) emptyValue ≡ True
   diffLemma : ∀ (v1 v2 : Value) -> geq v1 v2 ≡ True -> geq v2 emptyValue ≡ True -> geq (subValue v1 v2) emptyValue ≡ True
-
+  lovelaceLemma : ∀ (v1 v2 : Value) -> geq v1 v2 ≡ True -> (lovelaces v1 >= lovelaces v2) ≡ True
 
 
   

@@ -142,7 +142,7 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
   (case ((checkTokenOut tok ctx) , lab , red) of λ where
     (True , Holding , (Propose v pkh d)) ->
       (newValue ctx == oldValue ctx) && geq (oldValue ctx) v &&
-      geq v minValue && notTooLate param d ctx && continuing ctx &&
+      lovelaces v >= lovelaces minValue && notTooLate param d ctx && continuing ctx &&
       (case (newDatum ctx) of λ where
         (tok' , Holding) -> False
         (tok' , (Collecting v' pkh' d' sigs')) ->
@@ -164,7 +164,7 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
       (case (newDatum ctx) of λ where
         (tok' , Holding) -> expired d ctx && tok == tok'
         (tok' , (Collecting v' pkh' d' sigs')) -> False)
-    (False , Holding , Close) -> gt minValue (oldValue ctx) && not (continuing ctx) &&
+    (False , Holding , Close) -> lovelaces 2xMinValue > lovelaces (oldValue ctx) && not (continuing ctx) &&
                                  checkTokenBurned tok ctx
     _ -> False )
 
@@ -178,7 +178,7 @@ checkDatum addr ctx = case (newDatumAddr addr ctx) of λ where
   (tok , (Collecting _ _ _ _)) -> False
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOutAddr addr (ownAssetClass ctx) ctx
+checkValue addr ctx = lovelaces 2xMinValue > lovelaces (newValueAddr addr ctx) && checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&

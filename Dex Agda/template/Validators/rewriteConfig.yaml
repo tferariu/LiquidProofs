@@ -21,6 +21,10 @@ rewrites:
     to: "assetClassValue"
   - from: "Value.checkMinValue"
     to: "checkMinValue"
+  - from: "Value.lovelaces"
+    to: "lovelaces"
+  - from: "Value.2xMinValue"
+    to: "2xMinValue"
     
   - from: "Lib.CurrencySymbol"
     to: "CurrencySymbol"    

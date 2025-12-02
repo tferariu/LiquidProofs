@@ -2,7 +2,7 @@ module Validators.MultiSig where
 
 import Lib (Address, AssetClass, PubKeyHash, TxOutRef)
 import Numeric.Natural (Natural)
-import Value (Value, geq, gt, minValue)
+import Value (2xMinValue, Value, geq, lovelaces, minValue)
 
 data Info = Holding
           | Collecting Value PubKeyHash Natural [PubKeyHash]
@@ -39,7 +39,7 @@ agdaValidator param (tok, lab) red ctx
       case (checkTokenOut tok ctx, lab, red) of
           (True, Holding, Propose v pkh d) -> newValue ctx == oldValue ctx &&
                                                 geq (oldValue ctx) v &&
-                                                  geq v minValue &&
+                                                  lovelaces v >= lovelaces minValue &&
                                                     notTooLate param d ctx &&
                                                       continuing ctx &&
                                                         case newDatum ctx of
@@ -99,18 +99,21 @@ agdaValidator param (tok, lab) red ctx
                                                                                   tok == tok'
                                                              (tok',
                                                               Collecting v' pkh' d' sigs') -> False
-          (False, Holding, Close) -> gt minValue (oldValue ctx) &&
-                                       not (continuing ctx) && checkTokenBurned tok ctx
+          (False, Holding, Close) -> lovelaces 2xMinValue >
+                                       lovelaces (oldValue ctx)
+                                       && not (continuing ctx) && checkTokenBurned tok ctx
           _ -> False
 
 checkDatum :: Address -> ScriptContext -> Bool
 checkDatum addr ctx
-  = case newDatum ctx of
+  = case newDatumAddr addr ctx of
         (tok, Holding) -> ownAssetClass ctx == tok
         (tok, Collecting _ _ _ _) -> False
 
 checkValue :: Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
+checkValue addr ctx
+  = lovelaces 2xMinValue > lovelaces (newValueAddr addr ctx) &&
+      checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx

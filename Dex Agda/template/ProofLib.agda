@@ -321,3 +321,57 @@ t=f true p1 p2 = sym p1
 lst=lst : ∀ (lst : List (Nat × Integer)) -> (lst == lst) ≡ true
 lst=lst [] = refl
 lst=lst (x ∷ lst) rewrite n=n (x .fst) | i=i (x .snd) = lst=lst lst
+
+
+
+ltNatFalseToGeq : ∀ (a b : Nat) -> ltNat a b ≡ false -> (ltNat b a || eqNat a b) ≡ true
+ltNatFalseToGeq zero zero pf = refl
+ltNatFalseToGeq (N.suc a) zero pf = refl
+ltNatFalseToGeq (N.suc a) (N.suc b) pf = ltNatFalseToGeq a b pf
+
+ltNatFalseToGeq' : ∀ (a b : Nat) -> ltNat a b ≡ false -> (ltNat b a || eqNat b a) ≡ true
+ltNatFalseToGeq' zero zero pf = refl
+ltNatFalseToGeq' (N.suc a) zero pf = refl
+ltNatFalseToGeq' (N.suc a) (N.suc b) pf = ltNatFalseToGeq' a b pf
+
+ltIntFalseToGeq : ∀ (a b : Integer) -> ltInteger a b ≡ false -> (ltInteger b a || eqInteger a b) ≡ true
+ltIntFalseToGeq (+_ a) (+_ b) pf = ltNatFalseToGeq a b pf
+ltIntFalseToGeq (+_ a) (negsuc b) pf = refl
+ltIntFalseToGeq (negsuc a) (negsuc b) pf = ltNatFalseToGeq' b a pf
+
+geqNatTrans : ∀ (a b c : Nat) -> (a Haskell.Prelude.>= b) ≡ true -> (b Haskell.Prelude.>= c) ≡ true -> (a Haskell.Prelude.>= c) ≡ true
+geqNatTrans zero zero zero p1 p2 = p1
+geqNatTrans (N.suc a) zero zero p1 p2 = p1
+geqNatTrans (N.suc a) (N.suc b) zero p1 p2 = p2
+geqNatTrans (N.suc a) (N.suc b) (N.suc c) p1 p2 = geqNatTrans a b c p1 p2
+
+
+geqNatTrans' : ∀ (a b c : Nat) -> (ltNat a b || eqNat a b) ≡ true -> (ltNat b c || eqNat b c) ≡ true -> (ltNat a c || eqNat a c) ≡ true
+geqNatTrans' zero zero zero p1 p2 = p1
+geqNatTrans' zero zero (N.suc c) p1 p2 = p1
+geqNatTrans' zero (N.suc b) (N.suc c) p1 p2 = p1
+geqNatTrans' (N.suc a) (N.suc b) (N.suc c) p1 p2 = geqNatTrans' a b c p1 p2
+
+geqIntegerTrans : ∀ (a b c : Integer) -> (a Haskell.Prelude.>= b) ≡ true -> (b Haskell.Prelude.>= c) ≡ true -> (a Haskell.Prelude.>= c) ≡ true
+geqIntegerTrans (+_ zero) (+_ zero) (+_ zero) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (+_ zero) (+_ zero) p1 p2 = p1
+geqIntegerTrans +[1+ a ] +[1+ b ] (+_ zero) p1 p2 = p2
+geqIntegerTrans +[1+ a ] +[1+ b ] +[1+ c ] p1 p2 = geqNatTrans a b c p1 p2 
+geqIntegerTrans (+_ zero) (+_ zero) (negsuc zero) p1 p2 = p1
+geqIntegerTrans (+_ zero) (+_ zero) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (+_ zero) (negsuc zero) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (+_ zero) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans +[1+ a ] +[1+ b ] (negsuc zero) p1 p2 = p2
+geqIntegerTrans +[1+ a ] +[1+ b ] (negsuc (N.suc c)) p1 p2 = p2
+geqIntegerTrans (+_ zero) (negsuc zero) (negsuc zero) p1 p2 = p1
+geqIntegerTrans (+_ zero) (negsuc zero) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans (+_ zero) (negsuc (N.suc b)) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (negsuc zero) (negsuc zero) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (negsuc zero) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans +[1+ a ] (negsuc (N.suc b)) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans (negsuc zero) (negsuc zero) (negsuc zero) p1 p2 = p1
+geqIntegerTrans (negsuc zero) (negsuc zero) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans (negsuc zero) (negsuc (N.suc b)) (negsuc (N.suc c)) p1 p2 = p1
+geqIntegerTrans (negsuc (N.suc a)) (negsuc (N.suc b)) (negsuc (N.suc c)) p1 p2 = geqNatTrans' a b c p1 p2
+
+

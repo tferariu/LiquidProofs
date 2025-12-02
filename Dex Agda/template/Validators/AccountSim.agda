@@ -188,7 +188,7 @@ checkDatum addr ctx = case (newDatumAddr addr ctx) of λ where
   (tok , map) -> ownAssetClass ctx == tok && map == []
 
 checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = newValueAddr addr ctx == minValue && checkTokenOutAddr addr (ownAssetClass ctx) ctx
+checkValue addr ctx = checkTokenOutAddr addr (ownAssetClass ctx) ctx
 
 isInitial : Address -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref ctx = consumes oref ctx &&
