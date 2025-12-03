@@ -2,9 +2,7 @@ open import Haskell.Prelude hiding (lookup)
 open import Lib
 open import Value
 
-
 module Validators.AccountSim where
-
 
 AccMap = List (PubKeyHash × Value)
 
@@ -24,7 +22,7 @@ record ScriptContext : Set where
         continues     : Bool
         inputRef      : TxOutRef
         mint          : Integer
-        tokAssetClass : AssetClass
+        tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
         time          : Nat
@@ -51,8 +49,8 @@ getPayment pkh ctx = getPayment' pkh (ScriptContext.payments ctx)
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = ScriptContext.mint ctx 
 
-ownAssetClass : ScriptContext -> AssetClass
-ownAssetClass ctx = ScriptContext.tokAssetClass ctx
+ownAssetClass : TokenName -> ScriptContext -> AssetClass
+ownAssetClass tn ctx = ((ScriptContext.tokCurrSymbol ctx) , tn)
 
 checkTokenIn : AssetClass -> ScriptContext -> Bool
 checkTokenIn ac = ScriptContext.tokenIn
@@ -183,27 +181,27 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 {-# COMPILE AGDA2HS agdaValidator #-}
 
 
-checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = case (newDatumAddr addr ctx) of λ where
-  (tok , map) -> ownAssetClass ctx == tok && map == []
+checkDatum : Address -> TokenName -> ScriptContext -> Bool
+checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
+  (tok , map) -> ownAssetClass tn ctx == tok && map == []
 
-checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOutAddr addr (ownAssetClass ctx) ctx
+checkValue : Address -> TokenName -> ScriptContext -> Bool
+checkValue addr tn ctx = checkTokenOutAddr addr (ownAssetClass tn ctx) ctx
 
-isInitial : Address -> TxOutRef -> ScriptContext -> Bool
-isInitial addr oref ctx = consumes oref ctx &&
-                          checkDatum addr ctx &&
-                          checkValue addr ctx
+isInitial : Address -> TxOutRef -> TokenName -> ScriptContext -> Bool
+isInitial addr oref tn ctx = consumes oref ctx &&
+                          checkDatum addr tn ctx &&
+                          checkValue addr tn ctx
 
 
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
-agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr oref _ ctx =
+agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
+agdaPolicy addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&
-                         isInitial addr oref ctx 
+                         isInitial addr oref tn ctx 
   else if amt == -1 then not (continuingAddr addr ctx)
   else False
   where

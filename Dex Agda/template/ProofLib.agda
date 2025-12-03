@@ -322,7 +322,11 @@ lst=lst : ∀ (lst : List (Nat × Integer)) -> (lst == lst) ≡ true
 lst=lst [] = refl
 lst=lst (x ∷ lst) rewrite n=n (x .fst) | i=i (x .snd) = lst=lst lst
 
+==tto≡ : ∀ (a b : AssetClass) -> (a == b) ≡ true -> a ≡ b
+==tto≡ (cs , tn) (cs' , tn') p rewrite ==to≡ cs cs' (get p) | ==to≡ tn tn' (go (cs == cs') p) = refl
 
+t=t : ∀ (t : AssetClass) -> (t == t) ≡ true
+t=t (cs , tn) rewrite n=n cs | n=n tn = refl
 
 ltNatFalseToGeq : ∀ (a b : Nat) -> ltNat a b ≡ false -> (ltNat b a || eqNat a b) ≡ true
 ltNatFalseToGeq zero zero pf = refl

@@ -1,6 +1,6 @@
 module Validators.Template where
 
-import Lib (Address, AssetClass, TxOutRef)
+import Lib (Address, AssetClass, TokenName, TxOutRef)
 
 type Info = Placeholder
 
@@ -13,6 +13,7 @@ data Params = Params{optional :: Placeholder}
 agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param (tok, lab) red ctx = True
 
-agdaPolicy :: Address -> TxOutRef -> () -> ScriptContext -> Bool
-agdaPolicy addr oref _ ctx = True
+agdaPolicy ::
+           Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
+agdaPolicy addr oref tn _ ctx = True
 

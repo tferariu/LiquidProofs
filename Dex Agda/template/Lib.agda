@@ -5,12 +5,12 @@ module Lib where
 CurrencySymbol = Nat
 TokenName = Nat
 PubKeyHash = Nat 
-AssetClass = Nat
+AssetClass = (TokenName × CurrencySymbol)
 Address = Nat
 TxOutRef = Nat
 
 ada : AssetClass
-ada = 0
+ada = (0 , 0)
 
 data Map (a b : Set) : Set where
  MkMap : List (a × b) -> Map a b

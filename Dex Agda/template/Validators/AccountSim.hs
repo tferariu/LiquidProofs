@@ -1,6 +1,6 @@
 module Validators.AccountSim where
 
-import Lib (Address, AssetClass, PubKeyHash, TxOutRef)
+import Lib (Address, AssetClass, PubKeyHash, TokenName, TxOutRef)
 import Value (Value, emptyValue, geq)
 
 type AccMap = [(PubKeyHash, Value)]
@@ -107,23 +107,26 @@ agdaValidator (tok, lab) inp ctx
           Cleanup -> checkTokenBurned tok ctx &&
                        not (checkTokenOut tok ctx) && not (continuing ctx) && lab == []
 
-checkDatum :: Address -> ScriptContext -> Bool
-checkDatum addr ctx
+checkDatum :: Address -> TokenName -> ScriptContext -> Bool
+checkDatum addr tn ctx
   = case newDatumAddr addr ctx of
-        (tok, map) -> ownAssetClass ctx == tok && map == []
+        (tok, map) -> ownAssetClass tn ctx == tok && map == []
 
-checkValue :: Address -> ScriptContext -> Bool
-checkValue addr ctx
-  = checkTokenOutAddr addr (ownAssetClass ctx) ctx
+checkValue :: Address -> TokenName -> ScriptContext -> Bool
+checkValue addr tn ctx
+  = checkTokenOutAddr addr (ownAssetClass tn ctx) ctx
 
-isInitial :: Address -> TxOutRef -> ScriptContext -> Bool
-isInitial addr oref ctx
-  = consumes oref ctx && checkDatum addr ctx && checkValue addr ctx
+isInitial ::
+          Address -> TxOutRef -> TokenName -> ScriptContext -> Bool
+isInitial addr oref tn ctx
+  = consumes oref ctx &&
+      checkDatum addr tn ctx && checkValue addr tn ctx
 
-agdaPolicy :: Address -> TxOutRef -> () -> ScriptContext -> Bool
-agdaPolicy addr oref _ ctx
+agdaPolicy ::
+           Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
+agdaPolicy addr oref tn _ ctx
   = if amt == 1 then
-      continuingAddr addr ctx && isInitial addr oref ctx else
+      continuingAddr addr ctx && isInitial addr oref tn ctx else
       if amt == (-1) then not (continuingAddr addr ctx) else False
   where
     amt :: Integer

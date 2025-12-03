@@ -26,11 +26,10 @@ record ScriptContext : Set where
         continues     : Bool
         inputRef      : TxOutRef
         mint          : Integer
-        tokAssetClass : AssetClass
+        tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
         time          : Nat
-
 
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
@@ -54,8 +53,8 @@ getPayment pkh ctx = getPayment' pkh (ScriptContext.payments ctx)
 getMintedAmount : ScriptContext -> Integer
 getMintedAmount ctx = ScriptContext.mint ctx 
 
-ownAssetClass : ScriptContext -> AssetClass
-ownAssetClass ctx = ScriptContext.tokAssetClass ctx
+ownAssetClass : TokenName -> ScriptContext -> AssetClass
+ownAssetClass tn ctx = ((ScriptContext.tokCurrSymbol ctx) , tn)
 
 checkTokenIn : AssetClass -> ScriptContext -> Bool
 checkTokenIn ac = ScriptContext.tokenIn
@@ -117,29 +116,29 @@ agdaValidator param (tok , lab) red ctx = True
 {-# COMPILE AGDA2HS agdaValidator #-}
 
 {- can be reused for ThreadTokens
-checkDatum : Address -> ScriptContext -> Bool
-checkDatum addr ctx = case (newDatum ctx) of λ where
+checkDatum : Address -> TokenName -> ScriptContext -> Bool
+checkDatum addr tn ctx = case (newDatum ctx) of λ where
   a -> {!!}
 
-checkValue : Address -> ScriptContext -> Bool
-checkValue addr ctx = checkTokenOut (ownAssetClass ctx) ctx
+checkValue : Address -> TokenName -> ScriptContext -> Bool
+checkValue addr tn ctx = checkTokenOut (ownAssetClass tn ctx) ctx
 
-isInitial : Address -> TxOutRef -> ScriptContext -> Bool
-isInitial addr oref ctx = consumes oref ctx &&
-                          checkDatum addr ctx &&
-                          checkValue addr ctx
+isInitial : Address -> TokenName -> TxOutRef -> ScriptContext -> Bool
+isInitial addr oref tn ctx = consumes oref ctx &&
+                          checkDatum addr tn ctx &&
+                          checkValue addr tn ctx
 
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 -}
 
-agdaPolicy : Address -> TxOutRef -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr oref _ ctx = True
+agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
+agdaPolicy addr oref tn _ ctx = True
 
 {- can be reused for Thread Tokens
   if      amt == 1  then continuingAddr addr ctx &&
-                         isInitial addr oref ctx 
+                         isInitial addr oref tn ctx 
   else if amt == -1 then not (continuingAddr addr ctx)
   else False
   where

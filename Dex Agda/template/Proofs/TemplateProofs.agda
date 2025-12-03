@@ -147,15 +147,15 @@ validatorImpliesTransition = {!!}
 
 
 
-mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+mintingImpliesStart : ∀ {par tn} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> getMintedAmount ctx ≢ -1
-                           -> (pf : agdaPolicy adr oref top ctx ≡ true)
+                           -> (pf : agdaPolicy adr oref tn top ctx ≡ true)
                            -> getPar par adr oref ⊢ getMintS ctx
 mintingImpliesStart = {!!}
 
 
-bothImplyClose : ∀ {closeInput : Input} (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
-               -> (agdaValidator par d closeInput ctx && agdaPolicy adr oref top ctx) ≡ true
+bothImplyClose : ∀ {tn} {closeInput : Input} (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+               -> (agdaValidator par d closeInput ctx && agdaPolicy adr oref tn top ctx) ≡ true
                -> getPar par adr oref ⊢ getS d ctx ~[ closeInput ]~| getS' d ctx
 bothImplyClose = {!!}
 
@@ -165,14 +165,14 @@ transitionImpliesValidator : ∀ {adr oref} (par : Params) (d : Label) (i : Inpu
                            -> agdaValidator par d i ctx ≡ true
 transitionImpliesValidator = {!!}
 
-startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+startImpliesMinting : ∀ {par tn} (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                            -> getPar par adr oref ⊢ getMintS ctx
-                           -> agdaPolicy adr oref top ctx ≡ true
+                           -> agdaPolicy adr oref tn top ctx ≡ true
 startImpliesMinting = {!!}
   
-closeImpliesBoth : ∀ {closeInput : Input} (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
+closeImpliesBoth : ∀ {tn} {closeInput : Input} (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (top : ⊤) (ctx : ScriptContext)
                -> getPar par adr oref ⊢ getS d ctx ~[ closeInput ]~| getS' d ctx
-               -> ((agdaValidator par d closeInput ctx && agdaPolicy adr oref top ctx) ≡ true)
+               -> ((agdaValidator par d closeInput ctx && agdaPolicy adr oref tn top ctx) ≡ true)
 closeImpliesBoth = {!!}
 
 data Phase : Set where
@@ -203,10 +203,10 @@ Classifier = {!!}
 
 totalF : Argument -> Bool
 totalF arg with Classifier arg
-... | Initial  = agdaPolicy (arg .adr) (arg .oref) tt (arg .ctx)
+... | Initial  = agdaPolicy (arg .adr) (arg .oref) 0 tt (arg .ctx)
 ... | Running  = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) 
 ... | Terminal = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) &&
-                 agdaPolicy (arg .adr) (arg .oref) tt (arg .ctx)
+                 agdaPolicy (arg .adr) (arg .oref) 0 tt (arg .ctx)
 
 
 totalR : Argument -> Set
