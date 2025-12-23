@@ -4,6 +4,7 @@ open import Value
 
 module Validators.AccountSim where
 
+-- Defining the types of our Plinth Datum, referred to as Label in Agda
 AccMap = List (PubKeyHash × Value)
 
 Label = (AssetClass × AccMap)
@@ -11,7 +12,7 @@ Label = (AssetClass × AccMap)
 {-# COMPILE AGDA2HS AccMap #-}
 {-# COMPILE AGDA2HS Label #-}
 
-
+-- The abstract ScriptContext
 record ScriptContext : Set where
     field     
         inputVal      : Value
@@ -26,6 +27,9 @@ record ScriptContext : Set where
         tokenIn       : Bool
         tokenOut      : Bool
         time          : Nat
+
+-- Functions equivalent to Plinth ScriptContext functions or provided by our template
+--https://plutus.cardano.intersectmbo.org/haddock/latest/plutus-ledger-api/PlutusLedgerApi-V3-Data-Contexts.html#t:ScriptContext
 
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
@@ -91,7 +95,7 @@ checkPayment pkh v ctx = getPayment pkh ctx == v
 now : ScriptContext -> Nat
 now = ScriptContext.time
 
-
+-- The type of the Plinth Redeemer, referred to as Input in Agda
 data Input : Set where
   Open     : PubKeyHash -> Input
   Close    : PubKeyHash -> Input
@@ -102,7 +106,7 @@ data Input : Set where
 
 {-# COMPILE AGDA2HS Input #-}
 
-
+-- Helper functions of the validator
 insert : PubKeyHash -> Value -> AccMap -> AccMap
 insert pkh val [] = ((pkh , val) ∷ [])
 insert pkh val ((x , y) ∷ xs) = if (pkh == x)
@@ -124,7 +128,6 @@ lookup pkh ((x , y) ∷ xs) = if (pkh == x)
 {-# COMPILE AGDA2HS insert #-}
 {-# COMPILE AGDA2HS delete #-}
 {-# COMPILE AGDA2HS lookup #-}
-
 
 checkMembership : Maybe Value -> Bool
 checkMembership Nothing = False
@@ -154,6 +157,7 @@ checkTransfer tok (Just vF) (Just vT) from to val lab ctx = geq val emptyValue &
 {-# COMPILE AGDA2HS checkDeposit #-}
 {-# COMPILE AGDA2HS checkTransfer #-}
 
+-- The Validator
 agdaValidator : Label -> Input -> ScriptContext -> Bool
 agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ where
 
@@ -180,7 +184,7 @@ agdaValidator (tok , lab) inp ctx = checkTokenIn tok ctx && (case inp of λ wher
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
-
+-- Helper functions of the Minting Policy Script
 checkDatum : Address -> TokenName -> ScriptContext -> Bool
 checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
   (tok , map) -> ownAssetClass tn ctx == tok && map == []
@@ -198,6 +202,7 @@ isInitial addr oref tn ctx = consumes oref ctx &&
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
+-- The Minting Policy Script
 agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&

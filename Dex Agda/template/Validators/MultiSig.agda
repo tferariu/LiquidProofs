@@ -1,13 +1,13 @@
-
-open import Haskell.Prelude
+open import Haskell.Prelude 
 open import Lib
 open import Value
 
 module Validators.MultiSig where
 
+-- Defining the types of our Plinth Datum, referred to as Label in Agda
 data Info : Set where
   Holding : Info
-  Collecting : Value -> PubKeyHash -> Nat -> List PubKeyHash -> Info
+  Collecting : Value -> PubKeyHash -> Integer -> List PubKeyHash -> Info
 
 {-# COMPILE AGDA2HS Info #-}
 
@@ -15,7 +15,7 @@ Label = (AssetClass × Info)
 
 {-# COMPILE AGDA2HS Label #-}
 
-
+-- The abstract ScriptContext
 record ScriptContext : Set where
     field     
         inputVal      : Value
@@ -29,7 +29,10 @@ record ScriptContext : Set where
         tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
-        time          : Nat
+        validInterval : Interval
+
+-- Functions equivalent to Plinth ScriptContext functions or provided by our template
+--https://plutus.cardano.intersectmbo.org/haddock/latest/plutus-ledger-api/PlutusLedgerApi-V3-Data-Contexts.html#t:ScriptContext
 
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
@@ -92,11 +95,18 @@ checkTokenOutAddr adr = checkTokenOut
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
-now : ScriptContext -> Nat
-now = ScriptContext.time
+before : POSIXTime -> Interval -> Bool
+before record { getPOSIXTime = time } (start , end) = time < start
 
+after : POSIXTime -> Interval -> Bool
+after record { getPOSIXTime = time } (start , end) = time > end
+
+validRange : ScriptContext -> Interval
+validRange ctx = ScriptContext.validInterval ctx
+
+-- The type of the Plinth Redeemer, referred to as Input in Agda
 data Input : Set where
-  Propose : Value -> PubKeyHash -> Nat -> Input
+  Propose : Value -> PubKeyHash -> Integer -> Input
   Add     : PubKeyHash -> Input
   Pay     : Input
   Cancel  : Input
@@ -104,16 +114,19 @@ data Input : Set where
 
 {-# COMPILE AGDA2HS Input #-}
 
+-- The type of the smart contract parameters
 record Params : Set where
     no-eta-equality
+    pattern
     field
         authSigs  : List PubKeyHash
         nr : Nat
-        maxWait : Nat
+        maxWait : Integer
 open Params public
 
 {-# COMPILE AGDA2HS Params #-}
 
+-- Helper functions of the validator
 query : PubKeyHash -> List PubKeyHash -> Bool
 query pkh [] = False
 query pkh (x ∷ l') = (x == pkh) || query pkh l'
@@ -127,12 +140,11 @@ insert pkh (x ∷ l') = if (pkh == x)
 {-# COMPILE AGDA2HS query #-}
 {-# COMPILE AGDA2HS insert #-}
 
+expired : Integer -> ScriptContext -> Bool
+expired d ctx = before (record { getPOSIXTime = d }) (validRange ctx) 
 
-expired : Nat -> ScriptContext -> Bool
-expired d ctx = now ctx > d 
-
-notTooLate : Params -> Nat -> ScriptContext -> Bool
-notTooLate par d ctx = (now ctx) + (maxWait par) >= d  
+notTooLate : Params -> Integer -> ScriptContext -> Bool
+notTooLate par d ctx = before (record { getPOSIXTime = d - (maxWait par) }) (validRange ctx)
 
 {-# COMPILE AGDA2HS expired #-}
 {-# COMPILE AGDA2HS notTooLate #-}
@@ -180,20 +192,34 @@ checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
 checkValue : Address -> TokenName -> ScriptContext -> Bool
 checkValue addr tn ctx = lovelaces 2xMinValue < lovelaces (newValueAddr addr ctx) && checkTokenOutAddr addr (ownAssetClass tn ctx) ctx
 
-isInitial : Address -> TxOutRef -> TokenName -> ScriptContext -> Bool
-isInitial addr oref tn ctx = consumes oref ctx &&
+
+notIn : PubKeyHash -> List PubKeyHash -> Bool
+notIn x [] = True
+notIn x (y ∷ ys) = if x == y then False else notIn x ys
+
+noDups : List PubKeyHash -> Bool
+noDups [] = True
+noDups (x ∷ xs) = notIn x xs && noDups xs
+
+checkParams : Params -> Bool
+checkParams record { authSigs = authSigs ; nr = nr ; maxWait = maxWait }
+  = (noDups authSigs) && (lengthNat authSigs >= nr) && maxWait > 0 
+
+isInitial : Params -> Address -> TxOutRef -> TokenName -> ScriptContext -> Bool
+isInitial par addr oref tn ctx = consumes oref ctx &&
                           checkDatum addr tn ctx &&
-                          checkValue addr tn ctx
+                          checkValue addr tn ctx &&
+                          checkParams par
 
 
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
-agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
-agdaPolicy addr oref tn _ ctx =
+agdaPolicy : Params -> Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
+agdaPolicy par addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&
-                         isInitial addr oref tn ctx 
+                         isInitial par addr oref tn ctx 
   else if amt == -1 then not (continuingAddr addr ctx)
   else False
   where
