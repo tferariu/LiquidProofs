@@ -4,6 +4,7 @@ open import Value
 
 module Validators.DEx where
 
+-- Defining the types of our Plinth Datum, referred to as Label in Agda
 record Info : Set where
   no-eta-equality
   pattern
@@ -20,12 +21,12 @@ instance
   iEqInfo : Eq Info
   iEqInfo ._==_ = eqInfo
 
-
 Label = (AssetClass × Info)
 
 {-# COMPILE AGDA2HS Info #-}
 {-# COMPILE AGDA2HS Label #-}
 
+-- The abstract ScriptContext
 record ScriptContext : Set where
     field     
         inputVal      : Value
@@ -39,7 +40,10 @@ record ScriptContext : Set where
         tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
-        time          : Nat
+        validInterval : Interval
+
+-- Functions equivalent to Plinth ScriptContext functions or provided by our template
+--https://plutus.cardano.intersectmbo.org/haddock/latest/plutus-ledger-api/PlutusLedgerApi-V3-Data-Contexts.html#t:ScriptContext
 
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
@@ -102,10 +106,16 @@ checkTokenOutAddr adr = checkTokenOut
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
-now : ScriptContext -> Nat
-now = ScriptContext.time
+before : POSIXTime -> Interval -> Bool
+before record { getPOSIXTime = time } (start , end) = time < start
 
+after : POSIXTime -> Interval -> Bool
+after record { getPOSIXTime = time } (start , end) = time > end
 
+validRange : ScriptContext -> Interval
+validRange ctx = ScriptContext.validInterval ctx
+
+-- The type of the Plinth Redeemer, referred to as Input in Agda
 data Input : Set where
   Update   : Value -> Rational -> Input
   Exchange : Integer -> PubKeyHash -> Input
@@ -113,6 +123,7 @@ data Input : Set where
 
 {-# COMPILE AGDA2HS Input #-}
 
+-- The type of the smart contract parameters
 record Params : Set where
     no-eta-equality
     pattern
@@ -123,7 +134,7 @@ open Params public
 
 {-# COMPILE AGDA2HS Params #-}
 
-
+-- Helper functions of the validator
 checkRational : Rational -> Bool
 checkRational r = (numerator r >= 0) && (denominator r > 0)
 
@@ -133,12 +144,11 @@ ratioCompare a b r = a * (numerator r) <= b * (denominator r)
 checkPaymentRatio : PubKeyHash -> Integer -> AssetClass -> Rational -> ScriptContext -> Bool
 checkPaymentRatio pkh amt ac r ctx = ratioCompare amt (assetClassValueOf (getPayment pkh ctx) ac) r && checkMinValue (getPayment pkh ctx)
 
-
 {-# COMPILE AGDA2HS checkRational #-}
 {-# COMPILE AGDA2HS ratioCompare #-}
 {-# COMPILE AGDA2HS checkPaymentRatio #-}
 
-
+-- The Validator
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ where
   (Update v r) -> checkSigned (owner lab) ctx &&
@@ -155,6 +165,7 @@ agdaValidator par (tok , lab) red ctx = checkTokenIn tok ctx && (case red of λ 
            
 {-# COMPILE AGDA2HS agdaValidator #-}
 
+-- Helper functions of the Minting Policy Script
 checkDatum : Address -> TokenName -> ScriptContext -> Bool
 checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
   (tok , l) -> ownAssetClass tn ctx == tok && checkRational (ratio l)
@@ -172,6 +183,7 @@ isInitial addr oref tn ctx = consumes oref ctx &&
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
+-- The Thread Token Minting Policy
 agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&
@@ -180,7 +192,6 @@ agdaPolicy addr oref tn _ ctx =
   else False
   where
     amt = getMintedAmount ctx
-
 
 {-# COMPILE AGDA2HS agdaPolicy #-}
 

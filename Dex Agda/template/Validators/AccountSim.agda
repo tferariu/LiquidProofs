@@ -26,7 +26,7 @@ record ScriptContext : Set where
         tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
-        time          : Nat
+        validInterval : Interval
 
 -- Functions equivalent to Plinth ScriptContext functions or provided by our template
 --https://plutus.cardano.intersectmbo.org/haddock/latest/plutus-ledger-api/PlutusLedgerApi-V3-Data-Contexts.html#t:ScriptContext
@@ -92,8 +92,14 @@ checkTokenOutAddr adr = checkTokenOut
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
-now : ScriptContext -> Nat
-now = ScriptContext.time
+before : POSIXTime -> Interval -> Bool
+before record { getPOSIXTime = time } (start , end) = time < start
+
+after : POSIXTime -> Interval -> Bool
+after record { getPOSIXTime = time } (start , end) = time > end
+
+validRange : ScriptContext -> Interval
+validRange ctx = ScriptContext.validInterval ctx
 
 -- The type of the Plinth Redeemer, referred to as Input in Agda
 data Input : Set where
@@ -190,7 +196,7 @@ checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
   (tok , map) -> ownAssetClass tn ctx == tok && map == []
 
 checkValue : Address -> TokenName -> ScriptContext -> Bool
-checkValue addr tn ctx = checkTokenOutAddr addr (ownAssetClass tn ctx) ctx
+checkValue addr tn ctx = checkTokenOutAddr addr (ownAssetClass tn ctx) ctx && newValueAddr addr ctx == minValue
 
 isInitial : Address -> TxOutRef -> TokenName -> ScriptContext -> Bool
 isInitial addr oref tn ctx = consumes oref ctx &&
@@ -202,7 +208,7 @@ isInitial addr oref tn ctx = consumes oref ctx &&
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
--- The Minting Policy Script
+-- The Thread Token Minting Policy
 agdaPolicy : Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
 agdaPolicy addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&

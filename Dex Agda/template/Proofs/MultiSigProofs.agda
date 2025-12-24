@@ -2,14 +2,11 @@ open import Validators.MultiSig
 open import Lib
 open import Value
 
-
 open import Agda.Builtin.Char
 open import Agda.Builtin.Equality
 open import Agda.Builtin.Bool
 import Data.Nat as N
 import Data.Nat.Properties as N
---open import Data.Integer 
---open import Data.Integer.Properties
 open import Agda.Builtin.Int
 open import Agda.Builtin.Nat renaming (_==_ to eqNat; _<_ to ltNat; _+_ to addNat; _-_ to monusNat; _*_ to mulNat)
 open import Data.List
@@ -20,9 +17,7 @@ open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality.Core
 open import Data.Empty
 open import Data.Sum.Base
-
 open import Data.Product using ( ∃; ∃-syntax; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩; _×_ to _xx_)
-
 open import Haskell.Prim hiding (⊥ ; Any ; All) 
 open import Haskell.Prim.Integer
 open import Haskell.Prim.Bool
@@ -34,12 +29,25 @@ open import Haskell.Prim.Ord using (_<=_ ; _>=_)
 open import Haskell.Prim using (lengthNat)
 open import Haskell.Prelude using (lookup)
 
-
 open import ProofLib
 
 module Proofs.MultiSigProofs where
 
+-- Model and proofs for the Multi-Signature contract
 
+
+-- Extra definitions necessary for the model
+_∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
+x ∈ xs = Any (x ≡_) xs
+
+_∉_ : ∀ {A : Set} (x : A) (xs : List A) → Set
+x ∉ xs = ¬ (x ∈ xs)
+
+data Unique {a : Set} : List a → Set where
+  root : Unique []
+  _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
+
+-- The States of the State Transition System
 record State : Set where
   field
     datum      : Label
@@ -53,17 +61,8 @@ record State : Set where
     mint       : Integer
     token      : AssetClass
 open State
-
-
-_∈_ : ∀ {A : Set} (x : A) (xs : List A) → Set
-x ∈ xs = Any (x ≡_) xs
-
-_∉_ : ∀ {A : Set} (x : A) (xs : List A) → Set
-x ∉ xs = ¬ (x ∈ xs)
-
-
---Transition Rules
-
+  
+-- Model paramets consisting of the combined parameters of the validator and minting policy
 record MParams : Set where
     field
         address   : Address
@@ -74,6 +73,9 @@ record MParams : Set where
         maxWait   : Integer
 open MParams public
 
+-- Transition Rules of the State Transition System
+
+--The Initial Transition
 data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s tok}
@@ -91,7 +93,7 @@ data _⊢_ : MParams -> State -> Set where
     -------------------
     -> par ⊢ s
 
-
+--The Running Transitions
 data _⊢_~[_]~>_ : MParams -> State -> Input -> State -> Set where
  
   TPropose : ∀ {v tok pkh d s s' par} 
@@ -146,7 +148,7 @@ data _⊢_~[_]~>_ : MParams -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Cancel ]~> s'
 
-
+--The Terminal Transition
 data _⊢_~[_]~|_ : MParams -> State -> Input -> State -> Set where
 
   TClose : ∀ {par s s' tok}
@@ -159,22 +161,6 @@ data _⊢_~[_]~|_ : MParams -> State -> Input -> State -> Set where
     -> mint s' ≡ -1
     -------------------
     -> par ⊢ s ~[ Close ]~| s'
-
-data Unique {a : Set} : List a → Set where
-  root : Unique []
-  _::_ : {x : a} {l : List a} -> x ∉ l -> Unique l -> Unique (x ∷ l)
-
-
-noDupsLemma : ∀ {x ys} -> notIn x ys ≡ true -> x ∉ ys
-noDupsLemma {x} {[]} p = λ ()
-noDupsLemma {x} {y ∷ ys} p with x == y in eq
-...| True = ⊥-elim (get⊥ (sym p))
-...| False = λ { (here refl) → ⊥-elim (n≠n x eq) ; (there z) → noDupsLemma p z}
-
-noDups->Unique : ∀ (l : List PubKeyHash) -> noDups l ≡ true -> Unique l
-noDups->Unique [] p = root
-noDups->Unique (x ∷ []) p = (λ ()) :: root
-noDups->Unique (x ∷ y ∷ l) p = (noDupsLemma (get p)) :: noDups->Unique (y ∷ l) (go (notIn x (y ∷ l)) p)
 
 
 --Valid State
@@ -197,10 +183,6 @@ data ValidS : State -> Set where
     --------------------------------
     -> ValidS s
 
---Valid Parameters
-ValidP : MParams -> Set 
-ValidP par = Unique (authSigs par) × length (authSigs par) N.≥ nr par × (ltInteger (pos 0) (maxWait par) ≡ true)
-
 --Multi-Step Transition
 data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
 
@@ -214,12 +196,15 @@ data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
     -------------------------
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 
-  fin : ∀ { par s s' s'' i is }
-    -> par ⊢ s ~[ i ]~| s'
-    -> par ⊢ s' ~[ is ]~* s''
-    -------------------------
-    -> par ⊢ s ~[ (i ∷ is) ]~* s''
 
+  fin : ∀ { par s s' is }
+    -> par ⊢ s ~[ Close ]~| s'
+    -------------------------
+    -> par ⊢ s ~[ ((Close) ∷ is) ]~* s'
+
+--Valid Parameters
+ValidP : MParams -> Set 
+ValidP par = Unique (authSigs par) × length (authSigs par) N.≥ nr par × (ltInteger (pos 0) (maxWait par) ≡ true)
 
 --State Validity sub-lemmas
 diffLabels : ∀ {v pkh d sigs tok1 tok2} (dat : Label) -> dat ≡ (tok1 , Holding)
@@ -235,11 +220,9 @@ sameSigs : ∀ {v v' pkh pkh' d d' sigs sigs'} {tok tok' : AssetClass}
   -> (tok , Collecting v pkh d sigs) ≡ (tok' , Collecting v' pkh' d' sigs')  -> sigs ≡ sigs'
 sameSigs refl = refl
 
-
 reduce∈ : ∀ {A : Set} {x y : A} {xs} -> y ∈ (x ∷ xs) -> y ≢ x -> y ∈ xs
 reduce∈ (here px) p2 = ⊥-elim (p2 px)
 reduce∈ (there p1) p2 = p1 
-
 
 insertPreserves∈ : ∀ {x y zs}
   -> x ∈ insert y zs -> (y == x) ≡ false -> x ∈ zs
@@ -252,7 +235,6 @@ insertPreserves∈ {x} {y} {z ∷ zs} p1 p2 with y == x in eq1
 ...| true rewrite ==to≡ x z eq3 = here refl 
 ...| false = there (insertPreserves∈ (reduce∈ p1 (λ {refl → n≠n z eq3})) eq1)
 
-
 insertPreservesUniqueness : ∀ {sig sigs}
   -> Unique sigs -> Unique (insert sig sigs)
 insertPreservesUniqueness root = (λ ()) :: root
@@ -260,13 +242,22 @@ insertPreservesUniqueness {sig} {(x ∷ xs)} (p :: ps) with sig == x in eq
 ...| false = (λ z → p (insertPreserves∈ z eq)) :: (insertPreservesUniqueness ps)
 ...| true = p :: ps
 
+noDupsLemma : ∀ {x ys} -> notIn x ys ≡ true -> x ∉ ys
+noDupsLemma {x} {[]} p = λ ()
+noDupsLemma {x} {y ∷ ys} p with x == y in eq
+...| True = ⊥-elim (get⊥ (sym p))
+...| False = λ { (here refl) → ⊥-elim (n≠n x eq) ; (there z) → noDupsLemma p z}
 
---State Validity Invariant
+noDups->Unique : ∀ (l : List PubKeyHash) -> noDups l ≡ true -> Unique l
+noDups->Unique [] p = root
+noDups->Unique (x ∷ []) p = (λ ()) :: root
+noDups->Unique (x ∷ y ∷ l) p = (noDupsLemma (get p)) :: noDups->Unique (y ∷ l) (go (notIn x (y ∷ l)) p)
+
+--State Validity Invariants
 validStateInitial : ∀ {s par}
   -> par ⊢ s
   -> ValidS s
 validStateInitial (TStart p1 p' p2 p3 p4 p5 p6 p7 p8 p9 p10) = Hol p1 p3 p7
-
 validParamsInitial : ∀ {s par}
   -> par ⊢ s
   -> ValidP par
@@ -284,22 +275,6 @@ validStateTransition (Col pf1 pf2 pf3 pf4 pf5 pf6) (TAdd p1 p2 p3 p4 p5 p6 p7 p8
                      = Col p4 pf2 pf3 (insertPreservesUniqueness pf4) p7 p9
 validStateTransition iv (TPay p1 p2 p3 p4 p5 p6 p7 p8 p9 ) = Hol p4 p7 p9 
 validStateTransition iv (TCancel p1 p2 p3 p4 p5 p6 p7 p8) = Hol p3 p6 p8
-
-{-deprecated
-validStateFinal : ∀ {s s' : State} {i par}
-  -> ValidS s
-  -> par ⊢ s ~[ i ]~| s'
-  -> ValidS s'
-validStateFinal iv (TClose p1 p2 p3 p4 p5 p6 p7) = Stp p4 p6
-
-validStateMulti : ∀ {s s' : State} {is par}
-  -> ValidS s
-  -> par ⊢ s ~[ is ]~* s'
-  -> ValidS s'
-validStateMulti iv root = iv
-validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
-validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x
--}
 
 
 --Prop1 sub-lemmas and helper functions
@@ -396,8 +371,6 @@ prop1 s s' par p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13  = prop s s' par (auth
 
 
 --UniqueInsertLemma sub-lemmas
-
-
 _⊆_ : List a -> List a -> Set
 l1 ⊆ l2 = All (_∈ l2) l1
 
@@ -455,7 +428,6 @@ insertList-sublem : (l1 l2 : List PubKeyHash) (x : PubKeyHash) -> x ∈ l2 -> x 
 insertList-sublem [] l x pf = pf
 insertList-sublem (y ∷ l1) l2 x pf = insertList-sublem l1 (insert y l2) x (insert-lem2 x y l2 pf)
 
-
 insertList-lem : (l1 l2 : List PubKeyHash) -> l1 ⊆ insertList l1 l2
 insertList-lem [] l = []
 insertList-lem (x ∷ l1) l2 = insertList-sublem l1 (insert x l2) x (insert-lem1 x l2) ∷ insertList-lem l1 (insert x l2)
@@ -463,7 +435,6 @@ insertList-lem (x ∷ l1) l2 = insertList-sublem l1 (insert x l2) x (insert-lem1
 --Unique Insert Lemma
 uil : ∀ (l1 l2 : List PubKeyHash) (pf : Unique l1) -> (length (insertList l1 l2) N.≥ length l1)
 uil l1 l2 pf = unique-lem (insertList-lem l1 l2) pf
-
   
 --Multi-Step lemma
 lemmaMultiStep : ∀ (par : MParams) (s s' s'' : State) (is is' : List Input)
@@ -472,7 +443,17 @@ lemmaMultiStep : ∀ (par : MParams) (s s' s'' : State) (is is' : List Input)
                    -> par ⊢ s  ~[ is ++ is' ]~* s''
 lemmaMultiStep par s .s s'' [] is' root p2 = p2
 lemmaMultiStep par s s' s'' (x ∷ is) is' (cons {s' = s'''} p1 p2) p3 = cons p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
-lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''} p1 p2) p3 = fin p1 (lemmaMultiStep par s''' s' s'' is is' p2 p3)
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''} p1) root = fin p1 
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''}
+  (TClose x₁ x₂ x₃ () x₅ x₆ x₇)) (cons (TPropose x₈ x₉ x₁₀ x₁₁ x₁₂ x₁₃ refl x₁₅ x₁₆ x₁₇) p3)
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''}
+  (TClose x₁ x₂ x₃ () x₅ x₆ x₇)) (cons (TAdd x₈ x₉ x₁₀ x₁₁ x₁₂ refl x₁₄ x₁₅ x₁₆) p3) 
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''}
+  (TClose x₁ x₂ x₃ () x₅ x₆ x₇)) (cons (TPay x₈ x₉ x₁₀ x₁₁ x₁₂ refl x₁₄ x₁₅ x₁₆) p3) 
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''}
+  (TClose x₁ x₂ x₃ () x₅ x₆ x₇)) (cons (TCancel x₈ x₉ x₁₀ x₁₁ refl x₁₃ x₁₄  x₁₅) p3)
+lemmaMultiStep par s s' s'' (x ∷ is) is' (fin {s' = s'''} (TClose x₁ x₂ x₃ () x₅ x₆ x₇)) (fin (TClose x₈ x₉ refl x₁₁ x₁₂ x₁₃ x₁₄))
+
 
 --Prop2 (Can add signatures 1 by 1 and then pay)
 prop2 : ∀ { v pkh d sigs tok } (s s' : State) (par : MParams)
@@ -488,7 +469,6 @@ prop2 : ∀ { v pkh d sigs tok } (s s' : State) (par : MParams)
           -> hasToken s' ≡ true
           -> tsig s' ≡ pkh
           -> par ⊢ s ~[ ((makeIs (authSigs par)) ++ [ Pay ]) ]~* s'
-
 
 prop2 {d = d} {sigs = sigs} {tok = tok}
   s1@record { datum = .(tok , Collecting outVal sig d sigs) ; value = .(addValue value outVal) ; outVal = oV ; interval = interval ; tsig = tsig ; continues = .true ; spends = spends ; hasToken = .true ; mint = mint ; token = token }
@@ -520,7 +500,6 @@ prop2 {d = d} {sigs = sigs} {tok = tok}
           }
                                                                              
 
-
 takeLength : ∀ {a : Nat} {l : List PubKeyHash} -> length l N.≥ a -> a N.≤ length (take a l)
 takeLength {zero} {[]} p = p
 takeLength {zero} {x ∷ l} p = N.z≤n
@@ -543,9 +522,7 @@ takeUnique {suc a} {[]} p = p
 takeUnique {suc a} {x ∷ l} (p :: ps) = ∉take p :: (takeUnique ps)
 
 
-
-
---Weak Liquidity (For any state that is valid and has valid parameters,
+--Liquidity (For any state that is valid and has valid parameters,
 --there exists another state and some inputs such that we can transition
 --there and have no value left in the contract)
 liquidity : ∀ (par : MParams) (s : State) (pkh : PubKeyHash) 
@@ -554,7 +531,7 @@ liquidity : ∀ (par : MParams) (s : State) (pkh : PubKeyHash)
           
 liquidity par
   s@record { datum = (tok , Holding) ; value = value ; outVal = outVal ; interval = interval ; tsig = tsig ; continues = continues ; spends = spends ; hasToken = hasToken ; mint = mint ; token = token } pkh (Hol refl p p') (p2 , p3 , p4) with (lovelaces 2xMinValue > lovelaces value) in eq
-...| true = ⟨ s' , ⟨ [ Close ] , ((fin (TClose refl eq p refl p' refl refl) root) , refl) ⟩ ⟩  --(ltToGt (value) (2xMinValue) (notGeqToLt (value) (2xMinValue) eq))
+...| true = ⟨ s' , ⟨ [ Close ] , (fin (TClose refl eq p refl p' refl refl) , refl) ⟩ ⟩ 
      where
        s' : State
        s' = record
@@ -611,7 +588,7 @@ liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = v
               { datum = tok , Holding
               ; value = emptyValue
               ; outVal = value
-              ; interval = 0 , 0 --N.suc (N.suc (N.suc d'))
+              ; interval = 0 , 0 
               ; tsig = pkh
               ; continues = true
               ; spends = spends
@@ -623,7 +600,7 @@ liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = v
              { datum = tok , (Collecting value pkh 0 [])
              ; value = value
              ; outVal = outVal
-             ; interval = maxWait par , 0 --N.suc (N.suc d')
+             ; interval = maxWait par , 0
              ; tsig = tsig
              ; continues = true
              ; spends = spends
@@ -635,7 +612,7 @@ liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = v
               { datum = tok , Holding
               ; value = value
               ; outVal = outVal
-              ; interval = (d' Haskell.Prelude.+ 1) , 0 --N.suc d'
+              ; interval = (d' Haskell.Prelude.+ 1) , 0 
               ; tsig = tsig
               ; continues = true
               ; spends = spends
@@ -645,24 +622,9 @@ liquidity par s@record { datum = (tok , Collecting v' pkh' d' sigs') ; value = v
               }
 
 
+-- Extracting the State from ScriptContext
 
-
-
-
---sub-lemmas and helper functions for validator returning true implies transition
-
-
-l=l : ∀ (l : List Nat) -> (l == l) ≡ true
-l=l [] = refl
-l=l (x ∷ l) rewrite n=n x = l=l l
-
-queryTo∈ : ∀ {sig sigs} -> (query sig sigs) ≡ true -> sig ∈ sigs
-queryTo∈ {sig} {x ∷ sigs} pf with orToSum (x == sig) (query sig sigs) pf
-... | inj₁ a = here (sym (==to≡ x sig a))
-... | inj₂ b = there (queryTo∈ b)
-
-
-
+-- Starting State for normal transitions
 getS : Label -> ScriptContext -> State
 getS (tok , lab) ctx = record
               { datum = (tok , lab)
@@ -677,7 +639,7 @@ getS (tok , lab) ctx = record
               ; token = (0 , 0)
               }
 
-
+-- Initial State when we mint the token and put the smart contract on the blockchain
 getMintS : TokenName -> ScriptContext -> State
 getMintS tn ctx = record
                 { datum = newDatum ctx
@@ -692,8 +654,7 @@ getMintS tn ctx = record
                 ; token = ownAssetClass tn ctx
                 }
 
-
-
+-- Resulting State for normal transitions
 getS' : Label -> ScriptContext -> State
 getS' (tok , Holding) ctx = record
              { datum = newDatum ctx
@@ -720,7 +681,7 @@ getS' (tok , Collecting v pkh d sigs) ctx = record
              ; token = (0 , 0)
              }
 
-
+-- Getting the Model parameters from the parameters of the validator and minting policy
 getPar : Params -> Address -> TxOutRef -> TokenName -> MParams
 getPar p adr oref tn = record
                      { address = adr
@@ -732,19 +693,23 @@ getPar p adr oref tn = record
                      }
 
 
---Validator returning true implies transition relation is inhabited
+-- Lemma for validator returning true implies transition
+queryTo∈ : ∀ {sig sigs} -> (query sig sigs) ≡ true -> sig ∈ sigs
+queryTo∈ {sig} {x ∷ sigs} pf with orToSum (x == sig) (query sig sigs) pf
+... | inj₁ a = here (sym (==to≡ x sig a))
+... | inj₂ b = there (queryTo∈ b)
+
+--Validator returning true implies that we can perform a transition
 validatorImpliesTransition : ∀ {adr oref tn} (par : Params) (d : Label) (i : Input) (ctx : ScriptContext)
                            -> i ≢ Close
                            -> (pf : agdaValidator par d i ctx ≡ true)
                            -> getPar par adr oref tn ⊢ getS d ctx ~[ i ]~> getS' d ctx
 
 validatorImpliesTransition par (tok , Holding) Close ctx nc pf = ⊥-elim (nc refl)
---validatorImpliesTransition par (tok , Collecting v pkh d sigs) Close ctx nc pf = ⊥-elim (nc refl)
 validatorImpliesTransition par (tok , Holding) (Propose v pkh d) ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Holding) ; validInterval = validInterval ; signature = signature ; continues = continues ; inputRef = inputRef ; tokenIn = true ; tokenOut = true ; mint = mint } nc pf
   = ⊥-elim (&&5false (eqValue outputVal inputVal) (geq inputVal v) (lovelaces v >= lovelaces minValue) (notTooLate par d ctx) continues pf)
-  --(ltNat d (addNat time (maxWait par)) || eqNat (addNat time (maxWait par)) d) continues  pf)
 validatorImpliesTransition par (tok , Holding) (Propose v pkh d) ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; signature = signature ; continues = continues ; inputRef = inputRef ; tokenIn = true ; tokenOut = true ; mint = mint } nc pf
-  rewrite sym (==vto≡ v v' (get (go continues (go (notTooLate par d ctx) (go (lovelaces v >= lovelaces minValue) (go (geq inputVal v) (go (eqValue outputVal inputVal) pf))))))) | --(ltInteger v inputVal || eqInteger inputVal v)
+  rewrite sym (==vto≡ v v' (get (go continues (go (notTooLate par d ctx) (go (lovelaces v >= lovelaces minValue) (go (geq inputVal v) (go (eqValue outputVal inputVal) pf))))))) | 
   sym (==to≡ pkh pkh' (get (go (eqValue v v') (go continues (go (notTooLate par d ctx) (go (lovelaces v >= lovelaces minValue) (go (geq inputVal v) (go (eqValue outputVal inputVal) pf)))))))) |
   sym (==ito≡ d d' (get (go (pkh == pkh') (go (eqValue v v') (go continues (go (notTooLate par d ctx) (go (lovelaces v >= lovelaces minValue) (go (geq inputVal v) (go (eqValue outputVal inputVal) pf))))))))) |
   (==lto≡ sigs' [] (get (go (d == d') (go (pkh == pkh') (go (eqValue v v') (go continues (go (notTooLate par d ctx) (go (lovelaces v >= lovelaces minValue) (go (geq inputVal v) (go (eqValue outputVal inputVal) pf)))))))))) |
@@ -783,15 +748,12 @@ validatorImpliesTransition par (tok , Collecting v pkh d sigs) (Add sig) record 
   (sym (==to≡ sig signature (get (go (outputVal == inputVal) pf)))) refl refl --refl
   (sym (==vto≡ outputVal inputVal (get pf))) refl
   (get (go (query sig (authSigs par)) (go (sig == signature) (go (outputVal == inputVal) pf)))) refl refl
-  
 validatorImpliesTransition par (tok , Collecting v pkh d sigs) Pay record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; signature = signature ; continues = continues ; inputRef = inputRef ; tokenIn = true ; tokenOut = true ; mint = mint } nc pf
   = ⊥-elim (&&2false (ltNat (nr par) (lengthNat sigs) || eqNat (lengthNat sigs) (nr par)) continues pf)
 validatorImpliesTransition par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok' , Collecting v' pkh' d' sigs') ; signature = signature ; continues = continues ; inputRef = inputRef ; tokenIn = true ; tokenOut = true ; mint = mint } nc pf = ⊥-elim (&&2false (eqValue outputVal inputVal) continues pf)
 
 
-
-
-
+-- Minting the token implies we are in the initial state of our model
 mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                            -> getMintedAmount ctx ≡ 1
                            -> (pf : agdaPolicy par adr oref tn top ctx ≡ true)
@@ -809,7 +771,7 @@ mintingImpliesStart {record { authSigs = authSigs ; nr = nr ; maxWait = maxWait 
   (go (consumes oref ctx) (go continues pf)))))) 
 mintingImpliesStart adr oref tn top record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , Collecting x x₁ x₂ x₃) ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = .1  } refl pf = ⊥-elim (&&2false continues (eqNat oref inputRef) pf)
 
-
+-- Validator returning true and burning a token implies we are in the terminal state 
 bothImplyClose : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                -> getMintedAmount ctx ≡ -1
                -> (agdaValidator par d Close ctx && agdaPolicy par adr oref tn top ctx) ≡ true
@@ -820,14 +782,13 @@ bothImplyClose par (tok , Collecting x x₁ x₂ x₃) adr oref tn top ctx@recor
 bothImplyClose par (tok , Collecting x x₁ x₂ x₃) adr oref tn top ctx@record { tokenOut = true ; mint = .-1 } refl p = ⊥-elim (&&false (checkTokenIn tok ctx) (get p))
 
 
---sub-lemmas for transition implies validation returns true
-
+--Lemma for transition implies validation returns true
 
 ∈toQuery : ∀ {sig sigs} -> sig ∈ sigs -> (query sig sigs) ≡ true
 ∈toQuery {sig} (here refl) rewrite n=n sig = refl
 ∈toQuery (there pf) rewrite ∈toQuery pf = ||true
 
-
+-- Performing a transition implies that the validator returns true
 transitionImpliesValidator : ∀ {adr oref tn} (par : Params) (dat : Label) (i : Input) (ctx : ScriptContext)
                            -> getPar par adr oref tn ⊢ getS dat ctx ~[ i ]~> getS' dat ctx
                            -> agdaValidator par dat i ctx ≡ true
@@ -840,24 +801,25 @@ transitionImpliesValidator par (tok , Collecting v pkh d sigs) Pay record { inpu
 transitionImpliesValidator par (tok , Collecting v pkh d sigs) Cancel record { inputVal = inputVal ; outputVal = .(inputVal) ; outputDatum = .(tok , Holding) ; continues = .true ; inputRef = inputRef ; tokenIn = .true ; tokenOut = .true } (TCancel p1 refl refl refl p5 refl refl refl)
   rewrite v=v inputVal | t=t tok | p1 = refl 
 
+-- Being in the initial model state implies we can mint a token
 startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                            -> getPar par adr oref tn ⊢ getMintS tn ctx
                            -> agdaPolicy par adr oref tn top ctx ≡ true
 startImpliesMinting {record { authSigs = authSigs ; nr = nr ; maxWait = maxWait }} adr oref tn top record { inputVal = _ ; outputVal = _ ; outputDatum = .((cs , tn) , Holding) ; payments = _ ; signature = _ ; continues = .true ; inputRef = .(outputRef (getPar (record { authSigs = authSigs ; nr = nr ; maxWait = maxWait }) adr oref tn)) ; mint = .1 ; tokCurrSymbol = cs ; tokenIn = _ ; tokenOut = .true ; validInterval = _ } (TStart refl p refl refl refl refl refl refl p1 p2 p3)
   rewrite n=n oref | t=t (cs , tn) | p | p1 | p2 | p3 = refl
 
-
+-- Getting to the terminal state implies that the validator returns true and a token can be burned
 closeImpliesBoth : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                -> (getPar par adr oref tn ⊢ getS d ctx ~[ Close ]~| getS' d ctx)
                -> (agdaValidator par d Close ctx && agdaPolicy par adr oref tn top ctx) ≡ true
 closeImpliesBoth par (tok , Holding) adr oref tn top record { continues = .false ; tokenIn = .true ; tokenOut = .false ; mint = .-1 } (TClose refl p2 p3 refl refl refl refl) rewrite p2 = refl 
 
+-- Defining the components for the equivalence relation between the model and the validator.
 
 data Phase : Set where
   Initial  : Phase
   Running  : Phase
   Terminal : Phase
-
 
 record Argument : Set where
   field
@@ -870,6 +832,15 @@ record Argument : Set where
     ctx  : ScriptContext 
 open Argument
 
+
+-- The equivalence relation
+record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
+  field to   : ∀ {a} -> f a ≡ true -> R a
+        from : ∀ {a} -> R a        -> f a ≡ true
+
+-- If we mint exactly 1 token we are in the Initial Phase
+-- If we burn a token and the input is Close, we are in the Terminal Phase
+-- Otherwise we are in the Running Phase
 Classifier : Argument -> Phase
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = pos 0 } } = Running
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = pos (suc 0) } } = Initial
@@ -881,8 +852,7 @@ Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Pay 
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Cancel ; ctx = record { mint = (negsuc zero) } } = Running
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = record { mint = (negsuc zero) } } = Terminal
 
-
-
+-- The Validator as a function returning a boolean
 totalF : Argument -> Bool
 totalF arg with Classifier arg
 ... | Initial  = agdaPolicy (arg .par) (arg .adr) (arg .oref) (arg .tn) tt (arg .ctx)
@@ -890,14 +860,14 @@ totalF arg with Classifier arg
 ... | Terminal = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) &&
                  agdaPolicy (arg .par) (arg .adr) (arg .oref) (arg .tn) tt (arg .ctx)
 
-
+-- The State Transition System as a relation
 totalR : Argument -> Set
 totalR arg with Classifier arg
 ... | Initial  = getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getMintS (arg .tn) (arg .ctx)
 ... | Running  = getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .dat) (arg .ctx) 
 ... | Terminal =  getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .dat) (arg .ctx)
 
-
+-- Lemma for when the input is Close
 removeClose : ∀ (arg : Argument) -> (getMintedAmount (ctx arg) ≢ (negsuc zero))
                -> (agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) ≡ true)
                -> getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .dat) (arg .ctx)
@@ -910,12 +880,7 @@ removeClose record { par = par ; adr = adr ; oref = oref ; dat = (fst , Collecti
 removeClose record { par = par ; adr = adr ; oref = oref ; dat = (fst , Holding) ; inp = Close ; ctx = record { tokenIn = hasTokenIn ; tokenOut = true } } p1 p2 = ⊥-elim (&&false hasTokenIn p2)
 removeClose record { par = par ; adr = adr ; oref = oref ; dat = (fst , Collecting x x₁ x₂ x₃) ; inp = Close ; ctx = record { tokenIn = hasTokenIn ; tokenOut = true } } p1 p2 = ⊥-elim (&&false hasTokenIn p2)
 
-
-record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
-  field to   : ∀ {a} -> f a ≡ true -> R a
-        from : ∀ {a} -> R a        -> f a ≡ true
-
-
+-- The equivalence proof
 totalEquiv : totalF ≈ totalR
 totalEquiv = record { to = λ { {arg@record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { mint = pos 0 } }} x → removeClose arg (λ ()) x ;
                                {record { par = par ; adr = adr ; oref = oref ; tn = tn ; dat = dat ; inp = inp ; ctx = ctx@record { mint = pos (suc 0) } }} x → mintingImpliesStart {par} adr oref tn tt ctx refl x ; --mintingImpliesStart adr oref tt ctx refl x ;
@@ -937,6 +902,7 @@ totalEquiv = record { to = λ { {arg@record { par = par ; adr = adr ; oref = ore
                                {record { par = par ; adr = adr ; oref = oref ; tn = tn ; dat = dat ; inp = Close ; ctx = ctx@record { mint = (negsuc zero) } }} x → closeImpliesBoth par dat adr oref tn tt ctx x } }
 
 
+-- Proof that several components (outVal, interval, tsig, spends, mint, token) of the starting state are irrelevant to the state transition and can be replaced with anything
 inputRewrite : ∀ {oV t sig spn m tok} (par : MParams) (s s' : State) (i : Input)
                  -> par ⊢ s ~[ i ]~> s'
                  -> par ⊢ record

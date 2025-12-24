@@ -23,8 +23,8 @@ checkPaymentRatio ::
                   PubKeyHash ->
                     Integer -> AssetClass -> Rational -> ScriptContext -> Bool
 checkPaymentRatio pkh amt ac r ctx
-  = ratioCompare amt (assetClassValueOf (getPayments pkh ctx) ac) r
-      && checkMinValue (getPayments pkh ctx)
+  = ratioCompare amt (assetClassValueOf (getPayment pkh ctx) ac) r &&
+      checkMinValue (getPayment pkh ctx)
 
 agdaValidator :: Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator par (tok, lab) red ctx

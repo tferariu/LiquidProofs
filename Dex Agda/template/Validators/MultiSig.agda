@@ -149,6 +149,7 @@ notTooLate par d ctx = before (record { getPOSIXTime = d - (maxWait par) }) (val
 {-# COMPILE AGDA2HS expired #-}
 {-# COMPILE AGDA2HS notTooLate #-}
 
+-- The Validator
 agdaValidator : Params -> Label -> Input -> ScriptContext -> Bool
 agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
   (case ((checkTokenOut tok ctx) , lab , red) of λ where
@@ -183,7 +184,7 @@ agdaValidator param (tok , lab) red ctx = checkTokenIn tok ctx &&
 
 {-# COMPILE AGDA2HS agdaValidator #-}
 
-
+-- Helper functions of the Minting Policy Script
 checkDatum : Address -> TokenName -> ScriptContext -> Bool
 checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
   (tok , Holding) -> ownAssetClass tn ctx == tok
@@ -191,7 +192,6 @@ checkDatum addr tn ctx = case (newDatumAddr addr ctx) of λ where
 
 checkValue : Address -> TokenName -> ScriptContext -> Bool
 checkValue addr tn ctx = lovelaces 2xMinValue < lovelaces (newValueAddr addr ctx) && checkTokenOutAddr addr (ownAssetClass tn ctx) ctx
-
 
 notIn : PubKeyHash -> List PubKeyHash -> Bool
 notIn x [] = True
@@ -212,10 +212,14 @@ isInitial par addr oref tn ctx = consumes oref ctx &&
                           checkParams par
 
 
+{-# COMPILE AGDA2HS notIn #-}
+{-# COMPILE AGDA2HS noDups #-}
+{-# COMPILE AGDA2HS checkParams #-}
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}
 {-# COMPILE AGDA2HS isInitial #-}
 
+-- The Thread Token Minting Policy
 agdaPolicy : Params -> Address -> TxOutRef -> TokenName -> ⊤ -> ScriptContext -> Bool
 agdaPolicy par addr oref tn _ ctx =
   if      amt == 1  then continuingAddr addr ctx &&

@@ -35,8 +35,9 @@ open import ProofLib
 
 module Proofs.DExProofs where
 
+-- Model and proofs for the Limit Order Book Distributed Exchange contract
 
-
+-- The States of the State Transition System
 record State : Set where
   field
     datum      : Label
@@ -50,6 +51,7 @@ record State : Set where
     token      : AssetClass
 open State
 
+-- Model paramets consisting of the combined parameters of the validator and minting policy
 record MParams : Set where
     field
         address   : Address
@@ -59,6 +61,9 @@ record MParams : Set where
         buyC   : AssetClass
 open MParams public
 
+-- Transition Rules of the State Transition Model
+
+-- Initial State Transition
 data _⊢_ : MParams -> State -> Set where
 
   TStart : ∀ {par s l}
@@ -72,8 +77,7 @@ data _⊢_ : MParams -> State -> Set where
     -------------------
     -> par ⊢ s
 
-
-
+-- Running State Transitions
 data _⊢_~[_]~>_ : MParams -> State -> Input -> State -> Set where
  
   TUpdate : ∀ {v r s s' par}
@@ -89,7 +93,6 @@ data _⊢_~[_]~>_ : MParams -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ (Update v r) ]~> s'
 
-
   TExchange : ∀ {amt pkh s s' par}
     -> value s ≡ value s' <> assetClassValue (sellC par) amt
     -> datum s' ≡ datum s
@@ -102,8 +105,7 @@ data _⊢_~[_]~>_ : MParams -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ (Exchange amt pkh) ]~> s'
 
-
-
+-- Terminal State Transition
 data _⊢_~[_]~|_ : MParams -> State -> Input -> State -> Set where
 
   TClose : ∀ {s s' par}
@@ -116,11 +118,6 @@ data _⊢_~[_]~|_ : MParams -> State -> Input -> State -> Set where
     -------------------
     -> par ⊢ s ~[ Close ]~| s'
     
-
-
-Valid : State -> Set 
-Valid s = checkRational (ratio (snd (datum s))) ≡ true × continues s ≡ true × hasToken s ≡ true
-
 
 --Multi-Step Transition
 data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
@@ -135,12 +132,15 @@ data _⊢_~[_]~*_ : MParams -> State -> List Input -> State -> Set where
     -------------------------
     -> par ⊢ s ~[ (i ∷ is) ]~* s''
 
-  fin : ∀ { par s s' s'' i is }
-    -> par ⊢ s ~[ i ]~| s'
-    -> par ⊢ s' ~[ is ]~* s''
+  fin : ∀ { par s s' is }
+    -> par ⊢ s ~[ Close ]~| s'
     -------------------------
-    -> par ⊢ s ~[ (i ∷ is) ]~* s''
+    -> par ⊢ s ~[ ((Close) ∷ is) ]~* s'
 
+
+-- State Validity Predicate
+Valid : State -> Set 
+Valid s = checkRational (ratio (snd (datum s))) ≡ true × continues s ≡ true × hasToken s ≡ true
 
 --State Validity Invariant
 validStateInitial : ∀ {s par}
@@ -156,27 +156,14 @@ validStateTransition v (TUpdate x x₁ refl x₃ x₄ x₅ x₆ x₇ x₈) = x�
 validStateTransition (fst , snd , thd) (TExchange x refl x₂ x₃ x₄ x₅ x₆ x₇) = fst , x₅ , x₇
 
 
-{- deprecated
-validStateFinal : ∀ {s s' : State} {i par}
-  -> ValidS s
-  -> par ⊢ s ~[ i ]~| s'
-  -> ValidS s'
-validStateFinal iv (TClose p1 p2 p3 p4 p5 p6) = Stp p4 
-
-validStateMulti : ∀ {s s' : State} {is par}
-  -> ValidS s
-  -> par ⊢ s ~[ is ]~* s'
-  -> ValidS s'
-validStateMulti iv root = iv
-validStateMulti iv (cons pf x) = validStateMulti (validStateTransition iv pf) x
-validStateMulti iv (fin pf x) = validStateMulti (validStateFinal iv pf) x-}
-
-
+--Liquidity (For any state that is valid and has valid parameters,
+--there exists another state and some inputs such that we can transition
+--there and have no value left in the contract)
 liquidity : ∀ (par : MParams) (s : State) 
           -> Valid s
           -> ∃[ s' ] ∃[ is ] ((par ⊢ s ~[ is ]~* s') × (value s' ≡ MkMap []) )
 
-liquidity par s (p1 , p2 , p3) = ⟨ s' , ⟨  Close ∷ [] , (fin (TClose refl refl p2 refl p3 refl) root , refl) ⟩ ⟩
+liquidity par s (p1 , p2 , p3) = ⟨ s' , ⟨  Close ∷ [] , (fin (TClose refl refl p2 refl p3 refl) , refl) ⟩ ⟩
   where
     s' = record
           { datum = datum s
@@ -191,7 +178,9 @@ liquidity par s (p1 , p2 , p3) = ⟨ s' , ⟨  Close ∷ [] , (fin (TClose refl 
           }
 
 
+-- Extracting the State from ScriptContext
 
+-- Starting State for normal transitions
 getS : Label -> ScriptContext -> State
 getS (tok , lab) ctx = record
               { datum = (tok , lab)
@@ -205,7 +194,7 @@ getS (tok , lab) ctx = record
               ; token = (0 , 0) --ownAssetClass ctx
               }
 
-
+-- Initial State when we mint the token and put the smart contract on the blockchain
 getMintS : TokenName -> ScriptContext -> State
 getMintS tn ctx = record
              { datum = newDatum ctx
@@ -219,6 +208,7 @@ getMintS tn ctx = record
              ; token = ownAssetClass tn ctx
              }
 
+-- Resulting State for normal transitions
 getS' : Label -> ScriptContext -> State
 getS' (tok , lab) ctx = record
              { datum = newDatum ctx
@@ -232,18 +222,7 @@ getS' (tok , lab) ctx = record
              ; token = tok
              }
 
-
-
-
-==Lto≡ : ∀ (l l' : Info)
-       -> (l == l') ≡ true
-       -> l ≡ l' 
-==Lto≡ record { ratio = ratio ; owner = owner } record { ratio = ratio' ; owner = owner' } pf
-  rewrite ==rto≡ {ratio} {ratio'} (get pf) | ==to≡ owner owner' (go (ratio == ratio') pf) = refl
-  
-==dto≡ : {a b : Label} -> (a == b) ≡ true -> a ≡ b
-==dto≡ {tok , l} {tok' , l'} p rewrite ==tto≡ tok tok' (get p) | ==Lto≡ l l' (go (tok == tok') p) = refl
-
+-- Getting the Model parameters from the parameters of the validator and minting policy
 getPar : Params -> Address -> TxOutRef -> TokenName -> MParams
 getPar record { sellC = sellC ; buyC = buyC } adr oref tn = record
                                                           { address = adr
@@ -254,7 +233,19 @@ getPar record { sellC = sellC ; buyC = buyC } adr oref tn = record
                                                           } 
 
 
---Validator returning true implies transition relation is inhabited
+-- Lemma for validator returning true implies transition
+==Lto≡ : ∀ (l l' : Info)
+       -> (l == l') ≡ true
+       -> l ≡ l' 
+==Lto≡ record { ratio = ratio ; owner = owner } record { ratio = ratio' ; owner = owner' } pf
+  rewrite ==rto≡ {ratio} {ratio'} (get pf) | ==to≡ owner owner' (go (ratio == ratio') pf) = refl
+  
+==dto≡ : {a b : Label} -> (a == b) ≡ true -> a ≡ b
+==dto≡ {tok , l} {tok' , l'} p rewrite ==tto≡ tok tok' (get p) | ==Lto≡ l l' (go (tok == tok') p) = refl
+
+
+
+--Validator returning true implies that we can perform a transition
 validatorImpliesTransition : ∀ {adr oref tn} (par : Params) (d : Label) (i : Input) (ctx : ScriptContext)
                            -> i ≢ Close
                            -> (pf : agdaValidator par d i ctx ≡ true)
@@ -287,8 +278,7 @@ validatorImpliesTransition {adr} {oref} record { sellC = sellC ; buyC = buyC } (
 validatorImpliesTransition par d Close ctx p1 p2 = ⊥-elim (p1 refl)
 
 
-
-
+-- Minting the token implies we are in the initial state of our model
 mintingImpliesStart : ∀ {par} (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                            -> getMintedAmount ctx ≢ -1
                            -> (pf : agdaPolicy adr oref tn top ctx ≡ true)
@@ -302,7 +292,7 @@ mintingImpliesStart {record { sellC = sellC ; buyC = buyC }} adr oref tn top ctx
     (go (ownAssetClass tn ctx == tok) (get (go (consumes oref ctx) (go (continuingAddr adr ctx) p2))))
 mintingImpliesStart adr oref tn top ctx@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = (tok , lab) ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = mint' } p1 p2 | False | False = ⊥-elim (get⊥ (sym p2))
 
-
+-- Validator returning true and burning a token implies we are in the terminal state 
 bothImplyClose : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                -> (agdaValidator par d Close ctx && agdaPolicy adr oref tn top ctx) ≡ true
                -> getPar par adr oref tn ⊢ getS d ctx ~[ Close ]~| getS' d ctx
@@ -319,11 +309,12 @@ bothImplyClose par d adr oref tn top ctx p | False | False
   = ⊥-elim (get⊥ (sym (get {b = false} (go (not (continuing ctx)) (go (checkTokenIn (d .fst) ctx) (get p)))))) 
 
 
+--Lemma for transition implies validation returns true
 ≡to==l : ∀ {a b : Info} -> a ≡ b -> (a == b) ≡ true
 ≡to==l {record { ratio = ratio ; owner = owner }} refl
   rewrite i=i (num ratio) | i=i (den ratio) | n=n owner = refl
 
-
+-- Performing a transition implies that the validator returns true
 transitionImpliesValidator : ∀ {adr oref tn} (par : Params) (d : Label) (i : Input) (ctx : ScriptContext)
                            -> getPar par adr oref tn ⊢ getS d ctx ~[ i ]~> getS' d ctx
                            -> agdaValidator par d i ctx ≡ true
@@ -335,18 +326,20 @@ transitionImpliesValidator record { sellC = sellC ; buyC = buyC } d (Exchange am
     | t=t (d .fst) | i=i (num (ratio (d .snd))) | i=i (den (ratio (d .snd))) 
     | n=n (owner (snd d)) = refl
 
-
+-- Being in the initial model state implies we can mint a token
 startImpliesMinting : ∀ {par} (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                            -> getPar par adr oref tn ⊢ getMintS tn ctx
                            -> agdaPolicy adr oref tn top ctx ≡ true
 startImpliesMinting {record { sellC = sellC ; buyC = buyC }} adr oref tn top ctx (TStart refl refl refl refl p5 p6 p7)
   rewrite p5 | p6 | t=t (ownAssetClass tn ctx) | n=n oref | p7 = refl
-  
+
+-- Getting to the terminal state implies that the validator returns true and a token can be burned
 closeImpliesBoth : ∀ (par : Params) (d : Label) (adr : Address) (oref : TxOutRef) (tn : TokenName) (top : ⊤) (ctx : ScriptContext)
                -> getPar par adr oref tn ⊢ getS d ctx ~[ Close ]~| getS' d ctx
                -> ((agdaValidator par d Close ctx && agdaPolicy adr oref tn top ctx) ≡ true)
 closeImpliesBoth par d adr oref tn top ctx (TClose refl refl refl refl p5 p6) rewrite p5 | p6 | n=n (owner (d .snd)) = refl
 
+-- Defining the components for the equivalence relation between the model and the validator.
 
 data Phase : Set where
   Initial  : Phase
@@ -365,11 +358,15 @@ record Argument : Set where
 open Argument
 
 
-
+-- The equivalence relation
 record _≈_ {A : Set} (f : A -> Bool) (R : A -> Set) : Set where
   field to   : ∀ {a} -> f a ≡ true -> R a
         from : ∀ {a} -> R a        -> f a ≡ true
 
+
+-- If we mint exactly 1 token we are in the Initial Phase
+-- If we burn a token and the input is Close, we are in the Terminal Phase
+-- Otherwise we are in the Running Phase
 Classifier : Argument -> Phase
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = (+_ zero) } } = Running
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ zero ] } } = Initial
@@ -379,8 +376,7 @@ Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Upd
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Exchange x x₁) ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = (negsuc zero) } } = Running
 Classifier record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = (negsuc zero) } } = Terminal
 
-
-
+-- The Validator as a function returning a boolean
 totalF : Argument -> Bool
 totalF arg with Classifier arg
 ... | Initial  = agdaPolicy (arg .adr) (arg .oref) (arg .tn) tt (arg .ctx)
@@ -388,14 +384,14 @@ totalF arg with Classifier arg
 ... | Terminal = agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) &&
                  agdaPolicy (arg .adr) (arg .oref) (arg .tn) tt (arg .ctx)
 
-
+-- The State Transition System as a relation
 totalR : Argument -> Set
 totalR arg with Classifier arg
 ... | Initial  = getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getMintS (arg .tn) (arg .ctx)
 ... | Running  = getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .dat) (arg .ctx) 
 ... | Terminal =  getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~| getS' (arg .dat) (arg .ctx)
 
-
+-- Lemma for when the input is Close
 removeClose : ∀ (arg : Argument) -> (getMintedAmount (ctx arg) ≢ (negsuc zero))
                -> (agdaValidator (arg .par) (arg .dat) (arg .inp) (arg .ctx) ≡ true)
                -> getPar (arg .par) (arg .adr) (arg .oref) (arg .tn) ⊢ getS (arg .dat) (arg .ctx)  ~[ (arg .inp) ]~> getS' (arg .dat) (arg .ctx)
@@ -403,6 +399,7 @@ removeClose record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Up
 removeClose record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = (Exchange x x₁) ; ctx = ctx } p1 p2 = validatorImpliesTransition par dat (Exchange x x₁) ctx (λ ()) p2
 removeClose record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = Close ; ctx = ctx } p1 p2 = ⊥-elim (p1 (==ito≡ (getMintedAmount ctx) (negsuc 0) (get (go (not (continuing ctx)) (go (checkTokenIn (fst dat) ctx) p2)))))
 
+-- The Equivalence Proof
 totalEquiv : totalF ≈ totalR
 totalEquiv = record { to = λ { {arg@record { par = par ; adr = adr ; oref = oref ; dat = dat ; inp = inp ; ctx = c@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = (+_ zero) } }} x → removeClose arg (λ ()) x ;
                                {record { par = par ; adr = adr ; oref = oref ; tn = tn; dat = dat ; inp = inp ; ctx = c@record { inputVal = inputVal ; outputVal = outputVal ; outputDatum = outputDatum ; signature = signature ; continues = continues ; inputRef = inputRef ; mint = +[1+ zero ] } }} x → mintingImpliesStart {par} adr oref tn tt c (λ ()) x ;

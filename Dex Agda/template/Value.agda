@@ -118,7 +118,4 @@ postulate
   diffLemma : ∀ (a b : Value) -> geq a b ≡ True -> geq b emptyValue ≡ True -> geq (subValue a b) emptyValue ≡ True
   lovelaceLemma : ∀ (a b : Value) -> geq a b ≡ True -> (lovelaces a >= lovelaces b) ≡ True
 
-
-  
-
   

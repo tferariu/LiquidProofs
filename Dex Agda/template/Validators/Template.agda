@@ -15,7 +15,7 @@ Label = (AssetClass × Info)
 
 {-# COMPILE AGDA2HS Label #-}
 
-
+-- The abstract ScriptContext
 record ScriptContext : Set where
     field     
         inputVal      : Value
@@ -29,7 +29,10 @@ record ScriptContext : Set where
         tokCurrSymbol : CurrencySymbol
         tokenIn       : Bool
         tokenOut      : Bool
-        time          : Nat
+        validInterval : Interval
+
+-- Functions equivalent to Plinth ScriptContext functions or provided by our template
+--https://plutus.cardano.intersectmbo.org/haddock/latest/plutus-ledger-api/PlutusLedgerApi-V3-Data-Contexts.html#t:ScriptContext
 
 newDatum : ScriptContext -> Label
 newDatum ctx = ScriptContext.outputDatum ctx
@@ -92,8 +95,14 @@ checkTokenOutAddr adr = checkTokenOut
 checkPayment : PubKeyHash -> Value -> ScriptContext -> Bool
 checkPayment pkh v ctx = getPayment pkh ctx == v
 
-now : ScriptContext -> Nat
-now = ScriptContext.time
+before : POSIXTime -> Interval -> Bool
+before record { getPOSIXTime = time } (start , end) = time < start
+
+after : POSIXTime -> Interval -> Bool
+after record { getPOSIXTime = time } (start , end) = time > end
+
+validRange : ScriptContext -> Interval
+validRange ctx = ScriptContext.validInterval ctx
 
 data Input : Set where
   Placeholder' : Input
@@ -123,10 +132,13 @@ checkDatum addr tn ctx = case (newDatum ctx) of λ where
 checkValue : Address -> TokenName -> ScriptContext -> Bool
 checkValue addr tn ctx = checkTokenOut (ownAssetClass tn ctx) ctx
 
+--checkParams : Params -> Bool
+--checkParams par = {!!}
+
 isInitial : Address -> TokenName -> TxOutRef -> ScriptContext -> Bool
 isInitial addr oref tn ctx = consumes oref ctx &&
                           checkDatum addr tn ctx &&
-                          checkValue addr tn ctx
+                          checkValue addr tn ctx -- && checkParams
 
 {-# COMPILE AGDA2HS checkDatum #-}
 {-# COMPILE AGDA2HS checkValue #-}

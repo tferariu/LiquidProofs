@@ -300,6 +300,10 @@ t=f true p1 p2 = sym p1
   rewrite ==ito≡ (numerator r1) (numerator r2) (get pf)
   | ==ito≡ (denominator r1) (denominator r2) (go (eqInteger (numerator r1) (numerator r2)) pf) = refl
 
+l=l : ∀ (l : List Nat) -> (l == l) ≡ true
+l=l [] = refl
+l=l (x ∷ l) rewrite n=n x = l=l l
+
 lst=lst : ∀ (lst : List (Nat × Integer)) -> (lst == lst) ≡ true
 lst=lst [] = refl
 lst=lst (x ∷ lst) rewrite n=n (x .fst) | i=i (x .snd) = lst=lst lst
@@ -337,7 +341,10 @@ geqNatTrans' zero zero (N.suc c) p1 p2 = p1
 geqNatTrans' zero (N.suc b) (N.suc c) p1 p2 = p1
 geqNatTrans' (N.suc a) (N.suc b) (N.suc c) p1 p2 = geqNatTrans' a b c p1 p2
 
-geqIntegerTrans : ∀ (a b c : Integer) -> (a Haskell.Prelude.>= b) ≡ true -> (b Haskell.Prelude.>= c) ≡ true -> (a Haskell.Prelude.>= c) ≡ true
+geqIntegerTrans : ∀ (a b c : Integer)
+  -> (a Haskell.Prelude.>= b) ≡ true
+  -> (b Haskell.Prelude.>= c) ≡ true
+  -> (a Haskell.Prelude.>= c) ≡ true
 geqIntegerTrans (+_ zero) (+_ zero) (+_ zero) p1 p2 = p1
 geqIntegerTrans +[1+ a ] (+_ zero) (+_ zero) p1 p2 = p1
 geqIntegerTrans +[1+ a ] +[1+ b ] (+_ zero) p1 p2 = p2
